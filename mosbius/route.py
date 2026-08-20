@@ -24,10 +24,15 @@ can't silently drift out of sync with the router.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from mosbius import bitstream
 from mosbius.bitmap import MATRIX_BITS
 from mosbius.model import (
+    DEFAULT_IBIAS,
     DEVICE_TERMINALS,
     EXTERNAL_PINS,
     SwitchConfig,
@@ -477,3 +482,89 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         device_roles=roles,
         net_rows=net_rows,
     )
+
+
+# ---------------------------------------------------------------------------
+# Sticky routing (SPEC.md Sec 3.2b, Sec 3.6): a design's routing is part of
+# the design, not a fresh computation every run.
+#
+# What's implemented: an unchanged design's stored routing is reused
+# byte-for-byte verbatim, no re-solve at all. What's NOT implemented yet:
+# Sec 3.2b's fuller ideal for a *changed* design -- re-routing minimally,
+# keeping every assignment that's still valid and only re-placing what
+# actually moved. A changed design currently gets a full fresh route()
+# instead. That's a real gap against the spec (an edit to one net could
+# relocate unrelated nets' rows, which Sec 3.2b explicitly calls out as
+# harmful for analog parasitics) -- flagged here rather than silently
+# passed off as done.
+# ---------------------------------------------------------------------------
+
+def design_topology_hash(design: MosbiusDesign) -> str:
+    """A hash over device kinds/properties/terminal-net-connectivity.
+
+    Independent of *instance* names (device.name never appears below) and
+    netlist line order, so re-netlisting the same schematic hashes the
+    same even if xschem reorders instances or renumbers them.
+
+    NOT independent of net *labels*: two designs that are electrically
+    identical but use different wire-label text (including on a purely
+    internal/floating net, e.g. an unused body pin auto-named "net1" vs
+    "netA") hash differently and are treated as "changed". Re-netlisting
+    the same unedited schematic file names nets deterministically, so
+    this doesn't misfire on the SPEC.md Sec 3.2b "did I actually edit
+    anything" case that matters in practice -- but a user renaming a wire
+    label by hand, without touching connectivity, will trigger an
+    unnecessary re-route. Fixing this needs real graph-isomorphism
+    canonicalisation (net identity from which terminals touch it, not its
+    string name), not implemented here.
+    """
+    canonical = sorted(
+        (d.kind, tuple(sorted(d.terminals.items())), tuple(sorted(d.properties.items())))
+        for d in design.devices
+    )
+    return hashlib.sha256(repr(canonical).encode()).hexdigest()[:16]
+
+
+def save_routed_design(routed: RoutedDesign, design: MosbiusDesign, path: Path) -> None:
+    """Persist a routing (SPEC.md Sec 3.6: the committed, human-readable
+    config file -- route table, not just hex).
+    """
+    data = {
+        "schema": routed.schema,
+        "topology_hash": design_topology_hash(design),
+        "bitstream": routed.config.to_bitstream(),
+        "ibias": routed.config.ibias,
+        "device_roles": routed.device_roles,
+        "net_rows": routed.net_rows,
+    }
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def load_routed_design(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = False) -> RoutedDesign:
+    """Route `design`, reusing the routing stored at `config_path` verbatim
+    if the design's topology hasn't changed since it was written.
+    `force=True` (SPEC.md Sec 3.2b's `--reroute`) always re-solves.
+    """
+    topology = design_topology_hash(design)
+    if not force:
+        stored = load_routed_design(config_path)
+        if stored is not None and stored.get("topology_hash") == topology:
+            return RoutedDesign(
+                config=SwitchConfig(
+                    bits=bitstream.unpack(stored["bitstream"]),
+                    ibias=stored.get("ibias", DEFAULT_IBIAS),
+                ),
+                device_roles=stored["device_roles"],
+                net_rows=stored["net_rows"],
+                schema=stored.get("schema", SCHEMA),
+            )
+
+    routed = route(design)
+    save_routed_design(routed, design, config_path)
+    return routed
