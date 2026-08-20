@@ -1,0 +1,23 @@
+v {xschem version=3.4.8RC file_version=1.2}
+G {}
+K {type=subcircuit
+format="@name @pinlist @symname ratio=@ratio"
+template="name=M1 ratio=1"
+}
+V {}
+S {}
+E {}
+L 4 -60 -40 -60 40 {}
+L 4 -60 -40 -20 -40 {}
+L 4 -60 40 -20 40 {}
+L 4 -20 -60 -20 60 {}
+L 4 -20 0 20 0 {}
+B 5 -62.5 -2.5 -57.5 2.5 {name=ibias dir=in}
+B 5 17.5 -2.5 22.5 2.5 {name=out dir=inout}
+B 5 -2.5 -62.5 2.5 -57.5 {name=b dir=inout}
+T {@symname} -50 -80 0 0 0.3 0.3 {}
+T {@name} 30 -80 0 0 0.2 0.2 {}
+T {ratio=@ratio} 30 70 0 0 0.2 0.2 {}
+T {ibias} -55 -15 0 1 0.15 0.15 {}
+T {out} 5 15 0 1 0.15 0.15 {}
+T {b (tie to VAPWR)} 5 -55 0 0 0.12 0.12 {}
