@@ -75,11 +75,15 @@ def test_every_net_gets_its_own_channel_row(inverter_config):
 
 
 def test_ports_placed_for_external_nets(inverter_config):
+    # schgen.py normalises decode.py's "ua[N]" net names to the plain
+    # "uaN" that minimosbius_template.sch's real ports use (see
+    # mosbius/schgen.py::_port_net_name) -- ua[1]=gate net, ua[2]=drain net
+    # for this inverter (SPEC.md Sec 2.10 external pin map).
     decoded = decode(inverter_config)
     text = generate_schematic(decoded)
-    assert "lab=ua[1]" in text
-    assert "lab=ua[2]" in text
+    assert "lab=ua1" in text
+    assert "lab=ua2" in text
     port_lines = [l for l in text.splitlines() if "devices/iopin.sym" in l]
     port_nets = {l.split("lab=")[1].rstrip("}") for l in port_lines}
-    assert "ua[1]" in port_nets
-    assert "ua[2]" in port_nets
+    assert "ua1" in port_nets
+    assert "ua2" in port_nets

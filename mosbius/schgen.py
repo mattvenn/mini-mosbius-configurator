@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mosbius.decode import DecodedDesign
+from mosbius.netlist import PORT_NAMES
 
 # Each mosbius_lib symbol's pin -> local (x, y) offset, i.e. the exact
 # coordinate of that pin when the symbol is placed at (0, 0) unrotated.
@@ -74,6 +75,21 @@ def _sym_props(name: str, value: object) -> str:
     return f"{name}={value}"
 
 
+def _port_net_name(net: str) -> str:
+    """decode.py names external pins "ua[N]" (matching bitmap.py/model.py's
+    EXTERNAL_PINS, and the real chip's own bus-pin notation). But
+    minimosbius_template.sch's ports -- what a design.sch's netlist, and
+    therefore netlist.py/route.py, actually expect -- are plain "uaN" (no
+    brackets; chosen to dodge xschem's bus-pin geometry, see M2 notes).
+    Normalise here so a schgen'd schematic's ports match what route.py
+    (M3) can consume, keeping SPEC.md Sec 3.8's "edit it, emit a new
+    bitstream" round-trip possible.
+    """
+    if net.startswith("ua[") and net.endswith("]"):
+        return "ua" + net[3:-1]
+    return net
+
+
 def generate_schematic(decoded: DecodedDesign, title: str = "decoded circuit") -> str:
     """Return the text of an xschem .sch file for `decoded`."""
     lines = [
@@ -106,6 +122,7 @@ def generate_schematic(decoded: DecodedDesign, title: str = "decoded circuit") -
             if term not in pins:
                 raise ValueError(f"{dev.name} has no pin {term!r} on {symname}")
             dx, dy = pins[term]
+            net = _port_net_name(net)
             conn = _Connection(pin_x=origin_x + dx, pin_y=dy, net=net)
             connections.append(conn)
             net_connections.setdefault(net, []).append(conn)
@@ -140,11 +157,11 @@ def generate_schematic(decoded: DecodedDesign, title: str = "decoded circuit") -
         # A net touching a real chip pin/rail gets an external port there
         # too, so the generated schematic stays connected to the outside
         # world exactly like the design block it was decoded from.
-        if net in ("VAPWR", "VGND", "VDPWR") or net.startswith("ua[") or net == "ibias":
+        if net in PORT_NAMES:
             anchor_x = min_x
             wire_lines.append(
                 f"C {{devices/iopin.sym}} {anchor_x} {channel_y} 0 1 "
-                f"{{name=port_{net.replace('[', '').replace(']', '')} lab={net}}}"
+                f"{{name=port_{net} lab={net}}}"
             )
 
     lines.extend(wire_lines)

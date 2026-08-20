@@ -90,16 +90,6 @@ def bus_node(side: str, row: int) -> str:
 # Device settings: decode the raw cycler/toggle bits into named values.
 # ---------------------------------------------------------------------------
 
-# SPEC.md Sec 2.11: n = step * (1 + b_lsb + 2*b_msb). This formula is total
-# and bijective over the 4 raw (b_lsb, b_msb) combinations for both step=1
-# (n in 1..4) and step=2 (n in {2,4,6,8}) -- every raw bit pattern decodes to
-# a valid setting, there is no "invalid cycler value".
-def _decode_cycler(bits: dict[int, DeviceSettingBit], pin: str, step: int) -> int:
-    lsb = 1 if _bit_for(bits, pin, 0) else 0
-    msb = 1 if _bit_for(bits, pin, 1) else 0
-    return step * (1 + lsb + 2 * msb)
-
-
 # Index bit -> (pin, index) once, up front, instead of re-scanning
 # DEVICE_SETTING_BITS on every field lookup.
 _SETTING_BIT_BY_PIN_INDEX: dict[tuple[str, int], int] = {
@@ -107,7 +97,11 @@ _SETTING_BIT_BY_PIN_INDEX: dict[tuple[str, int], int] = {
 }
 
 
-def _bit_for(pin: str, index: int) -> int:
+def setting_bit(pin: str, index: int = 0) -> int:
+    """The chain bit number for a device-setting pin's given bit index.
+    Public: mosbius/route.py uses this to emit width/ratio/tail/source
+    bits, the mirror image of what DeviceSettings.decode() reads.
+    """
     try:
         return _SETTING_BIT_BY_PIN_INDEX[(pin, index)]
     except KeyError:
@@ -115,13 +109,30 @@ def _bit_for(pin: str, index: int) -> int:
 
 
 def _single(closed: frozenset[int], pin: str) -> bool:
-    return _bit_for(pin, 0) in closed
+    return setting_bit(pin, 0) in closed
 
 
 def _decode_cycler(closed: frozenset[int], pin: str, step: int) -> int:
-    lsb = 1 if _bit_for(pin, 0) in closed else 0
-    msb = 1 if _bit_for(pin, 1) in closed else 0
+    lsb = 1 if setting_bit(pin, 0) in closed else 0
+    msb = 1 if setting_bit(pin, 1) in closed else 0
     return step * (1 + lsb + 2 * msb)
+
+
+def encode_cycler(n: int, step: int) -> tuple[int, int]:
+    """Inverse of _decode_cycler: given a setting value (1-4 for step=1,
+    2/4/6/8 for step=2), return the (lsb_bit_set, msb_bit_set) pair to
+    close. SPEC.md Sec 2.11's formula is bijective over the 4 raw
+    combinations, so every valid n has exactly one encoding.
+    """
+    valid = range(1, 5) if step == 1 else range(2, 9, 2)
+    if n not in valid:
+        raise ValueError(
+            f"{n} is not a valid setting for step={step}\n"
+            f"  Valid values are {list(valid)} (SPEC.md Sec 2.11: "
+            f"n = step * (1 + b_lsb + 2*b_msb))."
+        )
+    k = n // step - 1
+    return (k & 1, (k >> 1) & 1)
 
 
 @dataclass(frozen=True)
@@ -168,8 +179,8 @@ class DeviceSettings:
             nfetb_source=_single(closed, "ctrl_nfetb_source"),
             dpp_source=_single(closed, "ctrl_dpp_source"),
             dpn_source=_single(closed, "ctrl_dpn_source"),
-            otan_mode0=_bit_for("ctrl_otan_mode", 0) in closed,
-            otan_mode1=_bit_for("ctrl_otan_mode", 1) in closed,
+            otan_mode0=setting_bit("ctrl_otan_mode", 0) in closed,
+            otan_mode1=setting_bit("ctrl_otan_mode", 1) in closed,
         )
 
 
