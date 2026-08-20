@@ -29,7 +29,7 @@ the first argument):
 
 ```bash
 docker run --rm -v "$PWD:/work" -w /work/ttsky-mini-mosbius/xschem \
-  hpretl/iic-osic-tools:2025.07 --skip bash -lc \
+  hpretl/iic-osic-tools:latest --skip bash -lc \
   'export PDK=sky130A PDK_ROOT=/foss/pdks
    xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q -o /work/build mosbius.sch'
 ```
