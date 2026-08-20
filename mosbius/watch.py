@@ -64,12 +64,18 @@ def _report(netlist_path: Path) -> str:
     return "\n".join(lines)
 
 
-def watch(netlist_path: Path, *, once: bool = False, out=sys.stdout) -> None:
+def watch(netlist_path: Path, *, once: bool = False, out=None) -> None:
     """Poll `netlist_path` and print a report every time it changes.
 
     `once=True` runs a single report and returns (used by tests, and by
     `mosbius watch --once` for scripting/CI).
     """
+    # Resolved at call time, not import time: a `sys.stdout` default
+    # argument binds whatever stdout *was* when this module first loaded,
+    # silently ignoring any later reassignment (e.g. pytest's capsys, or
+    # any other stdout redirection set up after import).
+    if out is None:
+        out = sys.stdout
     last_mtime: float | None = None
     while True:
         try:

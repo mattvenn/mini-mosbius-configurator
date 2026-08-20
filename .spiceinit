@@ -7,7 +7,16 @@
 * (confirmed upstream: https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/262
 * -- it's the library text parsing itself, not something these flags fix).
 * These give a small, free improvement on top of that, nothing more.
-set ngbehavior=hsa
+*
+* Do NOT add `set ngbehavior=hsa` here. It looks like a harmless HSPICE-
+* compatibility toggle, but it changes ngspice's default element scale
+* factor, which breaks automatic bin selection for the PDK's binned
+* high-voltage FET models (sky130_fd_pr__nfet_g5v0d10v5, used by
+* mosbius_nmos.sch/mosbius_pmos.sch): every instance fails with "could not
+* find a valid modelname" because its L falls outside every bin's
+* [lmin,lmax] once the scale shifts. Found the hard way while getting the
+* M5 example simulations to run at all -- confirmed by re-running with
+* this line removed, which produces a normal transient solution instead.
 set skywaterpdk
 set ng_nomodcheck
 set num_threads=8

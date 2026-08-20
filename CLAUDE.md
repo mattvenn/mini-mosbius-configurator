@@ -10,8 +10,8 @@ Sky130, Tiny Tapeout). Draw an analog circuit in xschem, validate it, generate t
 hardware model, the architecture, and the milestone plan. Read it before doing
 anything. Do not re-derive facts that are already marked VERIFIED there.
 
-Status: spec complete, **M0 not started**. See §5 for milestones and §2.9 for the
-one remaining extraction step.
+Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
+the milestone plan.
 
 ## Ground rules
 
@@ -71,6 +71,12 @@ These were all got wrong once. The sources that look authoritative are not.
 
 6. **Diff-pair and OTA *inputs* reach only bus rows 1–3.** Everything else reaches
    all six. (§2.12)
+
+7. **Never set `ngbehavior=hsa` in `.spiceinit`.** It changes ngspice's default
+   element scale factor, which breaks automatic bin selection for the PDK's
+   binned HV FET models (`sky130_fd_pr__nfet_g5v0d10v5`, used by
+   `mosbius_nmos.sch`/`mosbius_pmos.sch`) — every instance fails with "could not
+   find a valid modelname". Found getting the M5 example simulations running.
 
 ## Useful facts
 
