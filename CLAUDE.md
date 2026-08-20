@@ -34,6 +34,14 @@ docker run --rm -v "$PWD:/work" -w /work/ttsky-mini-mosbius/xschem \
    xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q -o /work/build mosbius.sch'
 ```
 
+Running ngspice (M2+) is separate from netlisting: sky130A's combined model
+library takes **~2 minutes to load** regardless of circuit size (confirmed
+upstream, not fixable from our side: [IIC-OSIC-TOOLS#262](https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/262)).
+`.spiceinit` at the repo root has the small free speedups that thread exposed;
+copy it alongside wherever ngspice actually runs, since it only reads
+`.spiceinit` from its own current directory. Budget for that load time before
+concluding a simulation has hung.
+
 This produces `build/mosbius.spice` — the authoritative switch-matrix
 connectivity. `build/` is gitignored. Python tooling runs on the **host**, not in
 the container (it needs USB serial for the demoboard).

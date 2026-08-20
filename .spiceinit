@@ -1,0 +1,15 @@
+* ngspice startup flags for this project. Only picked up if ngspice is
+* invoked from this directory (or this file is copied alongside wherever
+* it's run from) -- ngspice reads .spiceinit from the current directory,
+* not the repo root implicitly.
+*
+* sky130A's combined model library takes ~2 minutes to parse regardless
+* (confirmed upstream: https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/262
+* -- it's the library text parsing itself, not something these flags fix).
+* These give a small, free improvement on top of that, nothing more.
+set ngbehavior=hsa
+set skywaterpdk
+set ng_nomodcheck
+set num_threads=8
+option noinit
+option klu
