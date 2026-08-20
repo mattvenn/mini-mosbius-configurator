@@ -160,6 +160,11 @@ happened, why, what to try next.
   actual internal state (a latch), including the row-allocation constraint
   that made the first version of that example fail to route (worth reading
   even if you don't build it yourself).
+- `examples/ringosc/` -- an open investigation (not a finished tutorial)
+  comparing a ring oscillator's real-silicon measured frequency against
+  both an ideal and a real-switch-matrix simulation -- useful if you want
+  to see how much the switch matrix's own parasitics matter, and how to
+  set up a simulation that includes them.
 - `SPEC.md` -- the full hardware model and architecture, if you want to
   know *why* the router/checker behave the way they do rather than just
   *that* they do.
