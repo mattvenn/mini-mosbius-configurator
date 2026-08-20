@@ -13,6 +13,10 @@ anything. Do not re-derive facts that are already marked VERIFIED there.
 Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
+`TODO.md` holds deferred work raised by the first outside user running through
+the tutorial (symbol polish, Level-2 simulation, pin-direction errors, wrapping
+the `docker run` in the CLI).
+
 ## Ground rules
 
 - `ttsky-mini-mosbius/` is a **read-only git submodule** (upstream, Apache-2.0).
