@@ -51,5 +51,5 @@ model=pfet_g5v0d10v5
 spiceprefix=X
 }
 C {devices/ipin.sym} -20 -140 0 1 {name=p1 lab=ibias}
-C {devices/lab_pin.sym} 200 -160 0 1 {name=p2 lab=b}
+C {bulk_tie.sym} 200 -160 0 1 {name=p2 lab=b}
 C {devices/iopin.sym} 320 -20 0 1 {name=p3 lab=out}

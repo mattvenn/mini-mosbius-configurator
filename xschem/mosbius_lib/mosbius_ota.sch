@@ -104,5 +104,5 @@ C {devices/ipin.sym} 280 -80 0 1 {name=p2 lab=inm}
 C {devices/iopin.sym} 100 -200 0 1 {name=p3 lab=outp}
 C {devices/iopin.sym} 320 -200 0 1 {name=p4 lab=outm}
 C {devices/ipin.sym} 300 -250 0 1 {name=p5 lab=ibias}
-C {devices/lab_pin.sym} 90 50 0 1 {name=p6 lab=bn}
-C {devices/lab_pin.sym} 200 -430 0 1 {name=p7 lab=bp}
+C {bulk_tie.sym} 90 50 0 1 {name=p6 lab=bn}
+C {bulk_tie.sym} 200 -430 0 1 {name=p7 lab=bp}
