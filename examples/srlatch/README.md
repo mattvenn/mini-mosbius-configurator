@@ -98,27 +98,83 @@ now follows transistor channels, so they are gone.
 
 ## Simulation
 
-![SR latch waveform: Q powers up high, SET pulse has no visible effect since Q is already high, RESET pulse drives Q low and it stays low](srlatch.png)
+![SR latch waveform: Q powers up at about 1.5V and resolves high within a
+couple of ns, the SET pulse at 60-100ns has no visible effect since Q is
+already high, the RESET pulse at 220-260ns drives Q to 0V and it stays there
+after RESET releases](srlatch.png)
 
-The plot predates this schematic and uses the earlier pin assignment --
-`ua1` (SET) and `ua4` (RESET) against `ua2` (Q), where the schematic above
-uses `ua1`, `ua2` and `ua3`. Same six transistors, same topology, same
-behaviour; only which package pin carries which signal differs, so the
-waveform still shows what it says it shows. It has not been re-simulated
-against the current file. What it demonstrates: at power-up, with neither SET nor RESET driven,
-the latch starts at an undefined operating point (`Q` sits around 1.5V --
-neither rail -- since with both pull-downs off the cross-coupled pair has
-no external push toward either state) and resolves to `Q=HIGH` within
-about 20ns, before the SET pulse even arrives at t~61ns. That's a real,
-if slightly unlucky, property of this exact circuit, not a simulation
-bug: an SR latch's power-up state is inherently arbitrary, decided by
-whichever tiny asymmetry the solver's numerics happen to amplify first --
-this run happened to resolve high, so SET's pulse (t~61ns) has no visible
-effect (`Q` was already where SET would have driven it). RESET's pulse
-(t~221-261ns) is the one that's unambiguous: `Q` drops to 0V exactly when
-RESET goes high, and -- this is the actual point of a *latch* rather than
-a combinational gate -- **stays at 0V after RESET releases**, held there
-by the cross-coupled feedback rather than by anything actively driving it.
+Re-simulated 2026-08-21 against the schematic above, so the pin labels are
+this circuit's: **`ua1` = SET, `ua2` = RESET, `ua3` = Q.** This is SPEC.md
+§3.1b's Level-1 "ideal" result -- real sky130 device sizing, direct
+net-to-net wiring, no switch matrix in between -- with no load on `ua3`
+beyond the circuit itself.
+
+Three things it shows, in order:
+
+**Power-up is arbitrary, and this run resolved high.** At t=0 `Q` sits at
+**1.46V** -- neither rail. With both pull-downs off, the cross-coupled pair
+has nothing pushing it toward either state, so it starts at the balanced
+operating point the DC solver finds. It falls off that balance almost
+immediately, reaching 3.3V within about **1.4ns**, decided by whichever tiny
+asymmetry the numerics happen to amplify first. That is a real property of an
+SR latch, not a simulation artefact: power-up state is inherently undefined,
+which is exactly why a latch needs a SET or RESET to be useful.
+
+**SET does nothing visible here, and that is expected.** The pulse arrives at
+**t=60.5ns** and `Q` is already high, so there is nothing for it to change.
+Unlucky for a demo, honest about the circuit.
+
+**RESET is the unambiguous one.** The pulse crosses mid-rail at
+**t=220.6ns** and `Q` is below 0.1V by **t=221.4ns**. RESET releases at
+**t=261.6ns** -- and this is the whole point of a *latch* rather than a
+combinational gate -- **`Q` stays at 0V**, still 0V at the end of the run at
+400ns, held by the cross-coupled feedback rather than by anything actively
+driving it.
+
+### Reproducing it
+
+Two steps, both in the IIC-OSIC-TOOLS container, because neither xschem nor
+ngspice is installed natively (CLAUDE.md). Netlist the schematic with the
+sky130A xschemrc *and* `xschem/mosbius_lib` on the library path -- with only
+the latter, the inner `nfet3_*`/`pfet3_*` devices come out as
+`IS MISSING !!!!` and the deck silently has no transistors in it:
+
+```tcl
+# /tmp/xschemrc
+source /foss/pdks/sky130A/libs.tech/xschem/xschemrc
+append XSCHEM_LIBRARY_PATH :/work/xschem/mosbius_lib
+```
+
+```bash
+xschem --rcfile /tmp/xschemrc -n -q -o /work/build \
+    /work/examples/srlatch/srlatch.sch
+```
+
+Then prepend stimulus and append the analysis to that netlist (strip its
+trailing `.end` first), and run it:
+
+```spice
+.lib /foss/pdks/sky130A/libs.tech/ngspice/sky130.lib.spice tt
+Vapwr  VAPWR 0 3.3
+Vgnd   VGND  0 0
+Vset   ua1 0 PULSE(0 3.3 60n 1n 1n 40n 1000n)
+Vreset ua2 0 PULSE(0 3.3 220n 1n 1n 40n 1000n)
+* ... netlist body ...
+.tran 100p 400n
+.control
+run
+wrdata srlatch_tb.txt v(ua1) v(ua2) v(ua3)
+.endc
+```
+
+```bash
+python3 tools/plot_tb.py build/srlatch_tb.txt examples/srlatch/srlatch.png \
+  "SR latch (Level-1): SET on ua1, RESET on ua2, Q on ua3" \
+  "ua1 (SET):0" "ua2 (RESET):1" "ua3 (Q):2"
+```
+
+The run itself took 54s, nearly all of it the sky130A model load, which is
+fixed cost regardless of circuit size.
 
 Unlike the inverter, there's no single published trise number to compare
 against for this circuit -- the blog post describes the same topology and
