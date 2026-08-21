@@ -91,11 +91,18 @@ anywhere else, so redoing it means rebuilding from these steps:
    relative filename (`C {mosbius.sym}`) while running xschem with its
    working directory set to `ttsky-mini-mosbius/xschem`.
 
-   This is one of the few places a batch `docker run` is still the right
-   tool. The everyday path is xschem's Netlist button (`TUTORIAL.md`), but
-   that netlists the schematic you have open, into `simulation/` beside it
-   -- no use for a generated testbench in `build/` that has to resolve
-   `mosbius.sym` from the submodule's own directory:
+   The working directory is the load-bearing part, not the container.
+   xschem resolves a bare symbol name against where it is running from, so
+   whichever way you netlist, it has to be running in
+   `ttsky-mini-mosbius/xschem`. The GUI would do just as well: start xschem
+   from that directory, open `build/ring_l2.sch`, press Netlist, and read
+   the result from `build/simulation/`.
+
+   The batch form is written out here only because every other step of this
+   flow is scripted -- the testbench is generated (step 2) and the netlist
+   is post-processed (step 4) -- so a manual button press in the middle
+   would be the odd one out. For drawing a circuit by hand, use the Netlist
+   button; see `TUTORIAL.md`.
    ```bash
    docker run --rm -v "$PWD:/work" -w /work/ttsky-mini-mosbius/xschem \
      hpretl/iic-osic-tools:latest --skip bash -lc \
