@@ -31,6 +31,6 @@ model=nfet_g5v0d10v5
 spiceprefix=X
 }
 C {devices/iopin.sym} -120 20 0 1 {name=p7 lab=s}
-C {devices/iopin.sym} -120 -80 0 1 {name=p1 lab=g}
+C {devices/ipin.sym} -120 -80 0 1 {name=p1 lab=g}
 C {devices/iopin.sym} -120 -200 0 1 {name=p2 lab=d}
-C {devices/iopin.sym} 180 -80 0 1 {name=p4 lab=b}
+C {devices/lab_pin.sym} 180 -80 0 1 {name=p4 lab=b}

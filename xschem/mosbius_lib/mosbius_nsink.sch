@@ -54,6 +54,6 @@ sa=0 sb=0 sd=0
 model=nfet_g5v0d10v5
 spiceprefix=X
 }
-C {devices/iopin.sym} -120 -140 0 1 {name=p1 lab=ibias}
-C {devices/iopin.sym} 200 20 0 1 {name=p2 lab=b}
+C {devices/ipin.sym} -120 -140 0 1 {name=p1 lab=ibias}
+C {devices/lab_pin.sym} 200 20 0 1 {name=p2 lab=b}
 C {devices/iopin.sym} 320 -200 0 1 {name=p3 lab=out}

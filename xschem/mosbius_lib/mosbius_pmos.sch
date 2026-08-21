@@ -31,6 +31,6 @@ model=pfet_g5v0d10v5
 spiceprefix=X
 }
 C {devices/iopin.sym} 0 -160 0 1 {name=p7 lab=s}
-C {devices/iopin.sym} 0 -70 0 1 {name=p1 lab=g}
+C {devices/ipin.sym} 0 -70 0 1 {name=p1 lab=g}
 C {devices/iopin.sym} 0 40 0 1 {name=p2 lab=d}
-C {devices/iopin.sym} 300 -70 0 1 {name=p4 lab=b}
+C {devices/lab_pin.sym} 300 -70 0 1 {name=p4 lab=b}

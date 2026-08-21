@@ -24,7 +24,7 @@ real switch matrix with no behavioural model of the shift register (SPEC.md
 a routed config and running it. Budget ~2 min of sky130A model load per run
 (see CLAUDE.md).
 
-## 3. Fix the unmatched pin-direction errors
+## 3. Fix the unmatched pin-direction errors -- FIXED 2026-08-21, NEEDS GUI CONFIRMATION
 
 Netlisting from the xschem GUI prints, once per device:
 
@@ -45,9 +45,30 @@ hand-drawn inverter that triggered it routed to the exact reference bitstream
 
 Fix: change those pins to `devices/ipin.sym`. The only netlist change is the
 annotation `*.iopin g` -> `*.ipin g`, which nothing downstream reads
-(`netlist.py` skips lines starting with `*`). **Unverified** — batch mode with
-`-q` doesn't print these messages at all, so confirming the fix means
-netlisting from the GUI and watching the log.
+(`netlist.py` skips lines starting with `*`).
+
+**Applied 2026-08-21** to `g` (nmos/pmos), `ibias` (nsink/psource) and
+`inp`/`inm`/`ibias` (ota). Netlists verified byte-identical in batch. Still
+needs someone to netlist from the GUI and confirm the log is clean, because
+batch mode with `-q` does not print these messages at all -- and without `-q`
+xschem does not exit, so there is no way to capture them non-interactively
+either. Close this item once that's seen.
+
+The same GUI netlist should also be free of two errors introduced by the
+item-1 redraw and fixed alongside:
+
+```
+Error: Symbol mosbius_nmos.sym: schematic pin: b not in symbol
+Error: Symbol mosbius_nmos.sym has 3 pins, its schematic has 4 pins
+```
+
+Cause: the body ties are supplied by the symbol's `extra` attribute, so they
+are not symbol pins, but the schematics still declared them with
+`devices/iopin.sym` -- and xschem's symbol/schematic consistency check does
+not know about `extra`. They are now `devices/lab_pin.sym` instead. Nothing is
+lost by that: a SPICE subcircuit's port names *are* its internal node names,
+so naming the net `b` binds it to the `extra` port `b` exactly as before.
+Verified: `.subckt` interfaces and every internal bulk connection unchanged.
 
 Separately, the `Warning: open net: ua3/ua4/ua5/VDPWR/ibias` lines in the same
 output are expected, not a bug — the template places all nine chip ports and
