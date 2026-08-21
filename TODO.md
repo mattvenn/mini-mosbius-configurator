@@ -100,6 +100,15 @@ showed the error themselves: their body is a parameter, not a node.
 Verified: every `.subckt` interface, every instance line, every internal bulk
 binding and the ring's bitstream are byte-identical to before the change.
 
+One further self-inflicted wound from the same work, fixed 2026-08-21: the
+explanatory headers added to `mosbius_*.sym` contained the literal text
+`B{}`. xschem's reader treats a brace inside the `v {...}` header as
+structure rather than text -- it ends the header there and parses the rest of
+the comment as records, printing a `SKIP RECORD` / `SKIPPING |...|` pair per
+line on every GUI netlist. **Keep `.sym` header comments brace-free.**
+`devices/nmos3.sym`'s own GPL header gets away with a long comment precisely
+because it has no braces in it.
+
 Separately, the `Warning: open net: ua3/ua4/ua5/VDPWR/ibias` lines in the same
 output are expected, not a bug — the template places all nine chip ports and
 most designs use a few. Worth saying so in `TUTORIAL.md`, since it reads as a

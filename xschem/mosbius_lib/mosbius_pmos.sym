@@ -11,9 +11,16 @@ v {xschem version=3.4.8RC file_version=1.2
 * schematic does not. Override per instance with b=<net> if you ever
 * need to (mosbius_ota.sch does, to reach its own bulk port).
 *
-* The B{} box ORDER below is the netlist pin order and the .subckt port
-* order. mosbius/netlist.py's DEVICE_PINS holds a matching copy, and
-* mosbius/schgen.py holds the pin coordinates. Change all three together.
+* The .sch behind this symbol instantiates sky130's THREE-terminal FET
+* (nfet3_/pfet3_) and passes the bulk as its @body parameter. Do not
+* "fix" that by wiring the bulk to a net: `extra` ports are invisible to
+* xschem's connectivity check, so a bulk net reads as undriven and the
+* GUI reports an error on every netlist. See TODO.md section 3.
+*
+* The pin-box (B) records below are declared in netlist pin order, which
+* is also the .subckt port order. mosbius/netlist.py's DEVICE_PINS holds
+* a matching copy and mosbius/schgen.py holds the pin coordinates --
+* change all three together.
 * (Note this is g,d,s -- devices/pmos3.sym declares d,g,s. Geometry matches,
 * declaration order deliberately does not: reordering would rename every
 * routed device and force a re-route for no visible gain.)

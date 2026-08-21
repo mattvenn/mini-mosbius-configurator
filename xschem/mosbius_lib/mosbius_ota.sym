@@ -15,10 +15,11 @@ v {xschem version=3.4.8RC file_version=1.2
 * `extra` mechanism below: the netlist still gets the connection, the
 * schematic does not. Override per instance with bn=<net> / bp=<net> if you ever need to.
 *
-* The B{} box ORDER below is the netlist pin order and the .subckt port
-* order (extra pins are appended, in the order `extra` lists them).
-* mosbius/netlist.py's DEVICE_PINS holds a matching copy, and
-* mosbius/schgen.py holds the pin coordinates. Change all three together.
+* The pin-box (B) records below are declared in netlist pin order, which
+* is also the .subckt port order -- extra pins are appended, in the order
+* `extra` lists them. mosbius/netlist.py's DEVICE_PINS holds a matching
+* copy and mosbius/schgen.py holds the pin coordinates -- change all
+* three together.
 }
 G {}
 K {type=subcircuit
