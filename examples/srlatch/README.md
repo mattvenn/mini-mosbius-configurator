@@ -44,7 +44,15 @@ sides: `ua1`->`bus_A[1]`, `ua2`->`bus_A[3]`, `ua4`->`bus_B[2]` are inside
 the range; `ua3`->`bus_A[5]` and `ua5`->`bus_B[4]` are not. An earlier
 version of this circuit used `ua3` as the reset *input* and could not
 route. Note `ua3` is fine as Q, which is what this version does -- it is a
-drain there, not a gate.
+drain there, not a gate. The router now says which pins would have worked:
+
+```
+DOESN'T FIT -- XM5's gate (ndiffpair+.g) cannot reach bus_A[5]
+  ...
+  To fix: move this signal to a pin bonded to a row this terminal can
+  reach (ua1, ua2 or ua4), or arrange for the restricted device not to be
+  the one sitting on this net.
+```
 
 **Internal nets that span both bus sides.** The free rows are `A{2,4,6}`
 and `B{1,3,5,6}`, so the only row free on *both* sides is 6 -- which means
@@ -56,13 +64,25 @@ This circuit routes because the allocator hands out the independent slots
 in netlist order, so `XM2` and `XM4` take them and the halves fall to
 `XM5`/`XM6`, whose gates are on `ua1` and `ua2`. That is luck, not design:
 relist the same six devices in a different order and `XM4` takes a half,
-its gate on `net1` needs row 6, and the router dies with a bare
-`KeyError: ('cfgb_dpn_inm', 6)` rather than an explanation. `TODO.md` §5
-covers both halves of the fix -- raise a real `RouteError`, and allocate by
-constraint rather than by line order.
+its gate on `net1` needs row 6, and the design does not route.
 
-If you hit an unexplained crash from `route()` on your own design, rather
-than a `RouteError` with a diagnosis, this is very likely what it is.
+It does at least say so. Since 2026-08-21 that failure is a `RouteError`
+naming the device, the terminal, the rows it can reach and the rows a
+two-sided net has available:
+
+```
+DOESN'T FIT -- 'net1' spans both bus sides and no row can join them
+
+  'net1' connects:
+    ...
+    XM4's gate (ndiffpair-.g) -- reaches only bus rows 1, 2 and 3
+    ...
+```
+
+It used to be a bare `KeyError: ('cfgb_dpn_inm', 6)`. What is still open is
+the other half: allocating by constraint rather than by line order, so that
+the devices whose gates need rows 1-3 are the ones that get the halves.
+`TODO.md` §3 covers it.
 
 ## Routing
 

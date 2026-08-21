@@ -162,3 +162,77 @@ def test_watch_reports_the_merged_rails_too(tmp_path, capsys):
     assert rc == 0
     assert "DANGEROUS" in out
     assert "VAPWR and VGND are joined" in out
+
+
+# ---------------------------------------------------------------------------
+# D2: drain on the rail, source on an internal net -- a reversed transistor.
+# ---------------------------------------------------------------------------
+
+# The 3-stage ring that motivated D2, with the PMOS drawn upside down:
+# drain on VAPWR, source on the internal node. The netlist is legal, the
+# allocator reads it as three PMOS each wanting a routable source, and the
+# only thing the user used to see was "not enough PMOS".
+REVERSED_PMOS_RING = (
+    "M1 ua1 net1 VGND VGND mosbius_nmos w=1",
+    "M2 ua1 VAPWR net1 VAPWR mosbius_pmos w=1",
+    "M3 net2 ua1 VGND VGND mosbius_nmos w=1",
+    "M4 net2 VAPWR net3 VAPWR mosbius_pmos w=1",
+    "M5 net1 net2 VGND VGND mosbius_nmos w=1",
+    "M6 net1 VAPWR net2 VAPWR mosbius_pmos w=1",
+)
+
+
+def test_reversed_pmos_is_a_warning_naming_every_offender():
+    report = check_design(design(*REVERSED_PMOS_RING))
+    assert [f.code for f in report.warnings] == ["D2"]
+    assert report.errors == []
+    message = report.warnings[0].message
+    assert message.startswith("WARNING -- drain and source look swapped on M2, M4, M6")
+
+
+def test_reversed_pmos_message_connects_to_the_failure_the_user_sees():
+    message = check_design(design(*REVERSED_PMOS_RING)).warnings[0].message
+    # The point of the check: explain the "DOESN'T FIT" that follows.
+    assert "not enough PMOS with independent sources" in message
+    assert "flipped vertically" in message
+    assert "source at the top" in message      # mosbius_pmos's real geometry
+    assert "cascode" in message                # why it stays a hint
+
+
+def test_a_healthy_design_does_not_trip_it():
+    assert check_design(design(*HEALTHY_RING)).findings == []
+
+
+def test_a_source_on_a_package_pin_is_not_flagged():
+    # A source follower driving ua2 is an ordinary thing to draw, so the
+    # check deliberately fires only on a source that is neither a rail nor
+    # a ua[] pin.
+    follower = ("M1 ua1 VGND ua2 VGND mosbius_nmos w=1",)
+    assert check_design(design(*follower)).findings == []
+
+
+def test_a_source_on_an_internal_net_alone_is_not_flagged():
+    # Source on an internal node with the drain doing real work: a cascode
+    # or a degenerated stage. Only drain-on-the-rail *as well* is nonsense.
+    cascode = (
+        "M1 ua1 ua2 net1 VGND mosbius_nmos w=1",
+        "M2 ua3 net1 VGND VGND mosbius_nmos w=1",
+    )
+    assert check_design(design(*cascode)).findings == []
+
+
+def test_reversed_nmos_reports_the_nmos_rail_and_geometry():
+    reversed_nmos = ("M1 ua1 VGND net1 VGND mosbius_nmos w=1",)
+    message = check_design(design(*reversed_nmos)).warnings[0].message
+    assert "drain on VGND" in message
+    assert "drain at the top" in message        # mosbius_nmos is the other way up
+    assert "not enough NMOS with independent sources" in message
+
+
+def test_route_prints_the_hint_before_the_doesnt_fit(tmp_path, capsys):
+    path = tmp_path / "ring.spice"
+    path.write_text("\n".join(REVERSED_PMOS_RING) + "\n")
+    rc = main(["route", str(path)])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert err.index("drain and source look swapped") < err.index("DOESN'T FIT")

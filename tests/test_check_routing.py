@@ -135,3 +135,83 @@ def test_watch_reports_the_dropped_width_too(tmp_path, capsys):
     assert rc == 0
     assert "was ignored" in out
     assert "w=4 (fixed)" in out
+
+
+# ---------------------------------------------------------------------------
+# R2: the same rule as R1, for the other setting a device can carry --
+# a tail= that no bit in the bitstream can hold (TODO.md Sec 2).
+# ---------------------------------------------------------------------------
+
+# The SR latch, whose last two NMOS land on the diff-pair halves, with a
+# tail written on one of them. Nothing in the schematic can reach
+# ctrl_dpn_tail, so the value has nowhere to go.
+LATCH_WITH_TAIL = """
+XM1 ua3  net1 VAPWR VAPWR mosbius_pmos w=1
+XM2 ua3  net1 VGND  VGND  mosbius_nmos w=1
+XM3 net1 ua3  VAPWR VAPWR mosbius_pmos w=1
+XM4 net1 ua3  VGND  VGND  mosbius_nmos w=1
+XM5 ua1  net1 VGND  VGND  mosbius_nmos w=1 tail=6
+XM6 ua2  ua3  VGND  VGND  mosbius_nmos w=1
+"""
+
+OTA = "x1 ua1 ua4 ua2 ua5 ibias VGND VAPWR mosbius_ota tail=6\n"
+
+
+def test_a_tail_on_a_diff_pair_half_is_reported_not_dropped():
+    report = check_routing(routed(LATCH_WITH_TAIL))
+    codes = [f.code for f in report.warnings]
+    assert "R2" in codes
+    r2 = [f for f in report.warnings if f.code == "R2"][0]
+    assert r2.message.startswith("WARNING -- XM5's tail=6 was ignored")
+
+
+def test_the_tail_message_names_the_bit_and_what_you_get_instead():
+    r2 = [f for f in check_routing(routed(LATCH_WITH_TAIL)).warnings
+          if f.code == "R2"][0].message
+    assert "ctrl_dpn_tail" in r2      # the bit that exists but is unreachable
+    assert "tail=2" in r2             # what an all-zero cycler decodes to
+    assert "mosbius_ota" in r2        # the device that does expose a tail
+    assert "--ibias" in r2            # the knob you do have
+
+
+def test_a_tail_the_chip_can_carry_is_silent():
+    report = check_routing(routed(OTA))
+    assert [f.code for f in report.warnings] == []
+
+
+def test_tail_is_reported_for_every_device():
+    tails = routed(LATCH_WITH_TAIL).device_tails
+    assert set(tails) == {"XM1", "XM2", "XM3", "XM4", "XM5", "XM6"}
+    assert tails["XM5"].requested == 6 and not tails["XM5"].programmable
+    assert tails["XM5"].effective == 2       # what the bitstream really says
+    assert tails["XM2"].effective is None    # nmos_a has no tail at all
+
+
+def test_a_devices_own_tail_is_shown_in_the_route_table(tmp_path, capsys):
+    path = tmp_path / "ota.spice"
+    path.write_text(OTA)
+    rc = main(["route", str(path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "x1           -> ota           tail=6" in out
+
+
+def test_sticky_replay_recomputes_tails_rather_than_losing_them(tmp_path):
+    from mosbius.route import route_sticky
+
+    design = parse_netlist(LATCH_WITH_TAIL)
+    config_path = tmp_path / "latch.mosbius.json"
+    first = route_sticky(design, config_path)
+    second = route_sticky(design, config_path)
+    assert second.device_tails == first.device_tails
+    assert [f.code for f in check_routing(second).warnings if f.code == "R2"] == ["R2"]
+
+
+def test_a_tail_on_a_device_that_has_none_says_so_differently():
+    # nmos_a is a single transistor: it has no tail current at all, so the
+    # diff-pair explanation would send the reader looking in the wrong place.
+    report = check_routing(routed("XM1 ua1 ua2 VGND VGND mosbius_nmos w=1 tail=4\n"))
+    r2 = [f for f in report.warnings if f.code == "R2"][0].message
+    assert r2.startswith("WARNING -- XM1's tail=4 was ignored: nmos_a has no tail current")
+    assert "ctrl_dpn_tail" not in r2          # not this device's problem
+    assert "w= (1, 2, 3 or 4)" in r2          # what they probably meant

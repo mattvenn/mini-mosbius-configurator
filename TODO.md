@@ -4,11 +4,13 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-**Renumbered from 1 on 2026-08-21**, when the first eight items were resolved
-and removed: the symbol redraw, the pin-direction errors, netlisting via the
-container, widths silently dropped on diff-pair halves, W2 firing on every
-internal node, the missing `@spiceprefix`, and the example schematics left on
-the old pin geometry.
+**Renumbered from 1 on 2026-08-21**, for the second time that day. The first
+renumber removed the eight items the symbol/pin-geometry work closed. This
+one removes two more and shrinks two: the drain/source-swap hint now exists
+(`check.py`'s `D2`), a single OTA no longer crashes the router, the OTA's
+`tail=` now reaches the bitstream, and an unreachable (pin, row) is now a
+`RouteError` that explains itself rather than a `KeyError`. What is left of
+those last two items is in §2 and §3 below.
 
 This file used to keep numbers stable and leave gaps, because other files cite
 items by number. Renumbering instead means those citations move too, and they
@@ -49,141 +51,51 @@ explicitly. Get it wrong and the failure is silent: devices are replaced by
 `*  x1 -  tt_asw_3v3  IS MISSING !!!!` and ngspice runs the empty deck.
 
 
-## 2. Diagnose a probable drain/source swap instead of "doesn't fit"
+## 2. A differential pair's tail current cannot be set from the schematic
 
-Raised 2026-08-21, from a real 15-minute misdiagnosis.
+Raised 2026-08-21. The OTA half of this is done: `route.py` reads `tail=`
+on `mosbius_ota` and emits `ctrl_otan_tail` (`TAIL_SETTING`, step=2), a
+value the 2-bit cycler cannot express is a `RouteError` naming the device
+and the four settings it could have had, and the route table prints the
+tail each device was actually programmed to. What is left is the part that
+was never about code.
 
-A 3-stage ring whose PMOS had drain and source exchanged produced:
+`ctrl_dpn_tail` and `ctrl_dpp_tail` are real, programmable, and
+unreachable. A differential pair is drawn as two `mosbius_nmos` /
+`mosbius_pmos` symbols that expose only `w=`, and `_allocate_fets` pass 1
+pairs them onto `ndiffpair+`/`ndiffpair-` *after* the fact -- so the tail
+of the pair the user has just formed belongs to neither symbol. `w=`'s
+per-device shape does not fit a property that two devices share.
 
-```
-DOESN'T FIT -- not enough PMOS with independent sources
-Your circuit needs 3 PMOS transistors (M2, M4, M6),
-but the chip has only 2 with a source you can route anywhere
-```
+Nothing is silently dropped in the meantime: `check.py`'s `R2` reports a
+`tail=` written on a device whose role has no tail bits, says the chip
+will run at `tail=2` (an all-zero cycler decodes to `step * (1 + 0)`), and
+points at `--ibias` as the knob that does still move the operating point.
+That is the same rule `R1` enforces for widths, and it is what makes this
+item deferrable rather than a live bug.
 
-Every word true, and every word pointing away from the actual fault. The
-netlist was
+Two candidate shapes, neither obviously right:
 
-```
-M2 ua1 VAPWR net1 VAPWR mosbius_pmos w=1     (g d s b)
-```
+- **A `tail=` on both halves that must agree.** Cheapest: no new symbol,
+  and `TAIL_SETTING` already has the shape to hang it off. But it puts a
+  property on `mosbius_nmos` that is meaningless whenever that device does
+  *not* land on a half, and it needs a rule for what happens when the two
+  halves disagree.
+- **A separate symbol wired to the pair's shared source node.** Honest
+  about what the hardware is -- a tail current source on a real node --
+  but that node has no matrix terminal at all (SPEC.md §2.12), so the wire
+  would be a fiction only the router understands.
 
--- drain on VAPWR, source on an internal node. That is not a circuit anyone
-draws deliberately, and the allocator sees it as three PMOS each demanding a
-routable source.
+Whichever wins, `route.py`'s `UNSETTABLE_TAIL` and `check.py`'s `R2` come
+out with it: they exist only to say the value went nowhere.
 
-The check to add, before the allocator gives up: a FET whose **drain** sits on
-a supply rail while its **source** sits on a net that is neither a rail nor a
-`ua[]` pin is almost certainly wired backwards. For PMOS the rail is `VAPWR`,
-for NMOS `VGND`. Say so, name the instances, and say what to do -- for a
-`mosbius_pmos` the source is the *top* pin and the drain the *bottom* (the
-reverse of `mosbius_nmos`), so the usual cause is a symbol flipped vertically
-out of habit from a schematic drawn before 2026-08-21.
+## 3. Device allocation is decided by netlist order
 
-Keep it a *hint*, not an error: source-on-an-internal-net is legitimate in a
-cascode or a source follower. It should fire only when the drain is on the
-matching rail, which is the combination that has no sensible reading.
-
-Worth checking whether this belongs in `check.py` (so it fires on a netlist
-that routes, too) rather than only on the allocator's failure path.
-
-## 3. Tail currents never reach the bitstream
-
-Raised 2026-08-21, found while fixing the dropped-width item (now
-resolved: widths are reported per device and a drop is warned about).
-
-`route.py`'s device-settings loop emits width/ratio bits and nothing else:
-
-```python
-for dev_name, role in roles.items():
-    if role in WIDTH_SETTING:
-```
-
-`WIDTH_SETTING` covers the four programmable FETs and the four mirror legs.
-The three tail-current fields that exist in the bit map -- `ctrl_dpn_tail`,
-`ctrl_dpp_tail` and `ctrl_otan_tail`, each a step=2 cycler taking 2/4/6/8
-(SPEC.md §2.11) -- are never written by the router at all.
-
-Two consequences, one live and one structural.
-
-**`mosbius_ota`'s `tail=` is read by nothing.** The symbol's template is
-`template="name=X1 tail=2 bn=VGND bp=VAPWR"`, so every OTA instance carries a
-`tail` property into the netlist, and `route.py` looks only at `w` and
-`ratio`. Writing `tail=4` in the schematic changes the netlist and does not
-change one bit of the bitstream.
-
-This is masked by an unlucky coincidence: an all-zero cycler field decodes to
-`step * (1 + 0)` = 2, exactly the symbol's default, so `tail=2` is
-accidentally correct and only the other three values are silently wrong. The
-masking is the dangerous part -- the bug cannot be found by trying the
-default.
-
-**A real differential pair has no way to set its tail at all.**
-`mosbius_nmos`/`mosbius_pmos` expose only `w=`, so when two of them share a
-source and `_allocate_fets` pass 1 pairs them onto `ndiffpair+`/`ndiffpair-`,
-the tail current of the pair they have just formed is unreachable from the
-schematic. `ctrl_dpn_tail` is the only thing that sets it, and nothing the
-user can draw reaches that bit.
-
-Fix, in two parts:
-
-- Read `tail=` on `mosbius_ota` and emit `ctrl_otan_tail` -- a `TAIL_SETTING`
-  table beside `WIDTH_SETTING`, keyed by role, with step=2.
-- Decide how a diff pair's tail is expressed in the schematic at all. It is
-  not a per-device property, since the two halves share one tail, which is
-  why `w=`'s shape does not fit it. Worth weighing: a `tail=` on both halves
-  that must agree, versus a separate symbol wired to the shared source node.
-
-Either way the same rule applies that `R1` in `check.py` now enforces for
-widths: a property that cannot reach the bitstream gets said out loud
-rather than dropped.
-
-## 4. A single OTA crashes the router
-
-Raised 2026-08-21, found while writing §3.
-
-Routing any design containing one `mosbius_ota` raises an unhandled
-`KeyError: 'ota'` out of `_collect_touches`:
-
-```
-    side=ROLE_SIDE[role], pin=_pin_name(role, terminal))
-         ~~~~~~~~~^^^^^^
-KeyError: 'ota'
-```
-
-It looks like a missing dictionary entry and is not one. `ROLE_SIDE` maps a
-role to *one* bus side, and the OTA is the only device that straddles both:
-
-| terminal | crosspoint pin | side |
-|---|---|---|
-| `inp`  | `cfga_otan_inp`  | A |
-| `outp` | `cfga_otan_outp` | A |
-| `inm`  | `cfgb_otan_inm`  | B |
-| `outm` | `cfgb_otan_outm` | B |
-
-So side is a property of the *terminal*, not of the role, and no value put
-into `ROLE_SIDE["ota"]` can be right. `_pin_name()` has the same shape --
-it builds the `cfga_`/`cfgb_` prefix from `ROLE_SIDE[role]`.
-
-Fix: make the side per (role, terminal). `DEVICE_TERMINALS` already maps a
-terminal to its crosspoint, and a crosspoint's side is knowable from the bit
-map, so both `ROLE_SIDE` and `_pin_name` can be *derived* from `bitmap.py`
-rather than transcribed -- which is the discipline `route.py`'s own module
-docstring already claims for its row tables ("so a bit-map correction there
-can't silently drift out of sync with the router").
-
-Why it survived: the only OTA test is
-`test_two_ota_devices_reports_doesnt_fit`, and two OTAs raise in
-`allocate_devices` before `_collect_touches` is ever reached. No test has
-routed a single OTA.
-
-Note for whoever takes this: the OTA's inputs reach only bus rows 1-3
-(CLAUDE.md trap 6), so the row picker needs to respect that once it can get
-far enough to matter.
-
-## 5. Device allocation is decided by netlist order, and fails with a traceback
-
-Raised 2026-08-21, found routing a hand-drawn SR latch.
+Raised 2026-08-21, found routing a hand-drawn SR latch. The diagnostic half
+of this is done -- the failure below now raises a `RouteError` that names
+the device, the net, the rows each terminal can reach and the rule it ran
+into, instead of `KeyError: ('cfgb_dpn_inm', 6)`. The allocation itself is
+unchanged, so the same designs still fail; they just fail legibly.
 
 `_allocate_fets` pass 2 hands the two independent slots (`nmos_a`/`nmos_b`)
 to whichever requests come first in the netlist, then pass 3 gives the
@@ -193,50 +105,40 @@ xschem happened to list its instances in.
 
 The SR latch in `examples/srlatch/` is the worked case. Six devices, four
 NMOS all sourced on `VGND`, so two of them necessarily take diff-pair
-halves. As listed it routes: `M2`/`M4` take the independent slots and the
-halves fall to `M5`/`M6`, whose gates are on `ua1` and `ua2`. Relist the
-same six devices in a different order and:
-
-```
-KeyError: ('cfgb_dpn_inm', 6)
-```
-
-Not a `RouteError` -- a traceback out of `route_internal_net`.
+halves. As listed it routes: `XM2`/`XM4` take the independent slots and the
+halves fall to `XM5`/`XM6`, whose gates are on `ua1` and `ua2`. Relist the
+same six devices in a different order and `XM4` takes a half instead, with
+its gate on `net1` -- and that is the combination the next paragraph rules
+out.
 
 **Why row 6 specifically, and why no pin choice avoids it.** The free rows
-are `A{2,4,6}` and `B{1,3,5,6}`, so the only row free on *both* sides is 6.
-An internal net touching devices on both sides is therefore forced onto row
-6. Diff-pair inputs reach only rows 1-3 (CLAUDE.md trap 6). So:
+are `A{2,4,6}` and `B{1,3,5,6}`, so the only row free on *both* sides is 6
+(`route.py`'s `ROWS_FREE_ON_BOTH_SIDES` derives this rather than asserting
+it). An internal net touching devices on both sides is therefore forced
+onto row 6. Diff-pair inputs reach only rows 1-3 (CLAUDE.md trap 6). So:
 
 > a diff-pair half's gate can never sit on an internal net that spans both
 > bus sides.
 
 In the latch that net is `net1`, the cross-coupling node, which gates
-`M3`/`M4`. Moving Q from `ua3` to `ua4` does not help -- checked. The
-constraint is about the internal net, not the package pin, which makes it
-strictly harder to see than the `ua3`-as-a-gate problem
-`examples/srlatch/README.md` already describes.
+`XM3`/`XM4`. Moving Q from `ua3` to `ua4` does not help -- checked. The
+constraint is about the internal net, not the package pin.
 
-Two separate fixes, and the first is worth doing even alone:
+The fix: **allocate by constraint rather than by line order.** Give the
+independent slots to the devices whose gates sit on nets a diff-pair input
+cannot reach, and spend the halves on the ones that fit. That is a genuine
+ordering rule (SPEC.md §3.4's "spend the constrained resource first"), not
+a heuristic: a two-sided internal net on a gate is a hard exclusion,
+knowable before any row is picked. `route.py` already computes the reach
+half of it -- `rows_reachable()` and `_shared_reach()`, both derived from
+the bit map -- so what is missing is using that during allocation rather
+than only when placing a row.
 
-- **Raise a real `RouteError`.** Name the device, the net, the row it
-  needed, and say that diff-pair inputs are limited to rows 1-3 and why.
-  Every crossing of `_MATRIX_BIT_BY_PIN_ROW` with a missing key is this
-  same class -- an unreachable (pin, row) pair -- so the lookup wants
-  wrapping once rather than guarding at each call site.
-
-- **Allocate by constraint rather than by line order.** Give the
-  independent slots to the devices whose gates sit on nets a diff-pair
-  input cannot reach, and spend the halves on the ones that fit. That is
-  a genuine ordering rule (SPEC.md Sec 3.4's "spend the constrained
-  resource first"), not a heuristic: a two-sided internal net on a gate is
-  a hard exclusion, knowable before any row is picked.
-
-Note this interacts with sticky routing (SPEC.md Sec 3.2b): a better
+Note this interacts with sticky routing (SPEC.md §3.2b): a better
 allocator must not silently relocate an existing working design, so it
 belongs behind the same stored-routing reuse as everything else.
 
-## 6. Repeated findings repeat their whole explanation
+## 4. Repeated findings repeat their whole explanation
 
 Raised 2026-08-21 by the user, seeing two near-identical 23-line warnings
 from one `mosbius route`.

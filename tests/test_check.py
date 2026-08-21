@@ -157,7 +157,7 @@ def test_w2_not_triggered_once_the_tap_is_also_closed():
 
 
 def test_w2_silent_on_a_ring_oscillator():
-    """The case that motivated rewriting this check (TODO.md section 6).
+    """The case that motivated rewriting this check (TODO.md Sec 4).
 
     Every internal node of a chained design reaches a rail only through
     the transistors driving it. Before DEVICE_DC_PATHS existed this

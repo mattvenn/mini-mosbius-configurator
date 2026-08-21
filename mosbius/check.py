@@ -31,8 +31,8 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 
-from mosbius.netlist import IMPLICIT_PINS, MosbiusDesign
-from mosbius.route import FIXED_GEOMETRY, DeviceWidth
+from mosbius.netlist import IMPLICIT_PINS, PORT_NAMES, MosbiusDesign
+from mosbius.route import FIXED_GEOMETRY, UNSETTABLE_TAIL, DeviceTail, DeviceWidth
 from mosbius.model import (
     DEVICE_DC_PATHS,
     DEVICE_TERMINALS,
@@ -424,6 +424,13 @@ _PAIR_TAIL_BIT = {"nmos": "ctrl_dpn_source", "pmos": "ctrl_dpp_source"}
 _INDEPENDENT_SLOTS = {"nmos": "nmos_a and nmos_b", "pmos": "pmos_a and pmos_b"}
 _ROUTER_LABEL = {"nmos": "NMOS", "pmos": "PMOS"}
 
+# The free source-to-rail ties, for D2: naming them is what makes "it
+# costs a bus row" checkable rather than something to take on trust.
+SOURCE_TIE_EXAMPLE = {
+    "nmos": "ctrl_nfeta_source / ctrl_nfetb_source",
+    "pmos": "ctrl_pfeta_source / ctrl_pfetb_source",
+}
+
 
 def _name_list(devices: list) -> str:
     return ", ".join(d.name for d in devices)
@@ -468,7 +475,7 @@ def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
       WARN, not ERROR: the router *can* reach the opposite rail from a
       source terminal through a bus row and a cfg_bus_pwr tap, so this is
       routable, just almost certainly not what was meant. Same reasoning
-      as TODO.md Sec 2 keeps the drain/source-swap hint a hint.
+      as D2 below keeps the drain/source-swap hint a hint.
     """
     wired_nets = {
         net
@@ -549,6 +556,101 @@ def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
     return findings
 
 
+def _check_d2_drain_and_source_swapped(design: MosbiusDesign) -> list[Finding]:
+    """A FET whose drain sits on its own body's rail while its source sits
+    on an ordinary internal net -- almost always a symbol drawn upside
+    down, with drain and source exchanged.
+
+    Worth a check of its own because of how it presents. The allocator
+    sees a perfectly ordinary request -- a transistor whose source has to
+    be routed somewhere -- and there are only two FETs per polarity whose
+    source can go anywhere, so three of these come back as "DOESN'T FIT --
+    not enough PMOS with independent sources". Every word of that is true
+    and every word points at the size of the circuit instead of at the
+    wiring. This costs 15 minutes to unpick from the message alone.
+
+    A hint rather than an error, and deliberately narrow: a source on an
+    internal net is exactly right in a cascode or a source follower, so it
+    fires only when the *drain* is on the matching rail as well, which is
+    the combination with no sensible reading. Narrow in one more way: a
+    source on a `ua[]` pin is left alone too, so the reversed inverter in
+    examples/inverter/README.md (output on ua2) still passes silently.
+    That case costs a bus row rather than the circuit, and with a package
+    pin in play there are shapes that legitimately look like this.
+
+    It lives here, in the netlist-level checks, rather than on the
+    allocator's failure path, so it also fires on a design small enough to
+    route.
+    """
+    findings = []
+    for kind in ("nmos", "pmos"):
+        rail = BODY_RAIL[kind]
+        offenders = [
+            d for d in design.devices
+            if d.kind == kind
+            and d.terminals.get("d") == rail
+            and d.terminals.get("s") not in PORT_NAMES
+        ]
+        if not offenders:
+            continue
+
+        names = _name_list(offenders)
+        nets = ", ".join(sorted({f"'{d.terminals['s']}'" for d in offenders}))
+        n = len(offenders)
+        if n == 1:
+            subject = (
+                f"  {names} is a mosbius_{kind} with its drain on {rail} and its\n"
+                f"  source on {nets}, an ordinary net inside your circuit."
+            )
+        else:
+            subject = (
+                f"  {n} of your mosbius_{kind} devices have their drain on {rail} "
+                f"and their\n  source on an ordinary net inside your circuit "
+                f"({nets}):\n    {names}"
+            )
+
+        top, bottom = ("source", "drain") if kind == "pmos" else ("drain", "source")
+        message = (
+            f"WARNING -- drain and source look swapped on {names}\n\n"
+            f"{subject}\n\n"
+            f"  That is back to front for a common-source transistor. A "
+            f"mosbius_{kind}'s\n  source belongs on {rail} -- the rail its body is "
+            f"hard-wired to on\n  silicon -- and its drain is the end that drives "
+            f"the rest of the\n  circuit. As drawn, these two are the other way "
+            f"round.\n\n"
+            f"  Why it is worth saying: nothing downstream can tell a reversed\n"
+            f"  transistor from a deliberate one, so the request is taken at face\n"
+            f"  value and costs you something either way.\n\n"
+            f"  It costs a bus row even when it routes. Only the *source* terminal\n"
+            f"  has a free tie to its rail:\n"
+            f"    {SOURCE_TIE_EXAMPLE[kind]}\n"
+            f"  With the source on an internal net that tie is unusable, so "
+            f"reaching\n  {rail} from the drain instead has to spend a bus row and "
+            f"a cfg_bus_pwr\n  tap.\n\n"
+            f"  And it can cost you the circuit. The chip has only two "
+            f"{kind.upper()} whose\n  source can be routed anywhere at all, so once "
+            f"there are more than two\n  such requests the allocator gives up:\n"
+            f"    \"DOESN'T FIT -- not enough {kind.upper()} with independent "
+            f"sources\"\n"
+            f"  which points at the size of your circuit rather than at the "
+            f"wiring.\n\n"
+            f"  The usual cause is a symbol flipped vertically: mosbius_{kind} has "
+            f"its\n  {top} at the top and its {bottom} at the bottom, the opposite "
+            f"way up\n  from mosbius_{'nmos' if kind == 'pmos' else 'pmos'}. A "
+            f"schematic drawn before 2026-08-21 used the\n  older pin geometry, so "
+            f"a symbol copied from one comes out reversed.\n\n"
+            f"  This is a hint, not a hard stop: a source on an internal net is\n"
+            f"  exactly right in a cascode or a source follower. It is flagged only\n"
+            f"  because the drain is on {rail} as well, and that combination has no\n"
+            f"  sensible reading.\n\n"
+            f"  To fix: swap the two connections on {names}, so the source goes to\n"
+            f"  {rail} and the drain carries the signal."
+        )
+        findings.append(Finding(code="D2", severity=WARN, message=message))
+
+    return findings
+
+
 def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
                             device_roles: dict[str, str]) -> list[Finding]:
     """A width the schematic asked for that the assigned role cannot carry
@@ -601,21 +703,90 @@ def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
     return findings
 
 
+def _check_r2_tail_dropped(device_tails: dict[str, DeviceTail],
+                           device_roles: dict[str, str]) -> list[Finding]:
+    """A tail current the schematic asked for that the assigned role has
+    no bit for -- the same rule R1 enforces for widths, applied to the
+    other setting a device can carry.
+
+    Two different situations end up here, and they need different answers:
+    a diff-pair half, whose tail is real but unreachable from a schematic
+    (TODO.md Sec 2), and everything else, which simply has no tail current
+    to set. Only mosbius_ota carries a tail= of its own, so both of these
+    mean somebody typed the property by hand -- but a message that guessed
+    the wrong one of the two would send them looking in the wrong place.
+    """
+    findings = []
+    for name in sorted(device_tails):
+        tail = device_tails[name]
+        if not tail.dropped:
+            continue
+        role = device_roles[name]
+
+        if role not in UNSETTABLE_TAIL:
+            message = (
+                f"WARNING -- {name}'s tail={tail.requested} was ignored: {role} "
+                f"has no tail current\n\n"
+                f"  The router put {name} on {role}, which is a single transistor "
+                f"(or a\n  single current-mirror leg), not a differential pair. A "
+                f"tail current is\n  the shared current a pair is biased with, so "
+                f"there is nothing here for\n  tail= to set and it was dropped.\n\n"
+                f"  Only mosbius_ota has a tail you can write in the schematic. If "
+                f"you\n  meant to change how hard this device drives, that is "
+                f"w= (1, 2, 3 or 4)\n  on a mosbius_nmos/mosbius_pmos, or ratio= on "
+                f"a mosbius_nsink/\n  mosbius_psource."
+            )
+            findings.append(Finding(code="R2", severity=WARN, message=message))
+            continue
+
+        nmos = role.startswith("n")
+        pair = "NMOS" if nmos else "PMOS"
+        bit = "ctrl_dpn_tail" if nmos else "ctrl_dpp_tail"
+        symbol = "mosbius_nmos" if nmos else "mosbius_pmos"
+        message = (
+            f"WARNING -- {name}'s tail={tail.requested} was ignored: nothing in "
+            f"the schematic can\n           set {role}'s tail current\n\n"
+            f"  The router put {name} on {role}, one of the two halves of the\n"
+            f"  {pair} differential pair. That pair does have a programmable tail\n"
+            f"  current on the chip -- {bit}, which takes 2, 4, 6 or 8 --\n"
+            f"  but the tail belongs to the pair as a whole, not to either half,\n"
+            f"  and a half is drawn as an ordinary {symbol} symbol that has no\n"
+            f"  way to say so. So there is nowhere in your schematic for this "
+            f"value\n  to come from, and it was dropped.\n\n"
+            f"  What you get instead is tail={tail.effective}: the router leaves "
+            f"{bit}\n  clear, and an all-zero 2-bit cycler decodes to "
+            f"2 * (1 + 0) = 2\n  (SPEC.md Sec 2.11).\n\n"
+            f"  What you can still change: every tail and every mirror on the chip\n"
+            f"  scales with the bias current fed into the ibias pin, which\n"
+            f"  `mosbius program --ibias` sets when it uploads (SPEC.md Sec 3.4b).\n"
+            f"  That moves this pair's operating point even though its own tail\n"
+            f"  setting is out of reach -- it moves everything else with it too.\n"
+            f"  If you need a tail you can set on its own, mosbius_ota is the one\n"
+            f"  device that exposes one (tail=2/4/6/8, wired to ctrl_otan_tail)."
+        )
+        findings.append(Finding(code="R2", severity=WARN, message=message))
+    return findings
+
+
 def check_routing(routed) -> SafetyReport:
     """Run the post-routing checks against a RoutedDesign.
 
-    Typed loosely on purpose: this only needs `.device_widths` and
-    `.device_roles`, and taking the object by duck type keeps check.py
-    from importing the router's result class.
+    Typed loosely on purpose: this only needs `.device_widths`,
+    `.device_tails` and `.device_roles`, and taking the object by duck
+    type keeps check.py from importing the router's result class.
     """
     return SafetyReport(
         findings=_check_r1_width_dropped(routed.device_widths, routed.device_roles)
+        + _check_r2_tail_dropped(routed.device_tails, routed.device_roles)
     )
 
 
 def check_design(design: MosbiusDesign) -> SafetyReport:
     """Run the netlist-level checks against `design`, before routing."""
-    return SafetyReport(findings=_check_d1_source_on_wrong_rail(design))
+    return SafetyReport(
+        findings=_check_d1_source_on_wrong_rail(design)
+        + _check_d2_drain_and_source_swapped(design)
+    )
 
 
 # ---------------------------------------------------------------------------

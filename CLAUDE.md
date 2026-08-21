@@ -14,14 +14,20 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§1), a reversed drain/source reported as "doesn't fit" rather than
-as the wiring mistake it is (§2), tail currents that never reach the
-bitstream (§3), a single OTA crashing the router (§4), and device allocation
-depending on netlist order and failing with a traceback (§5), and findings
-repeating their whole explanation once per offending device (§6). It is
+design (§1), no way for a schematic to set a differential pair's tail
+current (§2), device allocation decided by netlist order (§3), and findings
+repeating their whole explanation once per offending device (§4). It is
 renumbered from 1 whenever items are removed, and every citation of it in
 this repo is updated in the same commit, so a `TODO.md` §number here is
 always live.
+
+Closed on 2026-08-21, so don't re-report them: a reversed drain/source is
+now a `D2` hint that fires before the "DOESN'T FIT" it explains; a single
+`mosbius_ota` routes (side is per *terminal* now -- the OTA is the one
+device on both bus sides at once); `tail=` on a `mosbius_ota` reaches
+`ctrl_otan_tail`; and a terminal asked for a bus row it has no switch to
+raises a `RouteError` naming the device, the net and the rows it can
+reach, instead of a `KeyError`.
 
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it

@@ -54,10 +54,46 @@ class RouteError(ValueError):
 # Hardware roles (SPEC.md Sec 2.12 device inventory).
 # ---------------------------------------------------------------------------
 
-ROLE_SIDE = {
-    "nmos_a": "A", "nmos_b": "B", "ndiffpair+": "A", "ndiffpair-": "B",
-    "pmos_a": "A", "pmos_b": "B", "pdiffpair+": "A", "pdiffpair-": "B",
-    "nsink_a": "A", "nsink_b": "B", "psource_a": "A", "psource_b": "B",
+# Which cfga_/cfgb_ switch pin each device terminal is wired to, and which
+# bus side that puts it on. Both are *derived* from bitmap.py rather than
+# transcribed, for the reason this module's docstring gives: a bit-map
+# correction there must not silently drift out of sync with the router.
+#
+# Side is a property of the terminal, not of the device. Eleven of the
+# twelve FET/mirror roles sit wholly on one side, but the OTA straddles
+# both -- inp/outp on side A, inm/outm on side B -- so no single value
+# could ever describe it. Asking for a *role's* side is what used to raise
+# KeyError('ota') the moment anyone routed one, until 2026-08-21.
+def _derive_terminal_tables() -> tuple[dict[tuple[str, str], str], dict[tuple[str, str], str]]:
+    by_crosspoint: dict[str, tuple[str, str]] = {}
+    for mb in MATRIX_BITS.values():
+        if mb.crosspoint is None:
+            continue  # cfg_bus_short/cfg_bus_pwr: no device terminal behind them
+        known = by_crosspoint.setdefault(mb.crosspoint, (mb.pin, mb.bus))
+        if known != (mb.pin, mb.bus):
+            raise AssertionError(
+                f"{mb.crosspoint} is reached by two different switch pins, "
+                f"{known} and {(mb.pin, mb.bus)} -- bitmap.py disagrees with itself"
+            )
+
+    pins: dict[tuple[str, str], str] = {}
+    sides: dict[tuple[str, str], str] = {}
+    for role, terminals in DEVICE_TERMINALS.items():
+        for terminal, crosspoint in terminals.items():
+            pin, side = by_crosspoint[crosspoint]
+            pins[(role, terminal)] = pin
+            sides[(role, terminal)] = side
+    return pins, sides
+
+
+TERMINAL_PIN, TERMINAL_SIDE = _derive_terminal_tables()
+
+# The word a beginner would use for each terminal: the schematic says "g",
+# a diagnostic should say "gate" (CLAUDE.md: spell it out, and match the
+# vocabulary the user already has).
+TERMINAL_WORD = {
+    "g": "gate", "d": "drain", "s": "source", "out": "output",
+    "inp": "+ input", "inm": "- input", "outp": "+ output", "outm": "- output",
 }
 
 NMOS_INDEPENDENT_ROLES = ("nmos_a", "nmos_b")
@@ -108,6 +144,35 @@ WIDTH_SETTING = {
     "psource_a": ("ctrl_mirp_a", 1), "psource_b": ("ctrl_mirp_b", 1),
 }
 DEFAULT_WIDTH = 1  # mosbius_nmos/pmos/nsink/psource's own template default
+
+# (role -> tail-current setting field, step) for the devices whose tail
+# current a schematic can actually set. The cycler takes 2/4/6/8 rather
+# than 1..4 -- step=2 (SPEC.md Sec 2.11).
+#
+# Only the OTA is on this list, because it is the only symbol that carries
+# a tail= property (mosbius_ota.sym, template="name=X1 tail=2 ..."). Until
+# 2026-08-21 the router read only w= and ratio=, so writing tail=4 changed
+# the netlist and changed no bit at all -- masked by the coincidence that
+# an all-zero cycler decodes to step*(1+0) = 2, exactly the symbol's own
+# default, so the one value anybody tries first was accidentally right.
+TAIL_SETTING = {"ota": ("ctrl_otan_tail", 2)}
+DEFAULT_TAIL = 2  # mosbius_ota.sym's own template default
+
+# The roles TAIL_SETTING does *not* cover but that still have a tail, and
+# the value the bitstream leaves it at.
+#
+# ctrl_dpn_tail and ctrl_dpp_tail are real bits, and nothing a user can
+# draw reaches them: a differential pair is two mosbius_nmos/mosbius_pmos
+# symbols that expose only w=, and the tail belongs to the pair rather
+# than to either half, so w='s per-device shape does not fit it. Deciding
+# how a schematic should express it (a tail= on both halves that must
+# agree, or a separate symbol wired to the shared source) is still open --
+# TODO.md Sec 2. Until then the router leaves those bits clear, which is
+# 2 by the same all-zero-decodes-to-2 arithmetic, and R2 in check.py says
+# so out loud rather than dropping a tail= silently.
+UNSETTABLE_TAIL = {
+    "ndiffpair+": 2, "ndiffpair-": 2, "pdiffpair+": 2, "pdiffpair-": 2,
+}
 
 # The roles WIDTH_SETTING does *not* cover, and the width they are fixed
 # at anyway. A diff-pair half has no width bits on the chip -- its
@@ -185,13 +250,75 @@ def device_widths(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, Dev
     by_name = {d.name: d for d in design.devices}
     return {name: device_width(by_name[name], role) for name, role in roles.items()}
 
-# Pin name for a (role, terminal): matches xpt_<suffix> crosspoints
-# (model.DEVICE_TERMINALS) with the side-appropriate cfga_/cfgb_ prefix --
-# this is exactly the naming SPEC.md Sec 2.8 confirms holds everywhere.
-def _pin_name(role: str, terminal: str) -> str:
-    crosspoint = DEVICE_TERMINALS[role][terminal]
-    prefix = "cfga_" if ROLE_SIDE[role] == "A" else "cfgb_"
-    return prefix + crosspoint.removeprefix("xpt_")
+
+@dataclass(frozen=True)
+class DeviceTail:
+    """What tail current a device ended up with, versus what the schematic
+    asked for -- the same shape as DeviceWidth, for the same reason: a
+    property that cannot reach the bitstream has to be said out loud.
+
+    `requested` is None when the symbol carries no tail property at all
+    (every symbol except mosbius_ota); `effective` is None when the role
+    has no tail current in the first place (a single FET, a mirror leg).
+    """
+
+    requested: int | None      # what the netlist said, None if unset
+    effective: int | None      # what the chip will actually be set to
+    programmable: bool         # False when no bit can carry it
+
+    @property
+    def dropped(self) -> bool:
+        """A tail was asked for, cannot be programmed, and differs from
+        what the hardware will do anyway.
+        """
+        return (
+            not self.programmable
+            and self.requested is not None
+            and self.requested != self.effective
+        )
+
+
+def device_tail(dev: DeviceRequest, role: str) -> DeviceTail:
+    """The tail-current story for one allocated device."""
+    requested = dev.properties.get("tail")
+    if role in TAIL_SETTING:
+        return DeviceTail(requested, requested or DEFAULT_TAIL, True)
+    return DeviceTail(requested, UNSETTABLE_TAIL.get(role), False)
+
+
+def device_tails(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, DeviceTail]:
+    """The tail-current story for every device, keyed by instance name."""
+    by_name = {d.name: d for d in design.devices}
+    return {name: device_tail(by_name[name], role) for name, role in roles.items()}
+
+
+def _encode_setting(value: int, step: int, *, device: str, prop: str) -> tuple[int, int]:
+    """encode_cycler, with the ValueError turned into a routing failure
+    that names the device and says what it could have been instead.
+
+    A cycler is two bits, so a setting is one of exactly four values
+    (SPEC.md Sec 2.11) -- there is no rounding to a nearest legal one,
+    because silently building a different transistor than the schematic
+    draws is the failure mode this whole file is trying to avoid.
+    """
+    try:
+        return encode_cycler(value, step)
+    except ValueError:
+        valid = list(range(1, 5)) if step == 1 else list(range(2, 9, 2))
+        options = ", ".join(str(v) for v in valid[:-1]) + f" or {valid[-1]}"
+        raise RouteError(
+            f"DOESN'T FIT -- {device}'s {prop}={value} is not a setting this "
+            f"chip has\n\n"
+            f"  {prop}= is stored as a 2-bit cycler: n = {step} * (1 + b_lsb + "
+            f"2*b_msb)\n  (SPEC.md Sec 2.11). That gives exactly four settings, "
+            f"{options},\n  and nothing in between.\n\n"
+            f"  Nothing is rounded to the nearest one on your behalf: the chip "
+            f"would\n  then be built to a different {prop} than your schematic "
+            f"shows, which is\n  the kind of silent difference this tool exists "
+            f"to prevent.\n\n"
+            f"  To fix: set {prop}= to one of {options} on {device} in the "
+            f"schematic,\n  and press Netlist again."
+        ) from None
 
 
 # bit for (pin, row), for every matrix signal that has a crosspoint
@@ -229,6 +356,81 @@ _TAPPABLE_ROWS: set[tuple[str, int]] = set(_PWR_TAP_BY_SIDE_ROW)
 ALL_ROWS: set[tuple[str, int]] = {(side, row) for side in ("A", "B") for row in range(1, 7)}
 _FREE_ROWS: set[tuple[str, int]] = ALL_ROWS - _PINNED_ROWS  # tappable + the one unencumbered row
 
+ALL_SIX_ROWS = frozenset(range(1, 7))
+
+# The rows an internal net spanning *both* sides can ever use: free of a
+# ua[] bond wire on side A and on side B at once. Derived, because which
+# rows those are is a consequence of the pin map (SPEC.md Sec 2.10) rather
+# than an independent fact -- today it comes out as row 6 alone.
+ROWS_FREE_ON_BOTH_SIDES: frozenset[int] = frozenset(
+    row for row in ALL_SIX_ROWS
+    if ("A", row) in _FREE_ROWS and ("B", row) in _FREE_ROWS
+)
+
+
+def _derive_rows_by_pin() -> dict[str, frozenset[int]]:
+    rows: dict[str, set[int]] = {}
+    for pin, row in _MATRIX_BIT_BY_PIN_ROW:
+        rows.setdefault(pin, set()).add(row)
+    return {pin: frozenset(r) for pin, r in rows.items()}
+
+
+# Which bus rows each switch pin can reach at all. Most crosspoints have a
+# switch to all six rows; the differential-pair and OTA *inputs* have
+# switches to rows 1-3 only (SPEC.md Sec 2.12, CLAUDE.md trap 6). Derived
+# from the bit map, so this is the hardware talking, not a transcription.
+_ROWS_BY_PIN: dict[str, frozenset[int]] = _derive_rows_by_pin()
+
+
+def rows_reachable(pin: str) -> frozenset[int]:
+    """The bus rows `pin`'s crosspoint has a switch to."""
+    return _ROWS_BY_PIN.get(pin, frozenset())
+
+
+def _fmt_rows(rows) -> str:
+    rows = sorted(rows)
+    if not rows:
+        return "no row at all"
+    if len(rows) == 1:
+        return f"row {rows[0]}"
+    return "rows " + ", ".join(str(r) for r in rows[:-1]) + f" and {rows[-1]}"
+
+
+def _describe_touch(t: "_Touch") -> str:
+    """A device terminal in the words the user drew it in: instance name,
+    the terminal's ordinary name, and the hardware slot it was allocated
+    to (CLAUDE.md: translate the chip's own identifiers before printing).
+    """
+    return f"{t.device}'s {TERMINAL_WORD.get(t.terminal, t.terminal)} ({t.role}.{t.terminal})"
+
+
+def _reach_lines(touches: list["_Touch"]) -> str:
+    lines = []
+    for t in sorted(touches, key=lambda t: (t.device, t.terminal)):
+        rows = rows_reachable(t.pin)
+        reach = "all six rows" if rows == ALL_SIX_ROWS else f"only bus {_fmt_rows(rows)}"
+        lines.append(f"    {_describe_touch(t)} -- reaches {reach}")
+    return "\n".join(lines)
+
+
+# Why a terminal might reach fewer than six rows. Repeated in every
+# reach-related message, because it is the fact that makes the failure
+# make sense and the reader may be meeting it for the first time.
+_WHY_LIMITED_REACH = (
+    "  Why some terminals reach fewer rows than others: the differential\n"
+    "  pair's and the OTA's *input* crosspoints have a switch to three bus\n"
+    "  rows only, not to all six (SPEC.md Sec 2.12). Every other terminal on\n"
+    "  the chip reaches all six.\n"
+)
+
+
+def _shared_reach(touches: list["_Touch"]) -> frozenset[int]:
+    """The rows every one of these terminals can reach."""
+    shared = ALL_SIX_ROWS
+    for t in touches:
+        shared &= rows_reachable(t.pin)
+    return frozenset(shared)
+
 
 @dataclass
 class RoutedDesign:
@@ -241,8 +443,9 @@ class RoutedDesign:
     net_rows: dict[str, dict[str, int]] = field(default_factory=dict)  # net -> {side: row}
     schema: int = SCHEMA
     # Not persisted: a pure function of (design, device_roles), so the
-    # sticky path recomputes it rather than growing the file's schema.
+    # sticky path recomputes them rather than growing the file's schema.
     device_widths: dict[str, DeviceWidth] = field(default_factory=dict)
+    device_tails: dict[str, DeviceTail] = field(default_factory=dict)
 
 
 def format_device_roles(routed) -> list[str]:
@@ -258,6 +461,12 @@ def format_device_roles(routed) -> list[str]:
             note = f"  {width.prop}={width.effective}"
             if not width.programmable:
                 note += " (fixed)"
+        # Only the roles whose tail the bitstream really carries: a tail
+        # printed against a device that cannot set one would read as a
+        # promise the hardware does not make (R2 covers that case).
+        tail = routed.device_tails.get(name)
+        if tail is not None and tail.programmable and tail.effective is not None:
+            note += f"  tail={tail.effective}"
         lines.append(f"  {name:<12} -> {role:<12}{note}")
     return lines
 
@@ -408,6 +617,54 @@ class _Touch:
     pin: str
 
 
+def _matrix_bit(touch: _Touch, row: int, net: str) -> int:
+    """The chain bit closing `touch`'s crosspoint onto its side's `row`.
+
+    Every (pin, row) pair that is missing from the bit map means the same
+    thing -- the chip has no switch there -- so the lookup is wrapped once
+    here rather than guarded at each call site. The row pickers below try
+    to avoid ever asking for an unreachable row; this is the backstop that
+    turns a slip into an explanation instead of a KeyError.
+    """
+    try:
+        return _MATRIX_BIT_BY_PIN_ROW[(touch.pin, row)]
+    except KeyError:
+        reachable = rows_reachable(touch.pin)
+        if net in PORT_ROW:
+            # A port net's row is a bond wire, not a choice -- so the only
+            # move is a different pin, and there is no point making the
+            # reader work out which ones those are (SPEC.md Sec 2.10).
+            usable = [pin for pin, (_s, r) in sorted(PORT_ROW.items()) if r in reachable]
+            if len(usable) > 1:
+                options = ", ".join(usable[:-1]) + f" or {usable[-1]}"
+            elif usable:
+                options = usable[0]
+            else:
+                options = "no package pin at all, on this chip"  # unreachable today
+            why = (
+                f"  '{net}' is a package pin, and its bus row is a permanent bond "
+                f"wire\n  rather than something the router picks: {net} is always "
+                f"bus_{PORT_ROW[net][0]}[{row}]\n  (SPEC.md Sec 2.10).\n\n"
+                f"{_WHY_LIMITED_REACH}\n"
+                f"  To fix: move this signal to a pin bonded to a row this "
+                f"terminal can\n  reach ({options}), or arrange for the restricted "
+                f"device not to be the\n  one sitting on this net."
+            )
+        else:
+            why = (
+                f"  '{net}' was placed on bus row {row}, which this terminal has no "
+                f"switch\n  to.\n\n{_WHY_LIMITED_REACH}"
+            )
+        error = RouteError(
+            f"DOESN'T FIT -- {_describe_touch(touch)} cannot reach "
+            f"bus_{touch.side}[{row}]\n\n"
+            f"  {touch.role}.{touch.terminal} reaches {_fmt_rows(reachable)}, "
+            f"and nothing else.\n\n"
+            f"{why}"
+        )
+        raise error from None
+
+
 def _apply_free_source_ties(design: MosbiusDesign, roles: dict[str, str]) -> tuple[set[int], set[tuple[str, str]]]:
     """Close every ctrl_*_source bit whose device's own "s" net is exactly
     that role's tail rail (SPEC.md Sec 3.2: "cheaper -- no bus consumed").
@@ -441,7 +698,8 @@ def _collect_touches(
                 continue  # already tied to its rail for free -- see _apply_free_source_ties
             by_net.setdefault(net, []).append(
                 _Touch(device=d.name, role=role, terminal=terminal,
-                       side=ROLE_SIDE[role], pin=_pin_name(role, terminal))
+                       side=TERMINAL_SIDE[(role, terminal)],
+                       pin=TERMINAL_PIN[(role, terminal)])
             )
     return by_net
 
@@ -471,18 +729,42 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             )
         row_owner[key] = net
 
-    def pick_free_row(side: str, net: str) -> int:
-        candidates = sorted(
+    def pick_free_row(side: str, net: str, touches: list[_Touch]) -> int:
+        free = sorted(
             row for (s, row) in _FREE_ROWS
             if s == side and row_owner.get((s, row)) in (None, net)
         )
-        if not candidates:
+        if not free:
             raise RouteError(
                 f"DOESN'T FIT -- no free bus_{side}[] row left for '{net}'\n\n"
                 f"  All 6 rows on side {side} are already claimed by other nets, "
                 f"ports\n  or rail taps. Try routing this net through the other "
                 f"side, or freeing\n  up a row by sharing it with a net that's "
                 f"already there."
+            )
+        # Not every row suits every terminal: a diff-pair or OTA input has
+        # a switch to rows 1-3 only, so picking the lowest free row blind
+        # is how this used to end in a KeyError.
+        reachable = _shared_reach(touches)
+        candidates = [row for row in free if row in reachable]
+        if not candidates:
+            raise RouteError(
+                f"DOESN'T FIT -- no bus_{side}[] row that every device on "
+                f"'{net}' can reach\n\n"
+                f"  '{net}' connects:\n{_reach_lines(touches)}\n\n"
+                f"  Free on side {side} right now: bus {_fmt_rows(free)}. The "
+                f"terminals above can\n  share only bus {_fmt_rows(reachable)}, "
+                f"and none of that is free.\n\n"
+                f"{_WHY_LIMITED_REACH}\n"
+                f"  Ideas:\n"
+                f"    - Free up one of bus {_fmt_rows(reachable)} on side {side}, by "
+                f"moving another\n      net elsewhere.\n"
+                f"    - Give this net a package pin (name it ua1..ua5) if you can\n"
+                f"      spare one: that pins it to the row the pin is bonded to,\n"
+                f"      which may be a row the restricted terminal can reach.\n"
+                f"    - Rearrange the circuit so the restricted device is not on\n"
+                f"      this net at all -- only differential-pair and OTA inputs\n"
+                f"      are limited."
             )
         return candidates[0]
 
@@ -497,7 +779,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             bits.add(_BUS_SHORT_BIT_BY_ROW[row])
             net_rows.setdefault(net, {})[opposite] = row
         for t in touches:
-            bits.add(_MATRIX_BIT_BY_PIN_ROW[(t.pin, row)])
+            bits.add(_matrix_bit(t, row, net))
         net_rows.setdefault(net, {})[side] = row
 
     # -- Rail nets (VAPWR/VGND): terminals with a free ctrl_*_source tie
@@ -513,15 +795,26 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         tappable = sorted(row for (s, row) in _TAPPABLE_ROWS if s == side
                            and _PWR_TAP_BY_SIDE_ROW[(s, row)][1] == rail
                            and row_owner.get((s, row)) in (None, net))
-        if not tappable:
+        reachable = _shared_reach(remaining)
+        usable = [row for row in tappable if row in reachable]
+        if not usable:
+            unreachable_note = ""
+            if tappable:
+                unreachable_note = (
+                    f"  The {rail} tap rows still free on side {side} are bus "
+                    f"{_fmt_rows(tappable)},\n  but these terminals can share only "
+                    f"bus {_fmt_rows(reachable)}:\n{_reach_lines(remaining)}\n\n"
+                    f"{_WHY_LIMITED_REACH}\n"
+                )
             raise RouteError(
-                f"DOESN'T FIT -- no {rail} tap left on side {side} for '{net}'\n\n"
+                f"DOESN'T FIT -- no usable {rail} tap on side {side} for '{net}'\n\n"
+                f"{unreachable_note}"
                 f"  {rail} can only be reached from specific bus rows "
-                f"(SPEC.md Sec 2.7),\n  and they're all claimed. If the device "
-                f"has a source terminal, tying it\n  directly to {rail} costs no "
-                f"bus row at all."
+                f"(SPEC.md Sec 2.7),\n  and none of the ones this net could use is "
+                f"available. If the device\n  has a source terminal, tying it "
+                f"directly to {rail} costs no bus row\n  at all."
             )
-        row = tappable[0]
+        row = usable[0]
         claim_row(side, row, net)
         bit, _ = _PWR_TAP_BY_SIDE_ROW[(side, row)]
         bits.add(bit)
@@ -536,7 +829,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         sides_needed = {t.side for t in touches}
         if len(sides_needed) == 1:
             side = next(iter(sides_needed))
-            row = pick_free_row(side, net)
+            row = pick_free_row(side, net, touches)
             claim_row(side, row, net)
             route_touches_on_row(touches, side, row, net)
             return
@@ -545,14 +838,48 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         # than assuming row numbers line up between the two sides.
         a_rows = sorted(r for (s, r) in _FREE_ROWS if s == "A" and row_owner.get((s, r)) in (None, net))
         b_rows = sorted(r for (s, r) in _FREE_ROWS if s == "B" and row_owner.get((s, r)) in (None, net))
-        for row in sorted(set(a_rows) & set(b_rows)):
+        both_free = sorted(set(a_rows) & set(b_rows))
+        reachable = _shared_reach(touches)
+        for row in both_free:
+            if row not in reachable:
+                continue  # some terminal here has no switch to this row
             claim_row("A", row, net)
             claim_row("B", row, net)
             bits.add(_BUS_SHORT_BIT_BY_ROW[row])
             for t in touches:
-                bits.add(_MATRIX_BIT_BY_PIN_ROW[(t.pin, row)])
+                bits.add(_matrix_bit(t, row, net))
             net_rows[net] = {"A": row, "B": row}
             return
+
+        if both_free:
+            # A row was free on both sides and still no good: some terminal
+            # on this net cannot reach it. That is a rule rather than bad
+            # luck, and it is worth saying which rule.
+            raise RouteError(
+                f"DOESN'T FIT -- '{net}' spans both bus sides and no row can "
+                f"join them\n\n"
+                f"  '{net}' connects:\n{_reach_lines(touches)}\n\n"
+                f"  A net that touches both sides has to sit on the *same* row\n"
+                f"  number on side A and on side B, bridged by cfg_bus_short. Free\n"
+                f"  on both sides here: bus {_fmt_rows(both_free)}. The terminals "
+                f"above can share\n  only bus {_fmt_rows(reachable)}.\n\n"
+                f"{_WHY_LIMITED_REACH}\n"
+                f"  And bus {_fmt_rows(ROWS_FREE_ON_BOTH_SIDES)} is the only row "
+                f"ever free on both sides at once:\n  the others are permanently "
+                f"bonded to a ua[] pin on one side or the\n  other (SPEC.md Sec "
+                f"2.10). So this is a rule rather than a near miss:\n  a "
+                f"differential-pair or OTA input can never sit on an internal net\n"
+                f"  that spans both bus sides, whichever package pins you use.\n\n"
+                f"  Ideas:\n"
+                f"    - Get every device on '{net}' onto one bus side. Which side a\n"
+                f"      device is on follows from the hardware slot it was given, so\n"
+                f"      in practice this means changing which devices share a source.\n"
+                f"    - Give the net a package pin (name it ua1..ua5). A port net is\n"
+                f"      pinned to that pin's own row, which a restricted input may\n"
+                f"      well reach, and the other side is still bridged with\n"
+                f"      cfg_bus_short."
+            )
+
         raise RouteError(
             f"DOESN'T FIT -- '{net}' needs a free row on both sides, joined\n\n"
             f"  This net connects devices on both side A and side B, which needs "
@@ -584,10 +911,23 @@ def route(design: MosbiusDesign) -> RoutedDesign:
     # the width shown and the width programmed cannot drift apart -- which
     # is the failure that motivated reporting it at all.
     widths = device_widths(design, roles)
+    tails = device_tails(design, roles)
     for dev_name, role in roles.items():
         if role in WIDTH_SETTING:
             pin, step = WIDTH_SETTING[role]
-            lsb, msb = encode_cycler(widths[dev_name].effective, step)
+            lsb, msb = _encode_setting(
+                widths[dev_name].effective, step,
+                device=dev_name, prop=widths[dev_name].prop,
+            )
+            if lsb:
+                bits.add(setting_bit(pin, 0))
+            if msb:
+                bits.add(setting_bit(pin, 1))
+        if role in TAIL_SETTING:
+            pin, step = TAIL_SETTING[role]
+            lsb, msb = _encode_setting(
+                tails[dev_name].effective, step, device=dev_name, prop="tail",
+            )
             if lsb:
                 bits.add(setting_bit(pin, 0))
             if msb:
@@ -598,6 +938,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         device_roles=roles,
         net_rows=net_rows,
         device_widths=widths,
+        device_tails=tails,
     )
 
 
@@ -696,8 +1037,9 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
                 schema=stored.get("schema", SCHEMA),
                 # Safe to recompute rather than read back: the topology
                 # hash covers device properties, so a stored routing only
-                # matches a design whose w=/ratio= are unchanged too.
+                # matches a design whose w=/ratio=/tail= are unchanged too.
                 device_widths=device_widths(design, roles),
+                device_tails=device_tails(design, roles),
             )
 
     routed = route(design)
