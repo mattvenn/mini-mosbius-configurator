@@ -14,8 +14,8 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-Numbers are stable, so the list starts at 2: item 1 (redraw the symbols) was
-done on 2026-08-21. Other files cite these by number -- `CLAUDE.md` points at
+Numbers are stable, so the list starts at 2: items 1 (redraw the symbols) and
+6 (W2 firing on every internal node) were done on 2026-08-21. Other files cite these by number -- `CLAUDE.md` points at
 §4 and §7, `examples/ringosc/README.md` at §5 -- so completed items are
 removed without renumbering the rest.
 
@@ -218,37 +218,6 @@ Related: the Level-1 simulation netlists every device at its schematic `w=`, so
 it simulates a symmetric ring the chip will not build. That is a second,
 independent reason Level-1 misses -- on top of the missing switch matrix that
 item 2 and `examples/ringosc/README.md` already quantify.
-
-## 6. W2 fires on every internal node of a multi-stage design
-
-`check.py:226`'s `_check_w2_floating_crosspoint` builds its graph from closed
-switches only. A transistor channel is not an edge, so any net that reaches a
-rail *through a device* rather than through the matrix looks floating.
-
-Its docstring already anticipates half of this -- it anchors on the `ua[]` pins
-as well as the rails, specifically so W2 doesn't "fire on nearly every signal
-node in nearly every design ... which teaches a beginner to ignore warnings
-rather than trust them". That fix covers inputs and outputs. It does not cover
-*internal* nodes of chained stages, which is exactly what a ring oscillator is.
-
-The 3-stage ring produces eight W2 warnings for two nets:
-
-```
-net1 -> xpt_nfeta_d, xpt_pfeta_d, xpt_dpn_inp, xpt_dpp_inp
-net2 -> xpt_nfetb_g, xpt_pfetb_g, xpt_dpn_outp, xpt_dpp_outp
-```
-
-Both are ordinary CMOS inverter outputs. The advice W2 gives ("give this net a
-DC path to a rail or a pin") is wrong for them, and it is repeated once per
-crosspoint rather than once per net.
-
-Two things to fix, in order of value:
-
-1. **Don't fire when the net is driven.** A net that reaches a rail through a
-   transistor whose own terminals are routed is an output, not a float. Needs
-   the check to walk device channels, not just switches.
-2. **Group by net.** Report the net once, listing its crosspoints, instead of
-   N nearly-identical warnings.
 
 ## 7. Library symbols emit an invalid subcircuit call
 

@@ -16,9 +16,13 @@ from collections import deque
 from dataclasses import dataclass
 
 from mosbius.model import (
+    DEVICE_DC_PATHS,
     DEVICE_TERMINALS,
     EXTERNAL_PINS,
     INDEPENDENT_FETS,
+    TERMINAL_BY_CROSSPOINT,
+    DeviceSettings,
+    Edge,
     Graph,
     SwitchConfig,
     connected_components,
@@ -223,38 +227,119 @@ def _check_w1_shorted_channel(graph: Graph, comp: dict[str, int]) -> list[Findin
     return findings
 
 
-def _check_w2_floating_crosspoint(graph: Graph, comp: dict[str, int]) -> list[Finding]:
-    """A crosspoint with no DC path to *anything that pins its voltage*.
+def _biasing_graph(graph: Graph, settings: DeviceSettings) -> Graph:
+    """`graph` plus the DC paths that run *through* devices (model.py's
+    DEVICE_DC_PATHS) rather than through the switch matrix.
+
+    For W2 only. Every other check asks "are these shorted together", and
+    a transistor channel is not a short -- add these edges to E1's graph
+    and every working inverter becomes a VAPWR-VGND short.
+    """
+    augmented: Graph = {node: list(edges) for node, edges in graph.items()}
+    for path in DEVICE_DC_PATHS:
+        if path.setting is not None and not getattr(settings, path.setting):
+            continue
+        augmented.setdefault(path.a, []).append(Edge(neighbor=path.b, label=path.label))
+        augmented.setdefault(path.b, []).append(Edge(neighbor=path.a, label=path.label))
+    return augmented
+
+
+def _terminal_name(node: str) -> str:
+    return TERMINAL_BY_CROSSPOINT.get(node, node)
+
+
+def _check_w2_floating_crosspoint(
+    graph: Graph, comp: dict[str, int], settings: DeviceSettings,
+) -> list[Finding]:
+    """A net with no DC path to anything that pins its voltage.
 
     A rail obviously pins it. So does an external ua[] pin: those are
     listed alongside the rails as fixed nodes in SPEC.md Sec 3.1's graph
     model precisely because the demoboard can hold them at a defined
     voltage -- a gate or drain reachable only through ua[1] isn't floating,
-    it's an ordinary input/output. Without this, W2 would fire on nearly
-    every signal node in nearly every design (anything that's just an
-    input or output), which teaches a beginner to ignore warnings rather
-    than trust them.
+    it's an ordinary input/output.
+
+    So does a transistor channel that reaches a rail, which is why this
+    runs against _biasing_graph() rather than the switch graph. Without
+    that, every internal node of a multi-stage design fires: the output of
+    an inverter reaches a rail only through its own two transistors, so on
+    a 3-stage ring oscillator this check used to produce eight warnings,
+    all false, telling the user to break their circuit. Nets are grouped
+    too -- one finding per net, not one per crosspoint on it.
+
+    What still fires, and should: a net whose terminals are all gates.
+    Nothing can ever set its voltage.
     """
-    findings = []
-    anchor_comps = {comp["VAPWR"], comp["VGND"]}
-    anchor_comps |= {comp[pin] for pin in EXTERNAL_PINS}
+    bias = _biasing_graph(graph, settings)
+    bias_comp = connected_components(bias)
+    anchors = {"VAPWR", "VGND", *EXTERNAL_PINS}
+    anchor_comps = {bias_comp[a] for a in anchors if a in bias_comp}
+
+    # Group the wired crosspoints into nets, using the *switch* graph --
+    # that is what "one net" means everywhere else (decode.py agrees).
+    nets: dict[int, list[str]] = {}
     for node, edges in graph.items():
-        if not node.startswith("xpt_"):
-            continue
-        if not edges:
+        if not node.startswith("xpt_") or not edges:
             continue  # unused crosspoint, not a floating one -- fine
-        if comp[node] in anchor_comps:
+        nets.setdefault(comp[node], []).append(node)
+
+    findings = []
+    for _cid, nodes in sorted(nets.items(), key=lambda kv: sorted(kv[1])):
+        # The biasing graph is a superset, so every node here shares one
+        # biasing component -- testing the first is testing all of them.
+        if bias_comp[nodes[0]] in anchor_comps:
             continue
+        terminals = sorted(_terminal_name(n) for n in nodes)
+        names = ", ".join(terminals)
+        if len(terminals) == 1:
+            headline = f"WARNING -- nothing biases {names}"
+            intro = "  It has a closed switch on it, but the net it sits on\n"
+        else:
+            headline = f"WARNING -- nothing biases the net joining {names}"
+            intro = "  These terminals are wired together, but the net they form\n"
+
+        if all(t.endswith((".g", ".inp", ".inm")) for t in terminals):
+            why = (
+                "  Every terminal on it is a gate, so nothing can set its\n"
+                "  voltage -- there is no transistor channel to a rail here,\n"
+                "  and no switch to one either.\n\n"
+            )
+        else:
+            why = (
+                "  Nothing reaches it: not a closed switch to a rail or a\n"
+                "  ua[] pin, and not a transistor channel that gets to one\n"
+                "  either (a drain only conducts to a rail if its own source\n"
+                "  is tied to one).\n\n"
+            )
+
+        # If a diff-pair half is on this net, its untied tail is the whole
+        # reason the channel leads nowhere -- and that is one bit to flip.
+        untied = sorted({
+            path.setting for path in DEVICE_DC_PATHS
+            for node in nodes
+            if path.a == node and path.setting and not getattr(settings, path.setting)
+        })
+        hint = ""
+        if untied:
+            bits = ", ".join(f"ctrl_{name}" for name in untied)
+            hint = (
+                f"\n\n  Most likely fix here: {bits} is off, so the shared\n"
+                f"  diff-pair tail on this net's transistor is floating too. The\n"
+                f"  tail has no matrix terminal of its own (SPEC.md Sec 2.12) --\n"
+                f"  that bit is the only way to tie it to a rail, and with it set\n"
+                f"  the half works as an ordinary common-source FET."
+            )
+
         message = (
-            f"WARNING -- {node} has no DC path to a rail or a package pin\n\n"
-            f"  {node} is wired into the design (it has a closed switch on\n"
-            f"  it) but nothing connects it, even indirectly, to VAPWR,\n"
-            f"  VGND, or one of the ua[] pins. In SPICE this floats and can\n"
-            f"  settle at an arbitrary voltage; on real silicon leakage will\n"
-            f"  pull it somewhere uncontrolled, slowly.\n\n"
-            f"  To fix: give this net a DC path to a rail or a pin -- directly,\n"
-            f"  through a resistor/mirror, or through another device that's\n"
-            f"  already biased."
+            f"{headline}\n\n"
+            f"{intro}"
+            f"  has no DC path to VAPWR, VGND, or a ua[] pin.\n\n"
+            f"{why}"
+            f"  In SPICE it floats and settles at an arbitrary voltage; on\n"
+            f"  real silicon leakage pulls it somewhere uncontrolled, slowly.\n\n"
+            f"  To fix: connect it to something that drives it -- a drain\n"
+            f"  whose transistor has its source on a rail, a mirror output,\n"
+            f"  or a ua[] pin you can drive from the demoboard.{hint}"
         )
         findings.append(Finding(code="W2", severity=WARN, message=message))
     return findings
@@ -315,7 +400,7 @@ def check(config: SwitchConfig) -> SafetyReport:
     findings += _check_e3_driven_pin_into_rail(graph, comp)
     findings += _check_e4_pin_contention(graph, comp)
     findings += _check_w1_shorted_channel(graph, comp)
-    findings += _check_w2_floating_crosspoint(graph, comp)
+    findings += _check_w2_floating_crosspoint(graph, comp, config.device_settings())
     findings += _check_w3_unconnected_terminal(graph)
     findings += _check_i1_sparse_bus(graph)
     return SafetyReport(findings=findings)

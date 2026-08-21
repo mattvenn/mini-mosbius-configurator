@@ -138,20 +138,69 @@ def test_w1_not_triggered_when_drain_and_source_differ(inverter_config):
 
 def test_w2_rail_tappable_row_floats_if_the_tap_itself_is_open():
     # bus_A[2] is VGND-tappable (cfg_bus_pwr[1], SPEC.md Sec 2.7) but not
-    # externally pinned. Wiring mirn_a onto it *without* closing the pwr tap
+    # externally pinned. Wiring a *gate* onto it without closing the pwr tap
     # leaves both the row and the crosspoint with no DC anchor at all.
-    bits = {bit_for("cfga_mirn_a", 2)}
+    # (A gate specifically: it is the one terminal with no channel behind
+    # it, so nothing can bias it except the matrix.)
+    bits = {bit_for("cfga_nfeta_g", 2)}
     report = check(SwitchConfig(bits=frozenset(bits)))
     w2 = [f for f in report.warnings if f.code == "W2"]
     assert len(w2) == 1
-    assert "xpt_mirn_a" in w2[0].message
+    assert "nfeta.g" in w2[0].message
 
 
 def test_w2_not_triggered_once_the_tap_is_also_closed():
     # Same net, but now with the VGND tap actually closed -- anchored.
-    bits = {bit_for("cfga_mirn_a", 2), bit_for("cfg_bus_pwr", 1)}
+    bits = {bit_for("cfga_nfeta_g", 2), bit_for("cfg_bus_pwr", 1)}
     report = check(SwitchConfig(bits=frozenset(bits)))
     assert [f for f in report.warnings if f.code == "W2"] == []
+
+
+def test_w2_silent_on_a_ring_oscillator():
+    """The case that motivated rewriting this check (TODO.md section 6).
+
+    Every internal node of a chained design reaches a rail only through
+    the transistors driving it. Before DEVICE_DC_PATHS existed this
+    3-stage ring -- a real, measured, working circuit -- produced eight
+    W2 warnings for its two internal nets, each telling the user to give
+    an inverter output "a DC path to a rail", i.e. to break it.
+    """
+    config = SwitchConfig.from_bitstream(
+        "0c008800c004001801000020100804000060040100000021"
+    )
+    assert [f for f in check(config).warnings if f.code == "W2"] == []
+
+
+def test_w2_mirror_output_is_not_floating():
+    # A mirror leg's source is its rail inside the block, so `out` always
+    # has a DC path there -- that is what makes it a current sink rather
+    # than an inert node.
+    bits = {bit_for("cfga_mirn_a", 2)}
+    report = check(SwitchConfig(bits=frozenset(bits)))
+    assert [f for f in report.warnings if f.code == "W2"] == []
+
+
+def test_w2_diff_pair_drain_depends_on_the_tail_tie():
+    # The diff-pair tail has no matrix terminal (SPEC.md Sec 2.12), so the
+    # half's channel leads somewhere reachable only when ctrl_dpn_source
+    # ties that tail to VGND. With the bit clear the drain really is
+    # unbiased and W2 should say so.
+    wired = {bit_for("cfga_dpn_outp", 2)}
+    floating = check(SwitchConfig(bits=frozenset(wired)))
+    assert len([f for f in floating.warnings if f.code == "W2"]) == 1
+
+    tied = check(SwitchConfig(bits=frozenset(wired | {setting_bit("ctrl_dpn_source")})))
+    assert [f for f in tied.warnings if f.code == "W2"] == []
+
+
+def test_w2_reports_one_finding_per_net_not_per_crosspoint():
+    # Two gates on one row is one floating net, so one warning naming both
+    # -- not two warnings that each say most of the same thing.
+    bits = {bit_for("cfga_nfeta_g", 2), bit_for("cfga_pfeta_g", 2)}
+    report = check(SwitchConfig(bits=frozenset(bits)))
+    w2 = [f for f in report.warnings if f.code == "W2"]
+    assert len(w2) == 1
+    assert "nfeta.g" in w2[0].message and "pfeta.g" in w2[0].message
 
 
 def test_w2_not_triggered_by_a_pinned_row(inverter_config):
@@ -190,3 +239,12 @@ def test_i1_not_flagged_for_fully_wired_segment(inverter_config):
     i1_segments = {f.message.split()[2] for f in report.findings if f.code == "I1"}
     assert "bus_A[1]" not in i1_segments  # ua[1] bond + nfeta.g + pfeta.g
     assert "bus_A[3]" not in i1_segments  # ua[2] bond + nfeta.d + pfeta.d
+
+
+def test_w2_names_the_tail_tie_bit_when_that_is_the_cause():
+    # A diff-pair drain floats because its shared tail is untied, and that
+    # is one bit -- so say which bit rather than only the generic advice.
+    report = check(SwitchConfig(bits=frozenset({bit_for("cfga_dpn_outp", 2)})))
+    w2 = [f for f in report.warnings if f.code == "W2"]
+    assert len(w2) == 1
+    assert "ctrl_dpn_source" in w2[0].message

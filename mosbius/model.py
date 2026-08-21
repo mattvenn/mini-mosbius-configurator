@@ -87,6 +87,78 @@ def bus_node(side: str, row: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# DC conduction *through* a device, as opposed to through the switch matrix.
+# ---------------------------------------------------------------------------
+#
+# check.py's main graph has one kind of edge: a closed switch. That is the
+# right model for "are these two things shorted together", which is what
+# every ERROR check asks. It is the wrong model for "is this node's voltage
+# defined", because a transistor channel carries DC and is not a switch --
+# so the output of an inverter, which reaches a rail only through its own
+# two transistors, looks unreachable.
+#
+# This table adds the missing edges, for that question only. Feeding them to
+# E1 would make every working inverter a VAPWR-VGND short; feeding them to W1
+# would make every transistor look like its channel is shorted. See
+# check.py::_biasing_graph.
+#
+# `setting` names a DeviceSettings field that must be True for the path to
+# exist, or None if it always does.
+
+
+@dataclass(frozen=True)
+class DCPath:
+    a: str
+    b: str
+    label: str
+    setting: str | None = None
+
+
+DEVICE_DC_PATHS: tuple[DCPath, ...] = (
+    # The four independent FETs: drain <-> source through the channel.
+    # Whether that reaches a rail depends on where the source is routed,
+    # which is the matrix's business -- so this only joins the two
+    # crosspoints and lets the graph search finish the job.
+    DCPath("xpt_nfeta_d", "xpt_nfeta_s", "nfeta channel"),
+    DCPath("xpt_nfetb_d", "xpt_nfetb_s", "nfetb channel"),
+    DCPath("xpt_pfeta_d", "xpt_pfeta_s", "pfeta channel"),
+    DCPath("xpt_pfetb_d", "xpt_pfetb_s", "pfetb channel"),
+
+    # The diff-pair halves have no source crosspoint at all -- the shared
+    # tail has no matrix terminal (SPEC.md Sec 2.12) -- so their channel
+    # leads somewhere reachable only when the tail is tied to its rail by
+    # ctrl_dp{n,p}_source. With that bit clear the tail really is floating
+    # and the drain really has no DC path, which is worth warning about.
+    DCPath("xpt_dpn_outp", "VGND", "dpn+ channel to its tied tail", "dpn_source"),
+    DCPath("xpt_dpn_outm", "VGND", "dpn- channel to its tied tail", "dpn_source"),
+    DCPath("xpt_dpp_outp", "VAPWR", "dpp+ channel to its tied tail", "dpp_source"),
+    DCPath("xpt_dpp_outm", "VAPWR", "dpp- channel to its tied tail", "dpp_source"),
+
+    # Mirror legs: inside the block the mirror FET's source sits on the
+    # rail, so `out` always has a DC path to it (that is what makes it a
+    # current sink/source rather than a floating node).
+    DCPath("xpt_mirn_a", "VGND", "mirn_a mirror leg"),
+    DCPath("xpt_mirn_b", "VGND", "mirn_b mirror leg"),
+    DCPath("xpt_mirp_a", "VAPWR", "mirp_a mirror leg"),
+    DCPath("xpt_mirp_b", "VAPWR", "mirp_b mirror leg"),
+
+    # The OTA's outputs are its PMOS load's drains, and that load's sources
+    # are on VAPWR inside the block. Its inputs are gates and get nothing.
+    DCPath("xpt_otan_outp", "VAPWR", "otan output stage"),
+    DCPath("xpt_otan_outm", "VAPWR", "otan output stage"),
+)
+
+
+# Crosspoint node -> "device.terminal", so diagnostics can say `dpn+.g`
+# instead of `xpt_dpn_inp` (the same naming decode.py prints).
+TERMINAL_BY_CROSSPOINT: dict[str, str] = {
+    xpt: f"{device}.{terminal}"
+    for device, terminals in DEVICE_TERMINALS.items()
+    for terminal, xpt in terminals.items()
+}
+
+
+# ---------------------------------------------------------------------------
 # Device settings: decode the raw cycler/toggle bits into named values.
 # ---------------------------------------------------------------------------
 
