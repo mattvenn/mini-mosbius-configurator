@@ -183,7 +183,7 @@ for dev_name, role in roles.items():
 ```
 
 `WIDTH_SETTING` covers the four independent FETs and the four mirrors. It does
-not cover `dpn+`/`dpn-`/`dpp+`/`dpp-`, because those have no width bits on the
+not cover `ndiffpair+`/`ndiffpair-`/`pdiffpair+`/`pdiffpair-`, because those have no width bits on the
 chip -- their geometry is fixed. So a device the router assigns to a diff-pair
 half keeps whatever `w=` you wrote in the schematic in the *netlist*, has it
 ignored in the *bitstream*, and nothing tells you.
@@ -193,9 +193,9 @@ This matters more than it sounds, because the fixed geometry is not `w=1`:
 | device | sky130 instance | equivalent |
 |---|---|---|
 | `mosbius_nmos w=1` | W=10 nf=2 (`nmos_prog.sch` M1, the always-on slice) | 1x |
-| `diff_n` input half (`dpn+`/`dpn-`) | W=40 nf=8 (`diff_n.sch` M1/M2) | **w=4** |
+| `diff_n` input half (`ndiffpair+`/`ndiffpair-`) | W=40 nf=8 (`diff_n.sch` M1/M2) | **w=4** |
 | `mosbius_pmos w=1` | W=30 nf=4 | 1x |
-| `diff_p` input half (`dpp+`/`dpp-`) | W=120 nf=16 (`diff_p.sch` M3/M4) | **w=4** |
+| `diff_p` input half (`pdiffpair+`/`pdiffpair-`) | W=120 nf=16 (`diff_p.sch` M3/M4) | **w=4** |
 
 `nmos_prog` is a 1x always-on slice plus switchable 1x and 2x slices, so its
 maximum, `w=4`, is W=40 nf=8 -- an exact match for the diff-pair half. That is
@@ -206,7 +206,7 @@ switches, the diff-pair half doesn't.)
 
 Found by routing a hand-drawn 3-stage ring: with `w=1` on all six devices, the
 two stages on `nfeta`/`nfetb` come out 1x and the third, forced onto
-`dpn+`/`dpp+`, comes out 4x. The design looks symmetric in the schematic and
+`ndiffpair+`/`pdiffpair+`, comes out 4x. The design looks symmetric in the schematic and
 isn't on silicon.
 
 Fix: the router should report the width it actually programmed per device, and

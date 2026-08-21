@@ -13,7 +13,7 @@ found and how to redo it.
 Bitstream `380088007001000010000404250109000400000040000014` decodes
 (`python3 -m mosbius.cli decode 380088...0014`) to a 3-stage ring
 oscillator: three inverting stages built from the six non-independent-slot
-FETs (`nfeta`/`pfeta` w=4 as one stage, `dpn+`/`dpp+` and `dpn-`/`dpp-` as
+FETs (`nfeta`/`pfeta` w=4 as one stage, `ndiffpair+`/`pdiffpair+` and `ndiffpair-`/`pdiffpair-` as
 the other two, each pair standalone-tied to its own rail per CLAUDE.md
 trap #3), wired in a loop: `ua[2] -> ua[1] -> ua[4] -> ua[2]`. Three
 inversions around a closed loop is odd, so the loop has no stable fixed
@@ -38,7 +38,7 @@ symmetric on screen.
 
 **Three inverting stages is the longest odd ring this chip can build.** Only
 four devices per polarity expose both a drain and a source/tail to the matrix:
-`nfeta`, `nfetb`, `dpn+`, `dpn-` (and the PMOS mirror image). The current
+`nfeta`, `nfetb`, `ndiffpair+`, `ndiffpair-` (and the PMOS mirror image). The current
 mirror legs expose a single terminal (`out`) and the OTA is a fixed block, so
 neither can serve as an inverter FET. Four stages would fit but is even, and
 five is unreachable -- which makes three the practical ceiling.

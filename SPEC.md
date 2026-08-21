@@ -419,14 +419,14 @@ about the chip. (Nine *addressable blocks* is a different, less useful count.)
 |---|---|---|---|---|
 | N1 | `nfeta` | NMOS dual | d, g, s (A) | width 1–4, source→VGND |
 | N2 | `nfetb` | NMOS dual | d, g, s (B) | width 1–4, source→VGND |
-| N3 | `dpn+` | NMOS diff pair | g=`inp`, d=`outp` (A) | source shared with N4 |
+| N3 | `ndiffpair+` | NMOS diff pair | g=`inp`, d=`outp` (A) | source shared with N4 |
 | N4 | `dpn−` | NMOS diff pair | g=`inm`, d=`outm` (B) | source shared with N3 |
 | N5 | `dpn` tail | NMOS diff pair | **none — internal** | tail 2–8, or tie shared source to VGND |
 | N6 | `mirn_a` | NMOS mirror | 1 terminal (A) | 1–4 |
 | N7 | `mirn_b` | NMOS mirror | 1 terminal (B) | 1–4 |
 | P1 | `pfeta` | PMOS dual | s, g, d (A) | width 1–4, source→VAPWR |
 | P2 | `pfetb` | PMOS dual | s, g, d (B) | width 1–4, source→VAPWR |
-| P3 | `dpp+` | PMOS diff pair | g=`inp`, d=`outp` (A) | source shared with P4 |
+| P3 | `pdiffpair+` | PMOS diff pair | g=`inp`, d=`outp` (A) | source shared with P4 |
 | P4 | `dpp−` | PMOS diff pair | g=`inm`, d=`outm` (B) | source shared with P3 |
 | P5 | `dpp` tail | PMOS diff pair | **none — internal** | tail 2–8, or tie shared source to VAPWR |
 | P6 | `mirp_a` | PMOS mirror | 1 terminal (A) | 1–4 |
@@ -708,8 +708,8 @@ The library offers **generic parts**, not named hardware devices:
 
 | Symbol | Properties | Maps to |
 |---|---|---|
-| `mosbius_nmos` | `w` = 1–4 | `nfeta`, `nfetb`, `dpn+`, `dpn−` |
-| `mosbius_pmos` | `w` = 1–4 | `pfeta`, `pfetb`, `dpp+`, `dpp−` |
+| `mosbius_nmos` | `w` = 1–4 | `nfeta`, `nfetb`, `ndiffpair+`, `dpn−` |
+| `mosbius_pmos` | `w` = 1–4 | `pfeta`, `pfetb`, `pdiffpair+`, `dpp−` |
 | `mosbius_nsink` | `ratio` = 1–4 | `mirn_a`, `mirn_b` |
 | `mosbius_psource` | `ratio` = 1–4 | `mirp_a`, `mirp_b` |
 | `mosbius_ota` | `tail` = 2–8, `mode` | `otan` (one only) |
@@ -722,7 +722,7 @@ halves are usable only when their sources are common. So the router **spends the
 constrained resource first**:
 
 1. Find sets of same-type FETs in the user's circuit that share a source net.
-2. Map those preferentially onto a differential pair (`dpn+`/`dpn−`, `dpp+`/`dpp−`),
+2. Map those preferentially onto a differential pair (`ndiffpair+`/`dpn−`, `pdiffpair+`/`dpp−`),
    which physically shares a source anyway.
 3. Map FETs needing independent sources onto `nfeta`/`nfetb` / `pfeta`/`pfetb`.
 4. Choose A vs B side to satisfy any external-port requirements (§3.2).

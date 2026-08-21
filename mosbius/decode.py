@@ -27,7 +27,7 @@ class Net:
 
 @dataclass(frozen=True)
 class DeviceInstance:
-    name: str  # "nfeta", "dpn+", "otan", "mirn_a", ...
+    name: str  # "nfeta", "ndiffpair+", "otan", "mirn_a", ...
     terminals: dict[str, str]  # terminal name -> net name, only terminals actually wired
     settings: dict[str, object]  # the subset of DeviceSettings relevant to this device
 
@@ -50,10 +50,10 @@ _DEVICE_SETTINGS_FIELDS: dict[str, dict[str, str]] = {
     "mirn_b": {"ratio": "mirn_b_ratio"},
     "mirp_a": {"ratio": "mirp_a_ratio"},
     "mirp_b": {"ratio": "mirp_b_ratio"},
-    "dpn+": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
-    "dpn-": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
-    "dpp+": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
-    "dpp-": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
+    "ndiffpair+": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
+    "ndiffpair-": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
+    "pdiffpair+": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
+    "pdiffpair-": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
     "otan": {
         "tail": "otan_tail",
         "diode_connect_via_outp": "otan_mode0",
@@ -136,7 +136,7 @@ def format_summary(decoded: DecodedDesign) -> str:
         for dev in decoded.devices:
             terms = "  ".join(f"{t}={net}" for t, net in dev.terminals.items())
             settings = "  ".join(f"{k}={v}" for k, v in dev.settings.items())
-            lines.append(f"  {dev.name:<8} {terms}  {settings}")
+            lines.append(f"  {dev.name:<11} {terms}  {settings}")
     else:
         lines.append("Devices in use\n  (none -- this config wires nothing to a live device)")
 

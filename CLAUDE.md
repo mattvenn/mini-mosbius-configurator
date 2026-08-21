@@ -36,6 +36,15 @@ happily re-routed a stale file and reported success. Point the router at the
 - **The audience is beginners learning analog design** (§1.1). Every diagnostic
   states what happened, why the hardware behaves that way, and what to try
   instead. Terse error messages are a bug.
+- **That rule covers the words themselves, not just the structure.** Anything
+  a user reads -- diagnostics, `decode` output, role names, net names -- gets
+  spelled out rather than abbreviated. `dpn+` was renamed `ndiffpair+` for
+  exactly this reason: "dp" is guessable only if you already know the answer.
+  Internal hardware identifiers are the one exception: `xpt_dpn_outp` and
+  `cfga_dpn_inp` are the chip's own signal names and must stay verbatim, so
+  when one of those has to appear in a message, translate it first
+  (`model.TERMINAL_BY_CROSSPOINT` exists for that). Prefer a longer sentence
+  over a shorter one that assumes vocabulary.
 
 ## Running the EDA tools
 

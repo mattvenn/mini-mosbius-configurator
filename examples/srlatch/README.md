@@ -56,8 +56,8 @@ Device roles:
   m2           -> nfetb
   m3           -> pfeta
   m4           -> pfetb
-  mset         -> dpn+
-  mreset       -> dpn-
+  mset         -> ndiffpair+
+  mreset       -> ndiffpair-
 
 Bitstream: 2e008002e010020420000000010809000810800400000030
 ```

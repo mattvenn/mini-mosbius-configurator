@@ -5,7 +5,7 @@ Two decisions, in order (Sec 3.4's "spend the constrained resource
 first"):
 
 1. Device allocation: which hardware instance (nfeta vs nfetb vs the
-   dpn+/dpn- diff-pair halves, etc.) each generic device request becomes.
+   ndiffpair+/ndiffpair- halves, etc.) each generic device request becomes.
    FET pairs that already share a source net are mapped onto a diff pair
    preferentially, since that hardware is *only* useful as a shared-source
    pair -- using it for anything else wastes the one thing it's good for.
@@ -55,17 +55,27 @@ class RouteError(ValueError):
 # ---------------------------------------------------------------------------
 
 ROLE_SIDE = {
-    "nfeta": "A", "nfetb": "B", "dpn+": "A", "dpn-": "B",
-    "pfeta": "A", "pfetb": "B", "dpp+": "A", "dpp-": "B",
+    "nfeta": "A", "nfetb": "B", "ndiffpair+": "A", "ndiffpair-": "B",
+    "pfeta": "A", "pfetb": "B", "pdiffpair+": "A", "pdiffpair-": "B",
     "mirn_a": "A", "mirn_b": "B", "mirp_a": "A", "mirp_b": "B",
 }
 
 NMOS_INDEPENDENT_ROLES = ("nfeta", "nfetb")
-NMOS_PAIR_ROLES = ("dpn+", "dpn-")
+NMOS_PAIR_ROLES = ("ndiffpair+", "ndiffpair-")
 PMOS_INDEPENDENT_ROLES = ("pfeta", "pfetb")
-PMOS_PAIR_ROLES = ("dpp+", "dpp-")
+PMOS_PAIR_ROLES = ("pdiffpair+", "pdiffpair-")
 NSINK_ROLES = ("mirn_a", "mirn_b")
 PSOURCE_ROLES = ("mirp_a", "mirp_b")
+
+# Role names as written by routers before 2026-08-21, when the diff-pair
+# halves were called dpn+/dpp- and so on. Nothing about the hardware or the
+# bitstream changed -- only what the tool calls them out loud -- so an old
+# .mosbius.json is still perfectly reusable; it just needs its labels
+# translated on the way in so the report does not print two vocabularies.
+LEGACY_ROLE_NAMES = {
+    "dpn+": "ndiffpair+", "dpn-": "ndiffpair-",
+    "dpp+": "pdiffpair+", "dpp-": "pdiffpair-",
+}
 
 # (role -> device-setting field) for the ctrl_*_source free rail tie
 # (SPEC.md Sec 2.11/2.12). The 4 independent FETs each have their own tie;
@@ -77,12 +87,12 @@ PSOURCE_ROLES = ("mirp_a", "mirp_b")
 SOURCE_TIE_PIN = {
     "nfeta": "ctrl_nfeta_source", "nfetb": "ctrl_nfetb_source",
     "pfeta": "ctrl_pfeta_source", "pfetb": "ctrl_pfetb_source",
-    "dpn+": "ctrl_dpn_source", "dpn-": "ctrl_dpn_source",
-    "dpp+": "ctrl_dpp_source", "dpp-": "ctrl_dpp_source",
+    "ndiffpair+": "ctrl_dpn_source", "ndiffpair-": "ctrl_dpn_source",
+    "pdiffpair+": "ctrl_dpp_source", "pdiffpair-": "ctrl_dpp_source",
 }
 SOURCE_TIE_RAIL = {
     "nfeta": "VGND", "nfetb": "VGND", "pfeta": "VAPWR", "pfetb": "VAPWR",
-    "dpn+": "VGND", "dpn-": "VGND", "dpp+": "VAPWR", "dpp-": "VAPWR",
+    "ndiffpair+": "VGND", "ndiffpair-": "VGND", "pdiffpair+": "VAPWR", "pdiffpair-": "VAPWR",
 }
 
 # (role -> width/ratio setting field, step) for the 4 FETs + 4 mirrors.
@@ -159,7 +169,7 @@ def _allocate_fets(
     requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
     pair_rail: str, label: str,
 ) -> dict[str, str]:
-    """Assign each FET request to nfeta/nfetb/dpn+/dpn- (or the PMOS
+    """Assign each FET request to nfeta/nfetb/ndiffpair+/ndiffpair- (or the PMOS
     equivalents). Two cases can use the diff-pair role for free:
 
     - Two devices that share a genuine *internal* (non-rail) source net:
@@ -220,13 +230,16 @@ def _allocate_fets(
         names = ", ".join(d.name for d in requests)
         raise RouteError(
             f"DOESN'T FIT -- not enough {label} with independent sources\n\n"
-            f"  Your circuit needs {len(requests)} {label} transistors ({names}),\n"
-            f"  but the chip has only {len(independent_roles)} with a source you can\n"
-            f"  route anywhere ({', '.join(independent_roles)}), plus "
-            f"{len(pair_roles)} diff-pair\n"
-            f"  halves ({', '.join(pair_roles)}) that are only usable by two "
-            f"transistors\n"
-            f"  sharing a source, or standalone if tied to {pair_rail}.\n\n"
+            f"  Your circuit needs {len(requests)} {label} transistors:\n"
+            f"    {names}\n\n"
+            f"  The chip has only {len(independent_roles)} of those whose source you can\n"
+            f"  route wherever you like:\n"
+            f"    {', '.join(independent_roles)}\n\n"
+            f"  There are {len(pair_roles)} more, but they are the two halves of a\n"
+            f"  differential pair and share one source between them:\n"
+            f"    {', '.join(pair_roles)}\n"
+            f"  So they suit two transistors that want a common source, or a\n"
+            f"  single transistor if that shared source is tied to {pair_rail}.\n\n"
             f"  Currently placed: {placed if placed else '(none)'}.\n"
             f"  Couldn't place: {', '.join(d.name for d in final_unassigned)}.\n\n"
             f"  Ideas:\n"
@@ -560,7 +573,10 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
                     bits=bitstream.unpack(stored["bitstream"]),
                     ibias=stored.get("ibias", DEFAULT_IBIAS),
                 ),
-                device_roles=stored["device_roles"],
+                device_roles={
+                    dev: LEGACY_ROLE_NAMES.get(role, role)
+                    for dev, role in stored["device_roles"].items()
+                },
                 net_rows=stored["net_rows"],
                 schema=stored.get("schema", SCHEMA),
             )

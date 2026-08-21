@@ -40,8 +40,8 @@ RAILS = ("VAPWR", "VGND", "VDPWR")
 # (per-device net reporting) so the topology is defined in exactly one place.
 #
 # The 4 independent FETs expose d/g/s. The diff-pair halves and OTA don't
-# expose a source terminal (it's shared/internal, SPEC.md Sec 2.12) -- dpn+/
-# dpp+ read the netlist's "inp"/"outp" as g/d, dpn-/dpp- read "inm"/"outm"
+# expose a source terminal (it's shared/internal, SPEC.md Sec 2.12) -- ndiffpair+/
+# pdiffpair+ read the netlist's "inp"/"outp" as g/d, ndiffpair-/pdiffpair- read "inm"/"outm"
 # as g/d. The 4 current mirrors expose one terminal, named "out". The OTA is
 # used as one 5-transistor block with 4 terminals.
 DEVICE_TERMINALS: dict[str, dict[str, str]] = {
@@ -49,10 +49,10 @@ DEVICE_TERMINALS: dict[str, dict[str, str]] = {
     "nfetb": {"d": "xpt_nfetb_d", "g": "xpt_nfetb_g", "s": "xpt_nfetb_s"},
     "pfeta": {"d": "xpt_pfeta_d", "g": "xpt_pfeta_g", "s": "xpt_pfeta_s"},
     "pfetb": {"d": "xpt_pfetb_d", "g": "xpt_pfetb_g", "s": "xpt_pfetb_s"},
-    "dpn+": {"g": "xpt_dpn_inp", "d": "xpt_dpn_outp"},
-    "dpn-": {"g": "xpt_dpn_inm", "d": "xpt_dpn_outm"},
-    "dpp+": {"g": "xpt_dpp_inp", "d": "xpt_dpp_outp"},
-    "dpp-": {"g": "xpt_dpp_inm", "d": "xpt_dpp_outm"},
+    "ndiffpair+": {"g": "xpt_dpn_inp", "d": "xpt_dpn_outp"},
+    "ndiffpair-": {"g": "xpt_dpn_inm", "d": "xpt_dpn_outm"},
+    "pdiffpair+": {"g": "xpt_dpp_inp", "d": "xpt_dpp_outp"},
+    "pdiffpair-": {"g": "xpt_dpp_inm", "d": "xpt_dpp_outm"},
     "mirn_a": {"out": "xpt_mirn_a"},
     "mirn_b": {"out": "xpt_mirn_b"},
     "mirp_a": {"out": "xpt_mirp_a"},
@@ -129,10 +129,10 @@ DEVICE_DC_PATHS: tuple[DCPath, ...] = (
     # leads somewhere reachable only when the tail is tied to its rail by
     # ctrl_dp{n,p}_source. With that bit clear the tail really is floating
     # and the drain really has no DC path, which is worth warning about.
-    DCPath("xpt_dpn_outp", "VGND", "dpn+ channel to its tied tail", "dpn_source"),
-    DCPath("xpt_dpn_outm", "VGND", "dpn- channel to its tied tail", "dpn_source"),
-    DCPath("xpt_dpp_outp", "VAPWR", "dpp+ channel to its tied tail", "dpp_source"),
-    DCPath("xpt_dpp_outm", "VAPWR", "dpp- channel to its tied tail", "dpp_source"),
+    DCPath("xpt_dpn_outp", "VGND", "ndiffpair+ channel to its tied tail", "dpn_source"),
+    DCPath("xpt_dpn_outm", "VGND", "ndiffpair- channel to its tied tail", "dpn_source"),
+    DCPath("xpt_dpp_outp", "VAPWR", "pdiffpair+ channel to its tied tail", "dpp_source"),
+    DCPath("xpt_dpp_outm", "VAPWR", "pdiffpair- channel to its tied tail", "dpp_source"),
 
     # Mirror legs: inside the block the mirror FET's source sits on the
     # rail, so `out` always has a DC path to it (that is what makes it a
@@ -149,7 +149,7 @@ DEVICE_DC_PATHS: tuple[DCPath, ...] = (
 )
 
 
-# Crosspoint node -> "device.terminal", so diagnostics can say `dpn+.g`
+# Crosspoint node -> "device.terminal", so diagnostics can say `ndiffpair+.g`
 # instead of `xpt_dpn_inp` (the same naming decode.py prints).
 TERMINAL_BY_CROSSPOINT: dict[str, str] = {
     xpt: f"{device}.{terminal}"
