@@ -65,10 +65,30 @@ Error: Symbol mosbius_nmos.sym has 3 pins, its schematic has 4 pins
 Cause: the body ties are supplied by the symbol's `extra` attribute, so they
 are not symbol pins, but the schematics still declared them with
 `devices/iopin.sym` -- and xschem's symbol/schematic consistency check does
-not know about `extra`. They are now `devices/lab_pin.sym` instead. Nothing is
-lost by that: a SPICE subcircuit's port names *are* its internal node names,
-so naming the net `b` binds it to the `extra` port `b` exactly as before.
-Verified: `.subckt` interfaces and every internal bulk connection unchanged.
+not know about `extra`.
+
+Two attempts failed before the right fix. `devices/lab_pin.sym` cleared the
+pin-count errors but produced `Error: undriven node: b` instead, because
+sky130's 4-terminal FETs declare their `B` terminal `dir=in` and so does
+`lab_pin` -- no driver on the net. A custom `dir=inout` label did not help
+either: xschem does not accept it as a driver for a net it thinks is
+internal, and `extra` ports are invisible to that check.
+
+The fix, and it is the obvious one in hindsight: **the device schematics now
+instantiate the PDK's 3-terminal FETs** (`sky130_fd_pr/nfet3_g5v0d10v5.sym`,
+`pfet3_g5v0d10v5.sym`) and pass the bulk as their `@body` template parameter
+rather than wiring it. `D`/`G`/`S` sit at identical coordinates in the 3- and
+4-terminal symbols, so only the bulk connection changed. For `mosbius_nmos`,
+`mosbius_pmos` and the OTA's `bn` there is now no bulk net on the canvas at
+all -- nothing left to call undriven. Where the net does survive
+(`mosbius_nsink`/`mosbius_psource`'s `b` and the OTA's `bp`, which are also
+the shared *source* node) it is driven by the FETs' `dir=inout` source pins.
+
+This is what the 3-terminal PDK symbols were for, and the reason they never
+showed the error themselves: their body is a parameter, not a node.
+
+Verified: every `.subckt` interface, every instance line, every internal bulk
+binding and the ring's bitstream are byte-identical to before the change.
 
 Separately, the `Warning: open net: ua3/ua4/ua5/VDPWR/ibias` lines in the same
 output are expected, not a bug — the template places all nine chip ports and

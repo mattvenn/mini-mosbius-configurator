@@ -105,7 +105,11 @@ These were all got wrong once. The sources that look authoritative are not.
   attribute (`extra="b"`, `template="... b=VGND"`), which appends the net to
   both the instance line and the `.subckt` port list. So the netlist still
   carries 4 connections for a FET and `DEVICE_PINS` still counts them, but
-  there is nothing to draw. Same trick sky130's own `nfet3_*.sym` uses.
+  there is nothing to draw. Inside the device schematics the bulk is likewise
+  not a wire: they instantiate sky130's **3-terminal** `nfet3_*`/`pfet3_*`
+  symbols and pass it as the `@body` parameter. Wiring it instead makes
+  xschem's GUI netlist report `undriven node: b`, because `extra` ports are
+  invisible to its connectivity check (`TODO.md` §3).
 - 192-bit shift chain. Transmit **MSB first** (bit 191 first). 48 hex chars.
 - `enable` (ui[1]) gates all switch outputs combinationally — **must be low
   throughout the shift**, or the chip walks through 192 arbitrary configurations.

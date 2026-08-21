@@ -14,9 +14,7 @@ N 100 -200 100 -110 {
 lab=d}
 N -120 -200 100 -200 {
 lab=d}
-N 100 -80 180 -80 {
-lab=b}
-C {sky130_fd_pr/nfet_g5v0d10v5.sym} 80 -80 0 0 {name=M1
+C {sky130_fd_pr/nfet3_g5v0d10v5.sym} 80 -80 0 0 {name=M1
 L=0.5
 W="10*w"
 nf="2*w"
@@ -28,9 +26,9 @@ ps="'2*int((nf+2)/2) * (W/nf + 0.29)'"
 nrd="'0.29 / W'" nrs="'0.29 / W'"
 sa=0 sb=0 sd=0
 model=nfet_g5v0d10v5
+body=b
 spiceprefix=X
 }
 C {devices/iopin.sym} -120 20 0 1 {name=p7 lab=s}
 C {devices/ipin.sym} -120 -80 0 1 {name=p1 lab=g}
 C {devices/iopin.sym} -120 -200 0 1 {name=p2 lab=d}
-C {bulk_tie.sym} 180 -80 0 1 {name=p4 lab=b}

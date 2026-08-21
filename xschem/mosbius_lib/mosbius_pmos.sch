@@ -14,9 +14,7 @@ N -0 40 240 40 {
 lab=d}
 N 240 -40 240 40 {
 lab=d}
-N 240 -70 300 -70 {
-lab=b}
-C {sky130_fd_pr/pfet_g5v0d10v5.sym} 220 -70 0 0 {name=M1
+C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 220 -70 0 0 {name=M1
 L=0.5
 W="30*w"
 nf="4*w"
@@ -28,9 +26,9 @@ ps="'2*int((nf+2)/2) * (W/nf + 0.29)'"
 nrd="'0.29 / W'" nrs="'0.29 / W'"
 sa=0 sb=0 sd=0
 model=pfet_g5v0d10v5
+body=b
 spiceprefix=X
 }
 C {devices/iopin.sym} 0 -160 0 1 {name=p7 lab=s}
 C {devices/ipin.sym} 0 -70 0 1 {name=p1 lab=g}
 C {devices/iopin.sym} 0 40 0 1 {name=p2 lab=d}
-C {bulk_tie.sym} 300 -70 0 1 {name=p4 lab=b}
