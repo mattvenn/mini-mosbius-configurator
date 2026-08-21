@@ -52,10 +52,10 @@ WARNING -- xpt_nfeta_g has no DC path to a rail or a package pin
   ... (5 of these total, one per crosspoint touching the internal qb node)
 
 Device roles:
-  m1           -> nfeta
-  m2           -> nfetb
-  m3           -> pfeta
-  m4           -> pfetb
+  m1           -> nmos_a
+  m2           -> nmos_b
+  m3           -> pmos_a
+  m4           -> pmos_b
   mset         -> ndiffpair+
   mreset       -> ndiffpair-
 

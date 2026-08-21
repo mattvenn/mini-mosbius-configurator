@@ -111,7 +111,7 @@ def test_e3_driven_pin_shorted_to_rail():
 
 def test_e4_two_pins_shorted_together():
     # ua[1]=bus_A[1], ua[2]=bus_A[3]. Bridge the two rows through a shared
-    # nfeta.d crosspoint switch on each.
+    # nmos_a.d crosspoint switch on each.
     bits = {bit_for("cfga_nfeta_d", 1), bit_for("cfga_nfeta_d", 3)}
     report = check(SwitchConfig(bits=frozenset(bits)))
     e4 = [f for f in report.errors if f.code == "E4"]
@@ -126,7 +126,7 @@ def test_w1_drain_and_source_on_same_row():
     report = check(SwitchConfig(bits=frozenset(bits)))
     w1 = [f for f in report.warnings if f.code == "W1"]
     assert len(w1) == 1
-    assert "nfeta" in w1[0].message
+    assert "nmos_a" in w1[0].message
 
 
 def test_w1_not_triggered_when_drain_and_source_differ(inverter_config):
@@ -146,7 +146,7 @@ def test_w2_rail_tappable_row_floats_if_the_tap_itself_is_open():
     report = check(SwitchConfig(bits=frozenset(bits)))
     w2 = [f for f in report.warnings if f.code == "W2"]
     assert len(w2) == 1
-    assert "nfeta.g" in w2[0].message
+    assert "nmos_a.g" in w2[0].message
 
 
 def test_w2_not_triggered_once_the_tap_is_also_closed():
@@ -200,7 +200,7 @@ def test_w2_reports_one_finding_per_net_not_per_crosspoint():
     report = check(SwitchConfig(bits=frozenset(bits)))
     w2 = [f for f in report.warnings if f.code == "W2"]
     assert len(w2) == 1
-    assert "nfeta.g" in w2[0].message and "pfeta.g" in w2[0].message
+    assert "nmos_a.g" in w2[0].message and "pmos_a.g" in w2[0].message
 
 
 def test_w2_not_triggered_by_a_pinned_row(inverter_config):
@@ -218,7 +218,7 @@ def test_w3_gate_wired_drain_floating():
     report = check(SwitchConfig(bits=frozenset(bits)))
     w3 = [f for f in report.warnings if f.code == "W3"]
     assert len(w3) == 1
-    assert "nfeta" in w3[0].message
+    assert "nmos_a" in w3[0].message
 
 
 def test_w3_not_triggered_when_all_terminals_used(inverter_config):
@@ -237,8 +237,8 @@ def test_i1_unused_segment_flagged():
 def test_i1_not_flagged_for_fully_wired_segment(inverter_config):
     report = check(inverter_config)
     i1_segments = {f.message.split()[2] for f in report.findings if f.code == "I1"}
-    assert "bus_A[1]" not in i1_segments  # ua[1] bond + nfeta.g + pfeta.g
-    assert "bus_A[3]" not in i1_segments  # ua[2] bond + nfeta.d + pfeta.d
+    assert "bus_A[1]" not in i1_segments  # ua[1] bond + nmos_a.g + pmos_a.g
+    assert "bus_A[3]" not in i1_segments  # ua[2] bond + nmos_a.d + pmos_a.d
 
 
 def test_w2_names_the_tail_tie_bit_when_that_is_the_cause():

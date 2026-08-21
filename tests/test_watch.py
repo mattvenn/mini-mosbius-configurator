@@ -26,8 +26,8 @@ def test_ok_report_lists_device_roles(tmp_path: Path):
     netlist.write_text(INVERTER_NETLIST)
     report = _report(netlist)
     assert "OK" in report.splitlines()[0]
-    assert "nfeta_0" in report and "-> nfeta" in report
-    assert "pfeta_1" in report and "-> pfeta" in report
+    assert "nfeta_0" in report and "-> nmos_a" in report
+    assert "pfeta_1" in report and "-> pmos_a" in report
 
 
 def test_missing_file_reports_cant_read(tmp_path: Path):

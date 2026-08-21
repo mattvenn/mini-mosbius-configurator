@@ -334,7 +334,7 @@ configurator.**
 ### 2.10 A/B partition — VERIFIED
 
 Every crosspoint node reaches **exactly one bus side**. The `a` device halves
-(`nfeta`, `pfeta`, `mirn_a`, `mirp_a`, `dpn_inp/outp`, `dpp_inp/outp`,
+(`nmos_a`, `pmos_a`, `nsink_a`, `psource_a`, `dpn_inp/outp`, `dpp_inp/outp`,
 `otan_inp/outp`) can only reach `bus_A[1..6]`; the `b` halves only `bus_B[1..6]`.
 
 So the array is **12 independent nets**, not 6, and `cfg_bus_short[n]` is the only
@@ -389,17 +389,17 @@ and OTA tails (a pair is two matched devices, so it counts in 2s).
 
 | Setting | Bits (lsb, msb) | Range |
 |---|---|---|
-| `pfeta` width | 157, 156 | 1–4 |
-| `pfetb` width | 161, 160 | 1–4 |
-| `nfeta` width | 189, 188 | 1–4 |
-| `nfetb` width | 185, 184 | 1–4 |
-| `mirp_a` ratio | 166, 167 | 1–4 |
-| `mirp_b` ratio | 164, 165 | 1–4 |
-| `mirn_a` ratio | 178, 179 | 1–4 |
-| `mirn_b` ratio | 176, 177 | 1–4 |
+| `pmos_a` width | 157, 156 | 1–4 |
+| `pmos_b` width | 161, 160 | 1–4 |
+| `nmos_a` width | 189, 188 | 1–4 |
+| `nmos_b` width | 185, 184 | 1–4 |
+| `psource_a` ratio | 166, 167 | 1–4 |
+| `psource_b` ratio | 164, 165 | 1–4 |
+| `nsink_a` ratio | 178, 179 | 1–4 |
+| `nsink_b` ratio | 176, 177 | 1–4 |
 | `dpp` tail | 162, 163 | 2–8 |
 | `dpn` tail | 180, 181 | 2–8 |
-| `otan` tail | 182, 183 | 2–8 |
+| `ota` tail | 182, 183 | 2–8 |
 
 Plus 14 single-bit toggles: four FET source ties (158, 159, 186, 187), two
 diff-pair source ties, six `cfg_bus_pwr`, and OTA mode (190, 191).
@@ -417,21 +417,21 @@ about the chip. (Nine *addressable blocks* is a different, less useful count.)
 
 | # | Transistor | Block | Matrix terminals | Settings |
 |---|---|---|---|---|
-| N1 | `nfeta` | NMOS dual | d, g, s (A) | width 1–4, source→VGND |
-| N2 | `nfetb` | NMOS dual | d, g, s (B) | width 1–4, source→VGND |
+| N1 | `nmos_a` | NMOS dual | d, g, s (A) | width 1–4, source→VGND |
+| N2 | `nmos_b` | NMOS dual | d, g, s (B) | width 1–4, source→VGND |
 | N3 | `ndiffpair+` | NMOS diff pair | g=`inp`, d=`outp` (A) | source shared with N4 |
 | N4 | `dpn−` | NMOS diff pair | g=`inm`, d=`outm` (B) | source shared with N3 |
 | N5 | `dpn` tail | NMOS diff pair | **none — internal** | tail 2–8, or tie shared source to VGND |
-| N6 | `mirn_a` | NMOS mirror | 1 terminal (A) | 1–4 |
-| N7 | `mirn_b` | NMOS mirror | 1 terminal (B) | 1–4 |
-| P1 | `pfeta` | PMOS dual | s, g, d (A) | width 1–4, source→VAPWR |
-| P2 | `pfetb` | PMOS dual | s, g, d (B) | width 1–4, source→VAPWR |
+| N6 | `nsink_a` | NMOS mirror | 1 terminal (A) | 1–4 |
+| N7 | `nsink_b` | NMOS mirror | 1 terminal (B) | 1–4 |
+| P1 | `pmos_a` | PMOS dual | s, g, d (A) | width 1–4, source→VAPWR |
+| P2 | `pmos_b` | PMOS dual | s, g, d (B) | width 1–4, source→VAPWR |
 | P3 | `pdiffpair+` | PMOS diff pair | g=`inp`, d=`outp` (A) | source shared with P4 |
 | P4 | `dpp−` | PMOS diff pair | g=`inm`, d=`outm` (B) | source shared with P3 |
 | P5 | `dpp` tail | PMOS diff pair | **none — internal** | tail 2–8, or tie shared source to VAPWR |
-| P6 | `mirp_a` | PMOS mirror | 1 terminal (A) | 1–4 |
-| P7 | `mirp_b` | PMOS mirror | 1 terminal (B) | 1–4 |
-| — | `otan` | OTA — **5 transistors, used as a block** | `inp`, `outp` (A); `inm`, `outm` (B) | tail 2–8, mode (2 bits) |
+| P6 | `psource_a` | PMOS mirror | 1 terminal (A) | 1–4 |
+| P7 | `psource_b` | PMOS mirror | 1 terminal (B) | 1–4 |
+| — | `ota` | OTA — **5 transistors, used as a block** | `inp`, `outp` (A); `inm`, `outm` (B) | tail 2–8, mode (2 bits) |
 
 Plus infrastructure, not transistors: 6 `bus_short` (join `bus_A[n]`↔`bus_B[n]`) and
 6 `bus_pwr` taps — VAPWR on B1, A4, B6; VGND on A2, B5, A6.
@@ -615,12 +615,12 @@ DOESN'T FIT — not enough NMOS with independent sources
   Your circuit needs 3 NMOS whose sources go to different nets:
     M1.s -> vout     M2.s -> VGND     M3.s -> vbias
 
-  The chip has 4 NMOS, but only 2 of them (nfeta, nfetb) have a source you can
+  The chip has 4 NMOS, but only 2 of them (nmos_a, nmos_b) have a source you can
   route anywhere. The other 2 are the halves of a differential pair: they share
   a single source node, so they are only usable together, by two transistors
   that want a common source.
 
-  Currently placed: M1 -> nfeta, M2 -> nfetb. M3 has nowhere to go.
+  Currently placed: M1 -> nmos_a, M2 -> nmos_b. M3 has nowhere to go.
 
   Ideas:
     - If two of these could share a source, they would fit the pair.
@@ -678,10 +678,10 @@ Report sketch:
 mosbius watch — inverter.spice          12:04:31   OK
 
   net      segment      pin      via
-  vin      bus_A[1]     ua[1]    nfeta.g pfeta.g
-  vout     bus_A[3]     ua[2]    nfeta.d pfeta.d
-  vss      —            —        nfeta.s (ctrl_nfeta_source)
-  vdd      —            —        pfeta.s (ctrl_pfeta_source)
+  vin      bus_A[1]     ua[1]    nmos_a.g pmos_a.g
+  vout     bus_A[3]     ua[2]    nmos_a.d pmos_a.d
+  vss      —            —        nmos_a.s (ctrl_nfeta_source)
+  vdd      —            —        pmos_a.s (ctrl_pfeta_source)
 
   4 shorts free · 9 bus segments free · 190 bits clear
 ```
@@ -708,11 +708,11 @@ The library offers **generic parts**, not named hardware devices:
 
 | Symbol | Properties | Maps to |
 |---|---|---|
-| `mosbius_nmos` | `w` = 1–4 | `nfeta`, `nfetb`, `ndiffpair+`, `dpn−` |
-| `mosbius_pmos` | `w` = 1–4 | `pfeta`, `pfetb`, `pdiffpair+`, `dpp−` |
-| `mosbius_nsink` | `ratio` = 1–4 | `mirn_a`, `mirn_b` |
-| `mosbius_psource` | `ratio` = 1–4 | `mirp_a`, `mirp_b` |
-| `mosbius_ota` | `tail` = 2–8, `mode` | `otan` (one only) |
+| `mosbius_nmos` | `w` = 1–4 | `nmos_a`, `nmos_b`, `ndiffpair+`, `dpn−` |
+| `mosbius_pmos` | `w` = 1–4 | `pmos_a`, `pmos_b`, `pdiffpair+`, `dpp−` |
+| `mosbius_nsink` | `ratio` = 1–4 | `nsink_a`, `nsink_b` |
+| `mosbius_psource` | `ratio` = 1–4 | `psource_a`, `psource_b` |
+| `mosbius_ota` | `tail` = 2–8, `mode` | `ota` (one only) |
 
 `w` sets parallel unit count. **Only width is adjustable — the hardware has no
 length control.**
@@ -724,7 +724,7 @@ constrained resource first**:
 1. Find sets of same-type FETs in the user's circuit that share a source net.
 2. Map those preferentially onto a differential pair (`ndiffpair+`/`dpn−`, `pdiffpair+`/`dpp−`),
    which physically shares a source anyway.
-3. Map FETs needing independent sources onto `nfeta`/`nfetb` / `pfeta`/`pfetb`.
+3. Map FETs needing independent sources onto `nmos_a`/`nmos_b` / `pmos_a`/`pmos_b`.
 4. Choose A vs B side to satisfy any external-port requirements (§3.2).
 
 Capacity is therefore 4 NMOS and 4 PMOS, but only if the circuit's source-sharing
@@ -875,12 +875,12 @@ Output forms:
 $ mosbius decode 0000000000a4000000000000000000000000000c00000082
 
   Devices in use
-    nfeta  w=2   d=net1   g=net2   s=VGND
-    pfeta  w=4   d=net1   g=net2   s=VAPWR
+    nmos_a  w=2   d=net1   g=net2   s=VGND
+    pmos_a  w=4   d=net1   g=net2   s=VAPWR
 
   Nets
-    net1   ua[2]  (bus_A[3])   nfeta.d  pfeta.d
-    net2   ua[1]  (bus_A[1])   nfeta.g  pfeta.g
+    net1   ua[2]  (bus_A[3])   nmos_a.d  pmos_a.d
+    net2   ua[1]  (bus_A[1])   nmos_a.g  pmos_a.g
 
   Looks like: CMOS inverter   in=ua[1]  out=ua[2]
 ```

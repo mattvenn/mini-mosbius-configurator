@@ -4,7 +4,7 @@
 Two decisions, in order (Sec 3.4's "spend the constrained resource
 first"):
 
-1. Device allocation: which hardware instance (nfeta vs nfetb vs the
+1. Device allocation: which hardware instance (nmos_a vs nmos_b vs the
    ndiffpair+/ndiffpair- halves, etc.) each generic device request becomes.
    FET pairs that already share a source net are mapped onto a diff pair
    preferentially, since that hardware is *only* useful as a shared-source
@@ -55,17 +55,17 @@ class RouteError(ValueError):
 # ---------------------------------------------------------------------------
 
 ROLE_SIDE = {
-    "nfeta": "A", "nfetb": "B", "ndiffpair+": "A", "ndiffpair-": "B",
-    "pfeta": "A", "pfetb": "B", "pdiffpair+": "A", "pdiffpair-": "B",
-    "mirn_a": "A", "mirn_b": "B", "mirp_a": "A", "mirp_b": "B",
+    "nmos_a": "A", "nmos_b": "B", "ndiffpair+": "A", "ndiffpair-": "B",
+    "pmos_a": "A", "pmos_b": "B", "pdiffpair+": "A", "pdiffpair-": "B",
+    "nsink_a": "A", "nsink_b": "B", "psource_a": "A", "psource_b": "B",
 }
 
-NMOS_INDEPENDENT_ROLES = ("nfeta", "nfetb")
+NMOS_INDEPENDENT_ROLES = ("nmos_a", "nmos_b")
 NMOS_PAIR_ROLES = ("ndiffpair+", "ndiffpair-")
-PMOS_INDEPENDENT_ROLES = ("pfeta", "pfetb")
+PMOS_INDEPENDENT_ROLES = ("pmos_a", "pmos_b")
 PMOS_PAIR_ROLES = ("pdiffpair+", "pdiffpair-")
-NSINK_ROLES = ("mirn_a", "mirn_b")
-PSOURCE_ROLES = ("mirp_a", "mirp_b")
+NSINK_ROLES = ("nsink_a", "nsink_b")
+PSOURCE_ROLES = ("psource_a", "psource_b")
 
 # Role names as written by routers before 2026-08-21, when the diff-pair
 # halves were called dpn+/dpp- and so on. Nothing about the hardware or the
@@ -75,6 +75,11 @@ PSOURCE_ROLES = ("mirp_a", "mirp_b")
 LEGACY_ROLE_NAMES = {
     "dpn+": "ndiffpair+", "dpn-": "ndiffpair-",
     "dpp+": "pdiffpair+", "dpp-": "pdiffpair-",
+    "nfeta": "nmos_a", "nfetb": "nmos_b",
+    "pfeta": "pmos_a", "pfetb": "pmos_b",
+    "mirn_a": "nsink_a", "mirn_b": "nsink_b",
+    "mirp_a": "psource_a", "mirp_b": "psource_b",
+    "otan": "ota",
 }
 
 # (role -> device-setting field) for the ctrl_*_source free rail tie
@@ -85,22 +90,22 @@ LEGACY_ROLE_NAMES = {
 # are (their pass-1 pairing only happens for a non-rail shared source, so
 # this bit is never set for that case; see _allocate_fets).
 SOURCE_TIE_PIN = {
-    "nfeta": "ctrl_nfeta_source", "nfetb": "ctrl_nfetb_source",
-    "pfeta": "ctrl_pfeta_source", "pfetb": "ctrl_pfetb_source",
+    "nmos_a": "ctrl_nfeta_source", "nmos_b": "ctrl_nfetb_source",
+    "pmos_a": "ctrl_pfeta_source", "pmos_b": "ctrl_pfetb_source",
     "ndiffpair+": "ctrl_dpn_source", "ndiffpair-": "ctrl_dpn_source",
     "pdiffpair+": "ctrl_dpp_source", "pdiffpair-": "ctrl_dpp_source",
 }
 SOURCE_TIE_RAIL = {
-    "nfeta": "VGND", "nfetb": "VGND", "pfeta": "VAPWR", "pfetb": "VAPWR",
+    "nmos_a": "VGND", "nmos_b": "VGND", "pmos_a": "VAPWR", "pmos_b": "VAPWR",
     "ndiffpair+": "VGND", "ndiffpair-": "VGND", "pdiffpair+": "VAPWR", "pdiffpair-": "VAPWR",
 }
 
 # (role -> width/ratio setting field, step) for the 4 FETs + 4 mirrors.
 WIDTH_SETTING = {
-    "nfeta": ("ctrl_nfeta_width", 1), "nfetb": ("ctrl_nfetb_width", 1),
-    "pfeta": ("ctrl_pfeta_width", 1), "pfetb": ("ctrl_pfetb_width", 1),
-    "mirn_a": ("ctrl_mirn_a", 1), "mirn_b": ("ctrl_mirn_b", 1),
-    "mirp_a": ("ctrl_mirp_a", 1), "mirp_b": ("ctrl_mirp_b", 1),
+    "nmos_a": ("ctrl_nfeta_width", 1), "nmos_b": ("ctrl_nfetb_width", 1),
+    "pmos_a": ("ctrl_pfeta_width", 1), "pmos_b": ("ctrl_pfetb_width", 1),
+    "nsink_a": ("ctrl_mirn_a", 1), "nsink_b": ("ctrl_mirn_b", 1),
+    "psource_a": ("ctrl_mirp_a", 1), "psource_b": ("ctrl_mirp_b", 1),
 }
 DEFAULT_WIDTH = 1  # mosbius_nmos/pmos/nsink/psource's own template default
 
@@ -169,7 +174,7 @@ def _allocate_fets(
     requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
     pair_rail: str, label: str,
 ) -> dict[str, str]:
-    """Assign each FET request to nfeta/nfetb/ndiffpair+/ndiffpair- (or the PMOS
+    """Assign each FET request to nmos_a/nmos_b/ndiffpair+/ndiffpair- (or the PMOS
     equivalents). Two cases can use the diff-pair role for free:
 
     - Two devices that share a genuine *internal* (non-rail) source net:
@@ -186,7 +191,7 @@ def _allocate_fets(
       halves are in use, any number of such devices (up to 2) can each
       take a half, independently of whether they share a net object.
 
-    Independent slots (nfeta/nfetb) are tried first since they place no
+    Independent slots (nmos_a/nmos_b) are tried first since they place no
     restriction on the source net at all.
     """
     by_source: dict[str, list[DeviceRequest]] = {}
@@ -268,7 +273,7 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
         raise RouteError(
             f"DOESN'T FIT -- too many current sinks\n\n"
             f"  {len(nsink)} mosbius_nsink devices requested, but the chip has only "
-            f"{len(NSINK_ROLES)}\n  (mirn_a, mirn_b)."
+            f"{len(NSINK_ROLES)}\n  (nsink_a, nsink_b)."
         )
     for d, role in zip(nsink, NSINK_ROLES):
         roles[d.name] = role
@@ -277,7 +282,7 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
         raise RouteError(
             f"DOESN'T FIT -- too many current sources\n\n"
             f"  {len(psource)} mosbius_psource devices requested, but the chip has "
-            f"only {len(PSOURCE_ROLES)}\n  (mirp_a, mirp_b)."
+            f"only {len(PSOURCE_ROLES)}\n  (psource_a, psource_b)."
         )
     for d, role in zip(psource, PSOURCE_ROLES):
         roles[d.name] = role
@@ -286,10 +291,10 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
         raise RouteError(
             f"DOESN'T FIT -- only one OTA on this chip\n\n"
             f"  {len(ota)} mosbius_ota devices requested, but there's exactly one "
-            f"(otan)."
+            f"(ota)."
         )
     for d in ota:
-        roles[d.name] = "otan"
+        roles[d.name] = "ota"
 
     return roles
 

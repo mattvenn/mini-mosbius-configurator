@@ -199,13 +199,13 @@ This matters more than it sounds, because the fixed geometry is not `w=1`:
 
 `nmos_prog` is a 1x always-on slice plus switchable 1x and 2x slices, so its
 maximum, `w=4`, is W=40 nf=8 -- an exact match for the diff-pair half. That is
-why `examples/ringosc/README.md`'s measured bitstream uses `nfeta`/`pfeta` at
+why `examples/ringosc/README.md`'s measured bitstream uses `nmos_a`/`pmos_a` at
 `w=4`: at any other width the stages are mismatched. (Matched in W/L, not in
 parasitics -- the programmable FET's 2x and 1x slices sit behind drain
 switches, the diff-pair half doesn't.)
 
 Found by routing a hand-drawn 3-stage ring: with `w=1` on all six devices, the
-two stages on `nfeta`/`nfetb` come out 1x and the third, forced onto
+two stages on `nmos_a`/`nmos_b` come out 1x and the third, forced onto
 `ndiffpair+`/`pdiffpair+`, comes out 4x. The design looks symmetric in the schematic and
 isn't on silicon.
 

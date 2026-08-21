@@ -25,7 +25,7 @@ def test_decode_prints_devices(capsys):
     rc = main(["decode", INVERTER_BITSTREAM])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "nfeta" in out and "pfeta" in out
+    assert "nmos_a" in out and "pmos_a" in out
 
 
 def test_check_reports_ok_and_hides_info_by_default(capsys):
@@ -65,7 +65,7 @@ def test_route_writes_and_reuses_sticky_config(tmp_path: Path, capsys):
     assert rc == 0
     assert config_path.exists()
     assert INVERTER_BITSTREAM in out
-    assert "nfeta_0" in out and "-> nfeta" in out
+    assert "nfeta_0" in out and "-> nmos_a" in out
 
 
 def test_route_without_out_does_a_fresh_route_each_time(tmp_path: Path, capsys):

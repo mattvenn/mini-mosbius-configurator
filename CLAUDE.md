@@ -38,8 +38,13 @@ happily re-routed a stale file and reported success. Point the router at the
   instead. Terse error messages are a bug.
 - **That rule covers the words themselves, not just the structure.** Anything
   a user reads -- diagnostics, `decode` output, role names, net names -- gets
-  spelled out rather than abbreviated. `dpn+` was renamed `ndiffpair+` for
-  exactly this reason: "dp" is guessable only if you already know the answer.
+  spelled out rather than abbreviated, and **matches the vocabulary the user
+  already has**: role names echo the symbol that was drawn. `dpn+`/`mirn_a`/
+  `otan` became `ndiffpair+`/`nsink_a`/`ota` on 2026-08-21 for exactly this
+  reason -- "dp" and "mirn" are guessable only if you already know the
+  answer, and a message saying "3 mosbius_nsink requested, the chip has 2
+  (nsink_a, nsink_b)" connects to what the user drew in a way "(mirn_a,
+  mirn_b)" did not.
   Internal hardware identifiers are the one exception: `xpt_dpn_outp` and
   `cfga_dpn_inp` are the chip's own signal names and must stay verbatim, so
   when one of those has to appear in a message, translate it first

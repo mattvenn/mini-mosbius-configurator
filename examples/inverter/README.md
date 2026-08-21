@@ -28,8 +28,8 @@ $ python3 -m mosbius.cli route build/inverter.spice
 OK -- no errors or warnings (10 info notes hidden, use --verbose).
 
 Device roles:
-  nfeta_0      -> nfeta
-  pfeta_1      -> pfeta
+  nfeta_0      -> nmos_a
+  pfeta_1      -> pmos_a
 
 Bitstream: 080000004010000001000000000000000040000400000000
 ```

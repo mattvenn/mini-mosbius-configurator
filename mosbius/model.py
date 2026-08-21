@@ -45,19 +45,19 @@ RAILS = ("VAPWR", "VGND", "VDPWR")
 # as g/d. The 4 current mirrors expose one terminal, named "out". The OTA is
 # used as one 5-transistor block with 4 terminals.
 DEVICE_TERMINALS: dict[str, dict[str, str]] = {
-    "nfeta": {"d": "xpt_nfeta_d", "g": "xpt_nfeta_g", "s": "xpt_nfeta_s"},
-    "nfetb": {"d": "xpt_nfetb_d", "g": "xpt_nfetb_g", "s": "xpt_nfetb_s"},
-    "pfeta": {"d": "xpt_pfeta_d", "g": "xpt_pfeta_g", "s": "xpt_pfeta_s"},
-    "pfetb": {"d": "xpt_pfetb_d", "g": "xpt_pfetb_g", "s": "xpt_pfetb_s"},
+    "nmos_a": {"d": "xpt_nfeta_d", "g": "xpt_nfeta_g", "s": "xpt_nfeta_s"},
+    "nmos_b": {"d": "xpt_nfetb_d", "g": "xpt_nfetb_g", "s": "xpt_nfetb_s"},
+    "pmos_a": {"d": "xpt_pfeta_d", "g": "xpt_pfeta_g", "s": "xpt_pfeta_s"},
+    "pmos_b": {"d": "xpt_pfetb_d", "g": "xpt_pfetb_g", "s": "xpt_pfetb_s"},
     "ndiffpair+": {"g": "xpt_dpn_inp", "d": "xpt_dpn_outp"},
     "ndiffpair-": {"g": "xpt_dpn_inm", "d": "xpt_dpn_outm"},
     "pdiffpair+": {"g": "xpt_dpp_inp", "d": "xpt_dpp_outp"},
     "pdiffpair-": {"g": "xpt_dpp_inm", "d": "xpt_dpp_outm"},
-    "mirn_a": {"out": "xpt_mirn_a"},
-    "mirn_b": {"out": "xpt_mirn_b"},
-    "mirp_a": {"out": "xpt_mirp_a"},
-    "mirp_b": {"out": "xpt_mirp_b"},
-    "otan": {
+    "nsink_a": {"out": "xpt_mirn_a"},
+    "nsink_b": {"out": "xpt_mirn_b"},
+    "psource_a": {"out": "xpt_mirp_a"},
+    "psource_b": {"out": "xpt_mirp_b"},
+    "ota": {
         "inp": "xpt_otan_inp", "outp": "xpt_otan_outp",
         "inm": "xpt_otan_inm", "outm": "xpt_otan_outm",
     },
@@ -65,7 +65,7 @@ DEVICE_TERMINALS: dict[str, dict[str, str]] = {
 
 # The 4 devices with an independently-routable source, for W1 (SPEC.md
 # Sec 2.12: "eight FETs are freely usable singly").
-INDEPENDENT_FETS = ("nfeta", "nfetb", "pfeta", "pfetb")
+INDEPENDENT_FETS = ("nmos_a", "nmos_b", "pmos_a", "pmos_b")
 
 # The four FET source-tie bits: setting one shorts that FET's own source
 # crosspoint directly to its rail, bypassing the bus entirely (SPEC.md
@@ -119,10 +119,10 @@ DEVICE_DC_PATHS: tuple[DCPath, ...] = (
     # Whether that reaches a rail depends on where the source is routed,
     # which is the matrix's business -- so this only joins the two
     # crosspoints and lets the graph search finish the job.
-    DCPath("xpt_nfeta_d", "xpt_nfeta_s", "nfeta channel"),
-    DCPath("xpt_nfetb_d", "xpt_nfetb_s", "nfetb channel"),
-    DCPath("xpt_pfeta_d", "xpt_pfeta_s", "pfeta channel"),
-    DCPath("xpt_pfetb_d", "xpt_pfetb_s", "pfetb channel"),
+    DCPath("xpt_nfeta_d", "xpt_nfeta_s", "nmos_a channel"),
+    DCPath("xpt_nfetb_d", "xpt_nfetb_s", "nmos_b channel"),
+    DCPath("xpt_pfeta_d", "xpt_pfeta_s", "pmos_a channel"),
+    DCPath("xpt_pfetb_d", "xpt_pfetb_s", "pmos_b channel"),
 
     # The diff-pair halves have no source crosspoint at all -- the shared
     # tail has no matrix terminal (SPEC.md Sec 2.12) -- so their channel
@@ -137,15 +137,15 @@ DEVICE_DC_PATHS: tuple[DCPath, ...] = (
     # Mirror legs: inside the block the mirror FET's source sits on the
     # rail, so `out` always has a DC path to it (that is what makes it a
     # current sink/source rather than a floating node).
-    DCPath("xpt_mirn_a", "VGND", "mirn_a mirror leg"),
-    DCPath("xpt_mirn_b", "VGND", "mirn_b mirror leg"),
-    DCPath("xpt_mirp_a", "VAPWR", "mirp_a mirror leg"),
-    DCPath("xpt_mirp_b", "VAPWR", "mirp_b mirror leg"),
+    DCPath("xpt_mirn_a", "VGND", "nsink_a mirror leg"),
+    DCPath("xpt_mirn_b", "VGND", "nsink_b mirror leg"),
+    DCPath("xpt_mirp_a", "VAPWR", "psource_a mirror leg"),
+    DCPath("xpt_mirp_b", "VAPWR", "psource_b mirror leg"),
 
     # The OTA's outputs are its PMOS load's drains, and that load's sources
     # are on VAPWR inside the block. Its inputs are gates and get nothing.
-    DCPath("xpt_otan_outp", "VAPWR", "otan output stage"),
-    DCPath("xpt_otan_outm", "VAPWR", "otan output stage"),
+    DCPath("xpt_otan_outp", "VAPWR", "ota output stage"),
+    DCPath("xpt_otan_outm", "VAPWR", "ota output stage"),
 )
 
 

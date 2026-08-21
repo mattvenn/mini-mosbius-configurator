@@ -101,6 +101,24 @@ command on an unchanged design and it reuses that routing verbatim instead
 of re-solving -- so an unrelated edit elsewhere in a bigger circuit can't
 silently relocate this one's rows and change its parasitics.
 
+It prints a "Device roles" table showing which hardware position each of
+your devices got. The names line up with the symbol you drew:
+
+| you drew | you can get | what it is |
+|---|---|---|
+| `mosbius_nmos` | `nmos_a`, `nmos_b` | an NMOS whose source you can route anywhere |
+| | `ndiffpair+`, `ndiffpair-` | one half of the NMOS differential pair -- the two halves share a source |
+| `mosbius_pmos` | `pmos_a`, `pmos_b` | a PMOS whose source you can route anywhere |
+| | `pdiffpair+`, `pdiffpair-` | one half of the PMOS differential pair |
+| `mosbius_nsink` | `nsink_a`, `nsink_b` | a current sink, pulling current down to VGND |
+| `mosbius_psource` | `psource_a`, `psource_b` | a current source, pushing current down from VAPWR |
+| `mosbius_ota` | `ota` | the one 5-transistor amplifier |
+
+You don't choose -- the router does, and it prefers to spend the scarce
+positions last. Two NMOS that share a source get the differential pair,
+because that hardware is only good for that; a lone NMOS gets `nmos_a`
+first, since those are the flexible ones.
+
 The command also runs the safety checker and prints its report inline. For
 this circuit it'll say `OK` (with some INFO notes about unused bus rows
 hidden by default -- pass `--verbose` to see them; they're expected for a

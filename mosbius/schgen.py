@@ -48,22 +48,22 @@ _OTA_PINS = {
 # Sec 2.12: diff-pair transistors are fixed-size, only their shared tail
 # current is configurable) -- rendered at a fixed representative width.
 _DEVICE_SYMBOLS = {
-    "nfeta": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "nfetb": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "pfeta": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "pfetb": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "nmos_a": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "nmos_b": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "pmos_a": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "pmos_b": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
     "ndiffpair+": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": 4}),
     "ndiffpair-": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": 4}),
     "pdiffpair+": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": 4}),
     "pdiffpair-": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": 4}),
-    "mirn_a": ("mosbius_nsink", _NSINK_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "mirn_b": ("mosbius_nsink", _NSINK_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "mirp_a": ("mosbius_psource", _PSOURCE_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "mirp_b": ("mosbius_psource", _PSOURCE_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "otan": ("mosbius_ota", _OTA_PINS, lambda s: {"tail": s.get("tail", 2)}),
+    "nsink_a": ("mosbius_nsink", _NSINK_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "nsink_b": ("mosbius_nsink", _NSINK_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "psource_a": ("mosbius_psource", _PSOURCE_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "psource_b": ("mosbius_psource", _PSOURCE_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "ota": ("mosbius_ota", _OTA_PINS, lambda s: {"tail": s.get("tail", 2)}),
 }
 
-# nfeta/nfetb/ndiffpair+/ndiffpair- terminal "s" maps to mosbius_nmos's own "s" pin
+# nmos_a/nmos_b/ndiffpair+/ndiffpair- terminal "s" maps to mosbius_nmos's own "s" pin
 # directly -- no renaming needed; PMOS/mirror/OTA terminal names already
 # match their generic symbol's pin names one-to-one (SPEC.md Sec 2.12
 # device inventory table uses the same g/d/s and in/out naming throughout).

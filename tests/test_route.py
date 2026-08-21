@@ -55,11 +55,11 @@ def test_inverter_decodes_back_to_the_same_topology():
     routed = route(design)
     decoded = decode(routed.config)
     by_name = {d.name: d for d in decoded.devices}
-    assert set(by_name) == {"nfeta", "pfeta"}
-    assert by_name["nfeta"].terminals["g"] == by_name["pfeta"].terminals["g"]
-    assert by_name["nfeta"].terminals["d"] == by_name["pfeta"].terminals["d"]
-    assert by_name["nfeta"].settings["source_tied_to_VGND"] is True
-    assert by_name["pfeta"].settings["source_tied_to_VAPWR"] is True
+    assert set(by_name) == {"nmos_a", "pmos_a"}
+    assert by_name["nmos_a"].terminals["g"] == by_name["pmos_a"].terminals["g"]
+    assert by_name["nmos_a"].terminals["d"] == by_name["pmos_a"].terminals["d"]
+    assert by_name["nmos_a"].settings["source_tied_to_VGND"] is True
+    assert by_name["pmos_a"].settings["source_tied_to_VAPWR"] is True
 
 
 def test_sr_latch_routes_with_no_check_errors():
@@ -73,7 +73,7 @@ def test_sr_latch_uses_all_six_transistors():
     design = parse_netlist(SR_LATCH_NETLIST)
     routed = route(design)
     assert set(routed.device_roles.values()) == {
-        "nfeta", "nfetb", "pfeta", "pfetb", "ndiffpair+", "ndiffpair-",
+        "nmos_a", "nmos_b", "pmos_a", "pmos_b", "ndiffpair+", "ndiffpair-",
     }
 
 
@@ -83,18 +83,18 @@ def test_sr_latch_decodes_to_cross_coupled_inverters_plus_pulldowns():
     decoded = decode(routed.config)
     by_name = {d.name: d for d in decoded.devices}
 
-    # nfeta/pfeta and nfetb/pfetb form two cross-coupled inverters: each
+    # nmos_a/pmos_a and nmos_b/pmos_b form two cross-coupled inverters: each
     # pair's gate is the other pair's drain.
-    qb_net = by_name["nfeta"].terminals["g"]
-    assert by_name["pfeta"].terminals["g"] == qb_net
-    assert by_name["nfetb"].terminals["d"] == qb_net
-    assert by_name["pfetb"].terminals["d"] == qb_net
-    assert by_name["nfeta"].terminals["d"] == by_name["nfetb"].terminals["g"]
-    assert by_name["nfeta"].terminals["d"] == "ua[2]"  # Q is observable on ua2
+    qb_net = by_name["nmos_a"].terminals["g"]
+    assert by_name["pmos_a"].terminals["g"] == qb_net
+    assert by_name["nmos_b"].terminals["d"] == qb_net
+    assert by_name["pmos_b"].terminals["d"] == qb_net
+    assert by_name["nmos_a"].terminals["d"] == by_name["nmos_b"].terminals["g"]
+    assert by_name["nmos_a"].terminals["d"] == "ua[2]"  # Q is observable on ua2
 
     # The two set/reset pull-downs (ndiffpair+/ndiffpair-, used standalone with their
     # shared tail tied to VGND) each pull one side low.
-    assert by_name["ndiffpair+"].terminals["d"] == by_name["nfeta"].terminals["d"]
+    assert by_name["ndiffpair+"].terminals["d"] == by_name["nmos_a"].terminals["d"]
     assert by_name["ndiffpair-"].terminals["d"] == qb_net
     assert by_name["ndiffpair+"].settings["shared_source_tied_to_VGND"] is True
     assert by_name["ndiffpair-"].settings["shared_source_tied_to_VGND"] is True

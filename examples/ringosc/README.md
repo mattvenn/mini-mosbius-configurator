@@ -13,7 +13,7 @@ found and how to redo it.
 Bitstream `380088007001000010000404250109000400000040000014` decodes
 (`python3 -m mosbius.cli decode 380088...0014`) to a 3-stage ring
 oscillator: three inverting stages built from the six non-independent-slot
-FETs (`nfeta`/`pfeta` w=4 as one stage, `ndiffpair+`/`pdiffpair+` and `ndiffpair-`/`pdiffpair-` as
+FETs (`nmos_a`/`pmos_a` w=4 as one stage, `ndiffpair+`/`pdiffpair+` and `ndiffpair-`/`pdiffpair-` as
 the other two, each pair standalone-tied to its own rail per CLAUDE.md
 trap #3), wired in a loop: `ua[2] -> ua[1] -> ua[4] -> ua[2]`. Three
 inversions around a closed loop is odd, so the loop has no stable fixed
@@ -30,7 +30,7 @@ have no width bits -- their geometry is fixed at W=40 nf=8 for NMOS
 (`diff_n.sch` M1/M2) and W=120 nf=16 for PMOS (`diff_p.sch` M3/M4). The
 programmable FET is a 1x always-on slice plus switchable 1x and 2x slices
 (`nmos_prog.sch`), so `mosbius_nmos w=1` is W=10 nf=2 and its maximum, `w=4`,
-is W=40 nf=8 -- an exact match. Any other width leaves the `nfeta`/`pfeta`
+is W=40 nf=8 -- an exact match. Any other width leaves the `nmos_a`/`pmos_a`
 stage weaker than the two diff-pair stages. Note the router **silently
 discards** a `w=` on a device it assigns to a diff-pair half (`TODO.md` §5), so
 a schematic drawn at `w=1` throughout produces a 1x/1x/4x ring while looking
@@ -38,7 +38,7 @@ symmetric on screen.
 
 **Three inverting stages is the longest odd ring this chip can build.** Only
 four devices per polarity expose both a drain and a source/tail to the matrix:
-`nfeta`, `nfetb`, `ndiffpair+`, `ndiffpair-` (and the PMOS mirror image). The current
+`nmos_a`, `nmos_b`, `ndiffpair+`, `ndiffpair-` (and the PMOS mirror image). The current
 mirror legs expose a single terminal (`out`) and the OTA is a fixed block, so
 neither can serve as an inverter FET. Four stages would fit but is even, and
 five is unreachable -- which makes three the practical ceiling.

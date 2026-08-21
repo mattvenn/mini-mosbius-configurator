@@ -27,7 +27,7 @@ class Net:
 
 @dataclass(frozen=True)
 class DeviceInstance:
-    name: str  # "nfeta", "ndiffpair+", "otan", "mirn_a", ...
+    name: str  # "nmos_a", "ndiffpair+", "ota", "nsink_a", ...
     terminals: dict[str, str]  # terminal name -> net name, only terminals actually wired
     settings: dict[str, object]  # the subset of DeviceSettings relevant to this device
 
@@ -42,19 +42,19 @@ class DecodedDesign:
 # Which DeviceSettings fields belong to each device, so the summary shows
 # only what's relevant (SPEC.md Sec 2.11/2.12).
 _DEVICE_SETTINGS_FIELDS: dict[str, dict[str, str]] = {
-    "nfeta": {"width": "nfeta_width", "source_tied_to_VGND": "nfeta_source"},
-    "nfetb": {"width": "nfetb_width", "source_tied_to_VGND": "nfetb_source"},
-    "pfeta": {"width": "pfeta_width", "source_tied_to_VAPWR": "pfeta_source"},
-    "pfetb": {"width": "pfetb_width", "source_tied_to_VAPWR": "pfetb_source"},
-    "mirn_a": {"ratio": "mirn_a_ratio"},
-    "mirn_b": {"ratio": "mirn_b_ratio"},
-    "mirp_a": {"ratio": "mirp_a_ratio"},
-    "mirp_b": {"ratio": "mirp_b_ratio"},
+    "nmos_a": {"width": "nfeta_width", "source_tied_to_VGND": "nfeta_source"},
+    "nmos_b": {"width": "nfetb_width", "source_tied_to_VGND": "nfetb_source"},
+    "pmos_a": {"width": "pfeta_width", "source_tied_to_VAPWR": "pfeta_source"},
+    "pmos_b": {"width": "pfetb_width", "source_tied_to_VAPWR": "pfetb_source"},
+    "nsink_a": {"ratio": "mirn_a_ratio"},
+    "nsink_b": {"ratio": "mirn_b_ratio"},
+    "psource_a": {"ratio": "mirp_a_ratio"},
+    "psource_b": {"ratio": "mirp_b_ratio"},
     "ndiffpair+": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
     "ndiffpair-": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
     "pdiffpair+": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
     "pdiffpair-": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
-    "otan": {
+    "ota": {
         "tail": "otan_tail",
         "diode_connect_via_outp": "otan_mode0",
         "diode_connect_via_outm": "otan_mode1",

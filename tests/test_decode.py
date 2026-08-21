@@ -25,21 +25,21 @@ def test_decode_inverter_yields_expected_devices(inverter_config):
     decoded = decode(inverter_config)
     by_name = {d.name: d for d in decoded.devices}
 
-    assert set(by_name) == {"nfeta", "pfeta"}
+    assert set(by_name) == {"nmos_a", "pmos_a"}
 
-    nfeta = by_name["nfeta"]
-    assert nfeta.terminals["g"] == by_name["pfeta"].terminals["g"]
-    assert nfeta.terminals["d"] == by_name["pfeta"].terminals["d"]
-    assert nfeta.terminals["g"] != nfeta.terminals["d"]
-    assert nfeta.settings["source_tied_to_VGND"] is True
-    assert by_name["pfeta"].settings["source_tied_to_VAPWR"] is True
+    nmos_a = by_name["nmos_a"]
+    assert nmos_a.terminals["g"] == by_name["pmos_a"].terminals["g"]
+    assert nmos_a.terminals["d"] == by_name["pmos_a"].terminals["d"]
+    assert nmos_a.terminals["g"] != nmos_a.terminals["d"]
+    assert nmos_a.settings["source_tied_to_VGND"] is True
+    assert by_name["pmos_a"].settings["source_tied_to_VAPWR"] is True
 
 
 def test_decode_inverter_input_and_output_nets_reach_expected_pins(inverter_config):
     decoded = decode(inverter_config)
     by_name = {d.name: d for d in decoded.devices}
-    gate_net = by_name["nfeta"].terminals["g"]
-    drain_net = by_name["nfeta"].terminals["d"]
+    gate_net = by_name["nmos_a"].terminals["g"]
+    drain_net = by_name["nmos_a"].terminals["d"]
 
     net_by_name = {n.name: n for n in decoded.nets}
     assert "ua[1]" in net_by_name[gate_net].nodes
@@ -54,13 +54,13 @@ def test_decode_drops_devices_with_all_terminals_isolated():
     config = SwitchConfig(bits=frozenset({bit_for("cfga_mirn_a", 1)}))
     decoded = decode(config)
     names = {d.name for d in decoded.devices}
-    assert names == {"mirn_a"}
+    assert names == {"nsink_a"}
 
 
 def test_format_summary_mentions_devices_and_nets(inverter_config):
     text = format_summary(decode(inverter_config))
-    assert "nfeta" in text
-    assert "pfeta" in text
+    assert "nmos_a" in text
+    assert "pmos_a" in text
     assert "ua[1]" in text
     assert "ua[2]" in text
     assert "ibias" in text

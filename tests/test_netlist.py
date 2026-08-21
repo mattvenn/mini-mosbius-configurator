@@ -5,7 +5,7 @@ MosbiusDesign (SPEC.md Sec 3 architecture diagram).
 Cross-checked end-to-end (outside this suite, needs the EDA container):
 decode() an inverter, generate_schematic() it, netlist it through xschem,
 and parse_netlist() the result -- it reproduces the exact same
-nfeta.g=ua1/d=ua2/s=VGND, pfeta mirrored to VAPWR topology. These tests
+nmos_a.g=ua1/d=ua2/s=VGND, pmos_a mirrored to VAPWR topology. These tests
 cover parse_netlist() in isolation against hand-written netlist text.
 """
 
@@ -38,10 +38,10 @@ def test_parses_both_devices():
 
 def test_terminal_mapping_matches_pin_order():
     design = parse_netlist(INVERTER_NETLIST)
-    nfeta = next(d for d in design.devices if d.name == "nfeta_0")
-    assert nfeta.kind == "nmos"
-    assert nfeta.terminals == {"g": "ua1", "d": "ua2", "s": "VGND", "b": "net1"}
-    assert nfeta.properties == {"w": 1}
+    nmos_a = next(d for d in design.devices if d.name == "nfeta_0")
+    assert nmos_a.kind == "nmos"
+    assert nmos_a.terminals == {"g": "ua1", "d": "ua2", "s": "VGND", "b": "net1"}
+    assert nmos_a.properties == {"w": 1}
 
 
 def test_port_nets_detected():

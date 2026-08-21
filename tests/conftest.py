@@ -30,10 +30,10 @@ def setting_bit(pin: str, index: int = 0) -> int:
 def make_inverter_config() -> SwitchConfig:
     """A hand-routed CMOS inverter, built directly from the bit map:
 
-        nfeta.g = pfeta.g = ua[1]  (input, bus_A[1])
-        nfeta.d = pfeta.d = ua[2]  (output, bus_A[3])
-        nfeta.s -> VGND   (ctrl_nfeta_source)
-        pfeta.s -> VAPWR  (ctrl_pfeta_source)
+        nmos_a.g = pmos_a.g = ua[1]  (input, bus_A[1])
+        nmos_a.d = pmos_a.d = ua[2]  (output, bus_A[3])
+        nmos_a.s -> VGND   (ctrl_nfeta_source)
+        pmos_a.s -> VAPWR  (ctrl_pfeta_source)
 
     This is the same shape as SPEC.md Sec 3.8's illustrative `mosbius
     decode` example, but built against the actual verified bit map rather
