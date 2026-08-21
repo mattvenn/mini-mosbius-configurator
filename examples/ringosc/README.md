@@ -121,17 +121,21 @@ anywhere else, so redoing it means rebuilding from these steps:
 
 2. **Build a testbench schematic wiring every `mosbius.sym` pin to a
    self-labeled net.** Parse `mosbius.sym`'s `B` (pin box) lines directly
-   (regex, or see `tools/gen_example_schematic.py` for the general
-   pattern) to get each pin's exact coordinate, then place one
+   with a regex to get each pin's exact coordinate -- a `B` line is
+   `B 5 <x1> <y1> <x2> <y2> {name=<pin> dir=...}`, and the pin sits at
+   the box's centre. Then place one
    `devices/lab_wire.sym` per pin, each labeled with that pin's own bus
    name (e.g. `lab=cfga_nfeta_d[6:1]`) touching the pin's exact
    coordinate. xschem expands a bus-width label into the individual
    per-bit net names on its own (confirmed working the same way
    `tb_mosbius_ringo.sch`'s own `bus_A[6:1]`-style labels do) -- this
    avoids hand-placing 192+ individual wires, which is exactly the kind
-   of thing that silently floats a pin if one coordinate is wrong (it's
-   bitten this project twice already; see `tools/gen_example_schematic.py`'s
-   docstring).
+   of thing that silently floats a pin if one coordinate is wrong. That
+   has bitten this project twice: xschem merges net names only across wire
+   segments that *genuinely touch*, so a coordinate that is off by one
+   produces a schematic that looks right, netlists without complaint, and
+   has an unconnected pin in it. Generate the coordinates, never type
+   them.
 
 3. **Never place new files inside `ttsky-mini-mosbius/`** (read-only
    submodule, per CLAUDE.md). Keep the testbench `.sch`/`.spice` files in

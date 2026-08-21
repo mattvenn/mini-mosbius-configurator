@@ -867,9 +867,20 @@ Output forms:
 - **Readable summary** — the direct answer to "what circuit is this?"
 - **SPICE subckt** — feeds straight into the existing simulation path, so a
   bitstream from anywhere becomes immediately simulatable.
-- **Generated `.sch`** — an xschem schematic. With at most 9 devices, automatic
-  placement is easy, and this closes the loop: load a bitstream, get a schematic,
-  edit it, emit a new bitstream.
+
+*Amended 2026-08-22.* A third form, a **generated `.sch`**, was specified and
+built (`schgen.py`, M2) on the reasoning that it closed the loop: load a
+bitstream, get a schematic, edit it, emit a new bitstream. That loop only
+starts if a bitstream is what arrived, and it is not what people exchange —
+a design is shared as its `.sch` plus the committed routing (§3.6), and the
+48 hex characters are a rendering of that, not the artifact. The one real
+source of foreign bitstreams is the placeholder web configurator this
+project replaces (§6.1). The remaining use, "show me what the router built",
+is answered by the route table and the readable summary above, in text, and
+a generated schematic would not show the switch matrix anyway — it draws
+generic devices, i.e. roughly the schematic you drew. `schgen.py` and its
+tests were removed rather than left as a documented feature with no CLI
+entry point.
 
 ```
 $ mosbius decode 0000000000a4000000000000000000000000000c00000082
@@ -910,7 +921,6 @@ mini-mosbius-configurator/
 │   ├── watch.py                live netlist watcher (§3.3)
 │   ├── bitstream.py            pack/unpack 192 bits <-> 48 hex
 │   ├── decode.py               bitstream -> nets -> devices (§3.8)
-│   ├── schgen.py               decoded circuit -> xschem .sch (§3.8)
 │   ├── spice.py                emit ngspice include driving mosbius.sym pins
 │   └── program.py              demoboard load + readback verify
 ├── xschem/mosbius_lib/         the xschem library
@@ -986,12 +996,12 @@ the expected circuit** — the strongest available confirmation of the bit map.
 
 ### M2 — xschem library and simulation
 
-Device symbols (§3.4), testbench template, `spice.py`, and `schgen.py` — so a
-decoded bitstream becomes a viewable, editable schematic. Verified inside
-IIC-OSIC-TOOLS.
+Device symbols (§3.4), testbench template, and `spice.py` — so a decoded
+bitstream becomes simulatable. Verified inside IIC-OSIC-TOOLS. (M2 also
+delivered `schgen.py`, removed 2026-08-22 — see §3.8's amendment.)
 
 Together with M1 this completes the **reverse** path end to end: bitstream ->
-circuit -> schematic -> simulation, all before the router exists.
+circuit -> simulation, all before the router exists.
 
 **Exit criterion:** the inverter example simulates and shows a rise time in the
 tens of nanoseconds, consistent with the ~50 ns reported in the TT blog post; and

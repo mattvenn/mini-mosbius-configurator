@@ -35,7 +35,13 @@ a routed config and running it. Budget ~2 min of sky130A model load per run
 
 The container half of that workflow is now known, from re-simulating the SR
 latch at Level-1 on 2026-08-21 -- see `examples/srlatch/README.md`'s
-"Reproducing it" for the working invocation. Netlisting is handled by the
+"Reproducing it" for the working invocation. `examples/ringosc/README.md`'s
+"Reproducing this" carries the rest of the plan: how to wire all 192
+`mosbius.sym` config pins from its `B` (pin box) lines, and why those
+coordinates must be generated rather than typed -- xschem merges net names
+only across wire segments that genuinely touch, so one coordinate off by
+a hair gives you a schematic that looks right, netlists without complaint,
+and has a floating pin in it. Netlisting is handled by the
 repo-root `xschemrc` as long as xschem runs from the repo root; that run took
 54s wall clock, essentially all sky130A model load.
 

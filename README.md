@@ -83,7 +83,6 @@ xschem, instead of re-running the netlist/route/check cycle by hand.
 | Safety checker | `mosbius/check.py` | Finds supply shorts, pin contention, floating nodes, and other hazards before anything reaches silicon (SPEC.md Sec 3.1). Runs as a mandatory gate before upload. |
 | Decoder | `mosbius/decode.py` | Bitstream -> circuit. The reverse path: reads back what a config actually wires up. |
 | xschem library | `xschem/mosbius_lib/` | Five generic device symbols (`mosbius_nmos`, `mosbius_pmos`, `mosbius_nsink`, `mosbius_psource`, `mosbius_ota`) that netlist to the real sky130 transistor sizing behind each hardware block, plus `minimosbius_template.sch`/`tb_template.sch` for drawing and simulating a design. |
-| Schematic generator | `mosbius/schgen.py` | Decoded circuit -> xschem schematic, so a bitstream (yours, or someone else's) becomes something you can open and look at. |
 | Parser | `mosbius/netlist.py` | xschem-netlisted SPICE -> `MosbiusDesign` (the in-memory circuit request). |
 | Router | `mosbius/route.py` | The forward path's hard part: allocates your devices onto real switch-matrix positions, assigns nets to bus rows, and emits the bitstream. Includes sticky routing (SPEC.md Sec 3.2b) -- an unchanged design reuses its exact prior routing instead of re-solving. |
 | Watcher | `mosbius/watch.py` | Polls a netlist file and re-runs route+check on every change. |
