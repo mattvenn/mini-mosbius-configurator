@@ -13,10 +13,13 @@ anything. Do not re-derive facts that are already marked VERIFIED there.
 Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
-`TODO.md` holds deferred work raised by the first outside user running through
-the tutorial (Level-2 simulation, pin-direction errors, wrapping
-the `docker run` in the CLI, silently-dropped transistor widths, W2 false
-alarms on internal nodes, and the missing `@spiceprefix` in the symbols).
+`TODO.md` holds deferred work, mostly raised by the first outside user running
+through the tutorial (Level-2 simulation, pin-direction errors, wrapping the
+`docker run` in the CLI, silently-dropped transistor widths, W2 false alarms on
+internal nodes, and the missing `@spiceprefix` in the symbols), plus two from
+the symbol redraw: the example schematics still carry the old pin coordinates
+and need regenerating (§8), and a reversed drain/source is reported as
+"doesn't fit" rather than as the wiring mistake it is (§9).
 
 **Netlists land in two different directories.** The xschem GUI's Netlist button
 writes to `<schematic dir>/simulation/`; the `docker run` below writes wherever

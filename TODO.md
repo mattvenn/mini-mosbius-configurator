@@ -223,3 +223,88 @@ change.
 Note this is a **second, independent cause** of the "could not find a valid
 modelname" error that CLAUDE.md trap 7 attributes to `ngbehavior=hsa`. Both are
 real; seeing that message does not by itself mean `.spiceinit` is at fault.
+
+## 8. Regenerate the example schematics for the new symbol geometry
+
+Raised 2026-08-21, immediately after the item-1 redraw.
+
+`examples/inverter/inverter.sch`, `examples/inverter/inverter_w4.sch` and
+`examples/srlatch/srlatch.sch` were produced by
+`tools/gen_example_schematic.py` against the *old* pin coordinates (g at
+`(-60,0)`, d at `(60,-60)`, s at `(60,60)`, b at `(0,80)`). Every symbol now
+has pins at `nmos3`'s coordinates instead, so those files' wires end nowhere
+near the pins.
+
+Verified 2026-08-21: *every* pin is now dangling. The inverter netlists as
+
+```
+nfeta_0 net1 net2 net3 VGND mosbius_nmos w=1
+pfeta_1 net4 net5 net6 VAPWR mosbius_pmos w=1
+```
+
+-- six pins, six auto-named nets, no connectivity at all; the srlatch gives
+nineteen. Routing does fail, but on the first thing it happens to run out of:
+
+```
+DOESN'T FIT -- no free bus_A[] row left for 'net4'
+```
+
+which says nothing about the actual problem. Another instance of item 9.
+
+These are generated, not hand-drawn, so the fix is to re-run the generator
+rather than to edit them:
+
+```bash
+python3 tools/gen_example_schematic.py <netlist.spice> <out.sch>
+```
+
+The input each one was built from is the wrinkle -- `build/` is gitignored, so
+the source netlists are not in the repo. Recover each from its example README's
+netlist listing, or from the committed bitstream via `schgen.generate_schematic`
+(that is a different layout algorithm but the same pin tables, and it is what
+`mosbius decode` would draw).
+
+While regenerating, check the result actually netlists in the container before
+committing it -- `examples/*/README.md` quote device connectivity that has to
+keep matching.
+
+Related: the same geometry change broke a hand-drawn `ring.sch` in a way that
+took a routing failure to notice (see item 9).
+
+## 9. Diagnose a probable drain/source swap instead of "doesn't fit"
+
+Raised 2026-08-21, from a real 15-minute misdiagnosis.
+
+A 3-stage ring whose PMOS had drain and source exchanged produced:
+
+```
+DOESN'T FIT -- not enough PMOS with independent sources
+Your circuit needs 3 PMOS transistors (M2, M4, M6),
+but the chip has only 2 with a source you can route anywhere
+```
+
+Every word true, and every word pointing away from the actual fault. The
+netlist was
+
+```
+M2 ua1 VAPWR net1 VAPWR mosbius_pmos w=1     (g d s b)
+```
+
+-- drain on VAPWR, source on an internal node. That is not a circuit anyone
+draws deliberately, and the allocator sees it as three PMOS each demanding a
+routable source.
+
+The check to add, before the allocator gives up: a FET whose **drain** sits on
+a supply rail while its **source** sits on a net that is neither a rail nor a
+`ua[]` pin is almost certainly wired backwards. For PMOS the rail is `VAPWR`,
+for NMOS `VGND`. Say so, name the instances, and say what to do -- for a
+`mosbius_pmos` the source is the *top* pin and the drain the *bottom* (the
+reverse of `mosbius_nmos`), so the usual cause is a symbol flipped vertically
+out of habit from a schematic drawn before 2026-08-21.
+
+Keep it a *hint*, not an error: source-on-an-internal-net is legitimate in a
+cascode or a source follower. It should fire only when the drain is on the
+matching rail, which is the combination that has no sensible reading.
+
+Worth checking whether this belongs in `check.py` (so it fires on a netlist
+that routes, too) rather than only on the allocator's failure path.
