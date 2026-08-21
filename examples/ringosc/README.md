@@ -4,9 +4,9 @@
 `examples/inverter/` and `examples/srlatch/`, nothing here is a polished
 tutorial artifact -- this is a working note on a specific gap-closing
 exercise, kept so it can be picked back up later without re-deriving
-everything from scratch. No schematic or testbench file from this session
-was committed (see "Reproducing this" below); this file records what was
-found and how to redo it.
+everything from scratch. The schematic is now committed (`ring.sch`, see
+below); the Level-2 testbench still is not (see "Reproducing this"), so
+this file records what was found and how to redo the rest of it.
 
 ## The circuit
 
@@ -44,6 +44,52 @@ four devices per polarity expose both a drain and a source/tail to the matrix:
 mirror legs expose a single terminal (`out`) and the OTA is a fixed block, so
 neither can serve as an inverter FET. Four stages would fit but is even, and
 five is unreachable -- which makes three the practical ceiling.
+
+## The schematic
+
+`ring.sch` is a hand-drawn 3-stage ring, added 2026-08-21 -- the first
+schematic from this investigation to be kept. Open it in xschem with
+`xschem/mosbius_lib` on the library path, press Netlist, and route what it
+writes:
+
+```
+$ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/ring.spice
+OK -- no errors or warnings (7 info notes hidden, use --verbose).
+
+Device roles:
+  M1           -> nmos_a        w=4
+  M2           -> pmos_a        w=4
+  M3           -> nmos_b        w=4
+  M4           -> pmos_b        w=4
+  M5           -> ndiffpair+    w=4 (fixed)
+  M6           -> pdiffpair+    w=4 (fixed)
+
+Bitstream: 3f008803f004001801000020100804000060040100000021
+```
+
+Every device is drawn at `w=4` for the reason given above: `ndiffpair+` and
+`pdiffpair+` cannot be anything else, so the other two stages have to be
+brought up to match them rather than the other way round. Drawn at `w=1`
+the router now says so out loud instead of quietly building a 1x/1x/4x ring
+(`check.py`'s `R1`); `w=4` on the two diff-pair halves is redundant but
+costs nothing and documents the intent.
+
+**This is not the measured bitstream, and is not trying to be.** Both are
+the same three-stage topology, put onto different hardware:
+
+| | `ring.sch` | measured `3800...0014` |
+|---|---|---|
+| stages | `nmos_a`/`pmos_a`, `nmos_b`/`pmos_b`, `ndiffpair+`/`pdiffpair+` | `nmos_a`/`pmos_a`, `ndiffpair±`, `pdiffpair±` |
+| loop | `ua1` -> `bus_A[2]` -> `bus_A[6]`+`bus_B[6]` -> `ua1` | `ua[2]` -> `ua[1]` -> `ua[4]` -> `ua[2]` |
+| stage outputs on package pins | one | three |
+
+The measured version brings all three stage outputs out to `ua[]` pins, so
+every node is scopeable -- and every node carries pad capacitance.
+`ring.sch` brings out only `ua1` and keeps the other two stage outputs on
+internal bus rows. That should make it run *faster* than 30MHz, on one
+pad's worth of load instead of three, so read the ~30MHz above as belonging
+to the bitstream it was measured on rather than to this schematic. Nobody
+has put this bitstream on silicon yet.
 
 ## What was tried
 

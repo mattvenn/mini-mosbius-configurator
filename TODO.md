@@ -88,6 +88,13 @@ real; seeing that message does not by itself mean `.spiceinit` is at fault.
 
 Raised 2026-08-21, immediately after the item-1 redraw.
 
+**Only `examples/srlatch/srlatch.sch` is left.** The two inverter files were
+replaced with hand-drawn versions on 2026-08-21 (`examples/inverter/` now
+holds a real schematic drawn in xschem, and `inverter_w4.sch` is that same
+file with one `w=` changed), and `examples/ringosc/ring.sch` was added the
+same way. That leaves the srlatch as the last generated file still on the
+old geometry.
+
 `examples/inverter/inverter.sch`, `examples/inverter/inverter_w4.sch` and
 `examples/srlatch/srlatch.sch` were produced by
 `tools/gen_example_schematic.py` against the *old* pin coordinates (g at
@@ -130,6 +137,12 @@ keep matching.
 
 Related: the same geometry change broke a hand-drawn `ring.sch` in a way that
 took a routing failure to notice (see item 9).
+
+Note the hand-drawn route taken for the inverter and the ring is not a
+rejection of the generator -- `gen_example_schematic.py` reads the pin
+coordinates out of the `.sym` files at run time, so it would produce correct
+geometry today. It is simply that a schematic a person drew is the better
+artifact for an example a person is meant to learn from.
 
 ## 9. Diagnose a probable drain/source swap instead of "doesn't fit"
 
