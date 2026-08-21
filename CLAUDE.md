@@ -15,7 +15,14 @@ the milestone plan.
 
 `TODO.md` holds deferred work raised by the first outside user running through
 the tutorial (symbol polish, Level-2 simulation, pin-direction errors, wrapping
-the `docker run` in the CLI).
+the `docker run` in the CLI, silently-dropped transistor widths, W2 false
+alarms on internal nodes, and the missing `@spiceprefix` in the symbols).
+
+**Netlists land in two different directories.** The xschem GUI's Netlist button
+writes to `<schematic dir>/simulation/`; the `docker run` below writes wherever
+`-o` points (the tutorial says `build/`). They are not the same file and
+nothing syncs them — netlisting from the GUI leaves `build/` untouched, so the
+router happily re-routes a stale netlist and reports success. `TODO.md` §4.
 
 ## Ground rules
 
@@ -81,6 +88,12 @@ These were all got wrong once. The sources that look authoritative are not.
    binned HV FET models (`sky130_fd_pr__nfet_g5v0d10v5`, used by
    `mosbius_nmos.sch`/`mosbius_pmos.sch`) — every instance fails with "could not
    find a valid modelname". Found getting the M5 example simulations running.
+
+   **"could not find a valid modelname" has a second, independent cause.**
+   `mosbius_*.sym`'s format string omits `@spiceprefix`, so instances netlist
+   as `M1 ... mosbius_nmos` — an ngspice MOSFET primitive pointing at a
+   `.subckt` — and fail identically. Seeing this message does not by itself
+   mean `.spiceinit` is at fault. See `TODO.md` §7 for the one-line fix.
 
 ## Useful facts
 

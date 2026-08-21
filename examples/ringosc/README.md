@@ -21,6 +21,28 @@ point -- it free-runs.
 
 This bitstream has been loaded onto real silicon and **measured at ~30MHz**.
 
+### Why `w=4`, and why three stages is the maximum
+
+Both of these look like arbitrary choices in the bitstream above. Neither is.
+
+**`w=4` is the only width that makes the stages match.** The diff-pair halves
+have no width bits -- their geometry is fixed at W=40 nf=8 for NMOS
+(`diff_n.sch` M1/M2) and W=120 nf=16 for PMOS (`diff_p.sch` M3/M4). The
+programmable FET is a 1x always-on slice plus switchable 1x and 2x slices
+(`nmos_prog.sch`), so `mosbius_nmos w=1` is W=10 nf=2 and its maximum, `w=4`,
+is W=40 nf=8 -- an exact match. Any other width leaves the `nfeta`/`pfeta`
+stage weaker than the two diff-pair stages. Note the router **silently
+discards** a `w=` on a device it assigns to a diff-pair half (`TODO.md` §5), so
+a schematic drawn at `w=1` throughout produces a 1x/1x/4x ring while looking
+symmetric on screen.
+
+**Three inverting stages is the longest odd ring this chip can build.** Only
+four devices per polarity expose both a drain and a source/tail to the matrix:
+`nfeta`, `nfetb`, `dpn+`, `dpn-` (and the PMOS mirror image). The current
+mirror legs expose a single terminal (`out`) and the OTA is a fixed block, so
+neither can serve as an inverter FET. Four stages would fit but is even, and
+five is unreachable -- which makes three the practical ceiling.
+
 ## What was tried
 
 Three simulation levels, in increasing fidelity:
