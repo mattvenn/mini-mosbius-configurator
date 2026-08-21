@@ -17,7 +17,8 @@ the milestone plan.
 design (§1), a reversed drain/source reported as "doesn't fit" rather than
 as the wiring mistake it is (§2), tail currents that never reach the
 bitstream (§3), a single OTA crashing the router (§4), and device allocation
-depending on netlist order and failing with a traceback (§5). It is
+depending on netlist order and failing with a traceback (§5), and findings
+repeating their whole explanation once per offending device (§6). It is
 renumbered from 1 whenever items are removed, and every citation of it in
 this repo is updated in the same commit, so a `TODO.md` §number here is
 always live.

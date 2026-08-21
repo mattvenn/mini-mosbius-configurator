@@ -1,7 +1,3 @@
-# another new todo
-
-for repeated warnings, don't repeat the whole warning message, give all the devices that cause the warning and one set of warning text
-
 # new todo
 
 an annoying ux issue is that xschem wants to save simulations in its own directory. and they really want to be in ./build . There needs to be an easy workflow for someone to be able to start xschem, load the templates and see the symbols, then export the netlist and run the docker all in one place. I'm having to remember to copy the spice netlist from xdschem/mosbius/simulation -> build, then run the docker and the python.
@@ -44,6 +40,18 @@ real switch matrix with no behavioural model of the shift register (SPEC.md
 §3.7). What's missing is the workflow around it — generating a testbench from
 a routed config and running it. Budget ~2 min of sky130A model load per run
 (see CLAUDE.md).
+
+The container half of that workflow is now known, from re-simulating the SR
+latch at Level-1 on 2026-08-21 -- see `examples/srlatch/README.md`'s
+"Reproducing it", which has the working invocation. The one trap worth
+carrying forward: netlisting needs the sky130A xschemrc **and**
+`xschem/mosbius_lib` on the library path. With only the library path the
+schematic netlists fine, our own devices come out correctly prefixed, and the
+*inner* `nfet3_*`/`pfet3_*` instances are replaced by
+`*  M1 -  nfet3_g5v0d10v5  IS MISSING !!!!` -- a deck with no transistors in
+it, which ngspice runs quite happily. Level-2 will hit the same thing against
+`ttsky-mini-mosbius/xschem/mosbius.sym`, which pulls in `tt_asw_3v3` as well.
+That run took 54s wall clock, essentially all model load.
 
 
 ## 2. Diagnose a probable drain/source swap instead of "doesn't fit"
@@ -233,3 +241,45 @@ Note this interacts with sticky routing (SPEC.md Sec 3.2b): a better
 allocator must not silently relocate an existing working design, so it
 belongs behind the same stored-routing reuse as everything else.
 
+## 6. Repeated findings repeat their whole explanation
+
+Raised 2026-08-21 by the user, seeing two near-identical 23-line warnings
+from one `mosbius route`.
+
+Every check emits one `Finding` per offending thing, and `_format_report`
+prints each in full. When a check fires on several devices at once the
+reader gets the same explanation over and over. The SR latch is the
+smallest case: two `R1` warnings, 23 lines each, **21 of those lines
+identical** -- only the device name and the role differ. That is 46 lines
+of a 57-line report saying one thing twice.
+
+`I1` is the same shape and worse in bulk: five "does nothing" notes on the
+SR latch, seven on the ring oscillator, one per bus segment, all of them
+the same sentence with a different segment name. They are hidden without
+`--verbose`, which is a workaround rather than a fix.
+
+Wanted: name every device the finding applies to, then explain once.
+
+```
+WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
+           have a fixed width
+
+  <the explanation, once>
+```
+
+Two things to get right rather than grouping blindly:
+
+- **Group by what the explanation actually depends on, not just by check
+  code.** `R1`'s text quotes the geometry, and that differs by polarity:
+  an NMOS half is `W=40 nf=8` from `diff_n.sch` and a PMOS half is
+  `W=120 nf=16` from `diff_p.sch`. So the ring's two `R1` warnings are
+  *not* mergeable, while the SR latch's two are. The key is roughly
+  (check, device kind, requested width) -- worth deriving from the message
+  inputs rather than guessing.
+
+- **Keep each finding individually addressable.** `check()` returns a
+  `SafetyReport` that `program.py` gates uploads on and the tests assert
+  against per-code. Grouping belongs in the *formatting*, not in the
+  finding list -- so `_format_report` (and `watch.py`, which formats its
+  own) should merge for display while `SafetyReport.findings` stays one
+  entry per offending device.
