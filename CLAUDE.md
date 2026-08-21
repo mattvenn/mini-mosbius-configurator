@@ -14,18 +14,19 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work, mostly raised by the first outside user running
-through the tutorial (Level-2 simulation, pin-direction errors, wrapping the
-`docker run` in the CLI, silently-dropped transistor widths, W2 false alarms on
+through the tutorial (Level-2 simulation, pin-direction errors, driving the
+container from the CLI for CI, silently-dropped transistor widths, W2 false alarms on
 internal nodes, and the missing `@spiceprefix` in the symbols), plus two from
 the symbol redraw: the example schematics still carry the old pin coordinates
 and need regenerating (§8), and a reversed drain/source is reported as
 "doesn't fit" rather than as the wiring mistake it is (§9).
 
-**Netlists land in two different directories.** The xschem GUI's Netlist button
-writes to `<schematic dir>/simulation/`; the `docker run` below writes wherever
-`-o` points (the tutorial says `build/`). They are not the same file and
-nothing syncs them — netlisting from the GUI leaves `build/` untouched, so the
-router happily re-routes a stale netlist and reports success. `TODO.md` §4.
+**There is only one netlist directory now: `<schematic dir>/simulation/`,
+where the GUI puts it.** Earlier docs told you to netlist a second time via
+`docker run -o build/`, which produced a second copy that nothing kept in
+sync — netlisting from the GUI left `build/` untouched, so the router
+happily re-routed a stale file and reported success. Point the router at the
+`simulation/` path instead. `TODO.md` §4.
 
 ## Ground rules
 
@@ -38,15 +39,32 @@ router happily re-routes a stale netlist and reports success. `TODO.md` §4.
 
 ## Running the EDA tools
 
-Nothing is installed natively. Use the IIC-OSIC-TOOLS container (`--skip` must be
-the first argument):
+**Netlist from xschem's Netlist button, not from a container.** It writes
+`<schematic dir>/simulation/<name>.spice`, and that is the file to hand to
+`mosbius route` / `mosbius watch` directly:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work/ttsky-mini-mosbius/xschem \
-  hpretl/iic-osic-tools:latest --skip bash -lc \
-  'export PDK=sky130A PDK_ROOT=/foss/pdks
-   xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q -o /work/build mosbius.sch'
+python3 -m mosbius.cli route xschem/mosbius_lib/simulation/ring.spice \
+  --out build/ring.mosbius.json
 ```
+
+Nothing needs copying to `build/`; the router takes a path. Running xschem a
+second time in a container to re-netlist a file you already have open is pure
+redundancy, and it was the source of a whole class of stale-netlist bugs
+(`TODO.md` §4).
+
+xschem and ngspice are not installed natively -- they live in the
+IIC-OSIC-TOOLS container, which is also where you draw. `--skip` must be the
+first argument to the image. Batch netlisting from that container is still
+the right tool for CI and for regenerating the generated examples
+(`TODO.md` §8), just not for a person mid-edit; `git log` has the exact
+invocation if you need it.
+
+Two option meanings that are easy to get backwards: xschem's `-q` is
+`--quit` (exit when done), **not** quiet -- the symbol/schematic consistency
+messages are missing from batch because they are emitted on the GUI path, not
+because `-q` silences them. `--tcl` runs *before* the schematic loads;
+`--command` is the one that runs after. `-l <file>` sets a log file.
 
 Running ngspice (M2+) is separate from netlisting: sky130A's combined model
 library takes **~2 minutes to load** regardless of circuit size (confirmed

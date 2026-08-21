@@ -32,8 +32,11 @@ get, you just say how many you need and how they're connected.
 
 ## 1. Draw the circuit
 
-Copy `xschem/mosbius_lib/minimosbius_template.sch` to a new file, e.g.
-`my_inverter.sch`. Opening it in xschem shows nine `iopin` symbols already
+Copy `xschem/mosbius_lib/minimosbius_template.sch` to a new file **in the
+same directory**, e.g. `xschem/mosbius_lib/my_inverter.sch`. Keeping it
+there matters: schematics refer to symbols by bare name (`mosbius_nmos.sym`),
+so they only resolve while the file sits somewhere xschem's library path
+covers. Opening it in xschem shows nine `iopin` symbols already
 placed -- those are the fixed pins from Sec 0 above, and the file's own
 on-canvas instructions say the same thing: wire your circuit to them,
 there's nothing else to wire to.
@@ -66,28 +69,28 @@ more mechanical than yours will).
 
 ## 2. Netlist it
 
-xschem doesn't have a live plugin hook for "run this every time I save" --
-its scripting surface drives xschem itself in batch mode, it doesn't
-register callbacks into an interactive session (checked directly against
-xschem's own Tcl command reference before concluding this). So netlisting
-is a deliberate step, either from xschem's own menu or from the command
-line:
+Press xschem's **Netlist** button.
 
-```bash
-docker run --rm -v "$PWD:/work" -w /work/xschem/mosbius_lib \
-  hpretl/iic-osic-tools:latest --skip bash -lc \
-  'export PDK=sky130A PDK_ROOT=/foss/pdks
-   xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q -o /work/build my_inverter.sch'
-```
+That writes `xschem/mosbius_lib/simulation/my_inverter.spice` -- a flat
+SPICE netlist naming your two transistors and how their pins connect.
+xschem always puts it in a `simulation/` directory beside the schematic.
+That directory is gitignored; it is scratch output, and nothing needs
+copying anywhere.
 
-This writes `build/my_inverter.spice` -- a flat SPICE netlist naming your
-two transistors and how their pins connect. This is the file everything
-downstream reads; nothing past this point touches xschem again.
+This is the file everything downstream reads; nothing past this point
+touches xschem again.
+
+It stays a deliberate button press because xschem has no "netlist every
+time I save" hook -- its scripting surface drives xschem in batch mode, it
+does not register callbacks into an interactive session (checked against
+xschem's own Tcl command reference before concluding this). Step 4 makes
+that button the only manual part of the loop.
 
 ## 3. Route it
 
 ```bash
-python3 -m mosbius.cli route build/my_inverter.spice --out build/my_inverter.mosbius.json
+python3 -m mosbius.cli route xschem/mosbius_lib/simulation/my_inverter.spice \
+  --out build/my_inverter.mosbius.json
 ```
 
 This is the hard direction (SPEC.md Sec 3): it decides *which* of the
@@ -108,10 +111,10 @@ circuit this small and don't mean anything is wrong).
 Instead of re-running step 3 by hand after every edit, run:
 
 ```bash
-python3 -m mosbius.cli watch build/my_inverter.spice
+python3 -m mosbius.cli watch xschem/mosbius_lib/simulation/my_inverter.spice
 ```
 
-and leave it running in a terminal. Every time you re-netlist from xschem
+and leave it running in a terminal. Every time you press Netlist in xschem
 (step 2), the watcher notices the file changed (it polls the file's
 modification time -- xschem runs in the container while this watches from
 the host, and inotify-style file-change events don't reliably cross that

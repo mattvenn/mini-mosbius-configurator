@@ -89,8 +89,13 @@ anywhere else, so redoing it means rebuilding from these steps:
    submodule, per CLAUDE.md). Keep the testbench `.sch`/`.spice` files in
    `build/` (gitignored), and reference `mosbius.sym` with a bare
    relative filename (`C {mosbius.sym}`) while running xschem with its
-   working directory set to `ttsky-mini-mosbius/xschem` -- matching
-   CLAUDE.md's own working netlist command:
+   working directory set to `ttsky-mini-mosbius/xschem`.
+
+   This is one of the few places a batch `docker run` is still the right
+   tool. The everyday path is xschem's Netlist button (`TUTORIAL.md`), but
+   that netlists the schematic you have open, into `simulation/` beside it
+   -- no use for a generated testbench in `build/` that has to resolve
+   `mosbius.sym` from the submodule's own directory:
    ```bash
    docker run --rm -v "$PWD:/work" -w /work/ttsky-mini-mosbius/xschem \
      hpretl/iic-osic-tools:latest --skip bash -lc \

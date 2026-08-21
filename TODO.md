@@ -2,11 +2,11 @@
 
 an annoying ux issue is that xschem wants to save simulations in its own directory. and they really want to be in ./build . There needs to be an easy workflow for someone to be able to start xschem, load the templates and see the symbols, then export the netlist and run the docker all in one place. I'm having to remember to copy the spice netlist from xdschem/mosbius/simulation -> build, then run the docker and the python.
 
-(Overlaps §4, which already has the two-directories trap and the stale-netlist
-checks as bullets under a `mosbius netlist <sch>` subcommand. What this adds
-that §4 does not: the ask is the *whole loop* in one place -- start xschem with
-the library path already set, draw, netlist, route, program -- not just one
-subcommand. Fold together when someone picks it up.)
+(Half of this is answered as of 2026-08-21: there is no copying and no docker
+step any more. Press Netlist in xschem, then point the router straight at
+`<schematic dir>/simulation/<name>.spice` -- see §4. What remains is the rest
+of the ask: launching xschem with the library path already set, so the whole
+loop is one place.)
 
 # TODO — deferred work
 
@@ -114,14 +114,26 @@ output are expected, not a bug — the template places all nine chip ports and
 most designs use a few. Worth saying so in `TUTORIAL.md`, since it reads as a
 problem on a first run.
 
-## 4. Let the Python CLI drive the container
+## 4. Let the Python CLI drive the container -- SCOPE REDUCED 2026-08-21
 
-Netlisting means hand-writing a long `docker run` with four paths that have to
-agree (host mount, `-w`, `--rcfile`, `-o`). A `mosbius netlist <sch>`
-subcommand should derive all of them from the repo root and the schematic's
-location.
+**Most of this item evaporated.** It assumed netlisting required the long
+`docker run`. It never did: xschem's own Netlist button produces the same
+netlist, in `<schematic dir>/simulation/`, and `mosbius route` takes a path,
+so the interactive loop is *draw -> press Netlist -> read the terminal* with
+no container command and nothing to copy. `TUTORIAL.md` and `README.md` now
+say so, and the `docker run` is gone from both.
 
-Points to fold in, both hit on the first run:
+Verified equivalent on the 3-stage ring: the GUI netlist and the batch one
+differ only by a redundant `m=1` on the sky130 device lines inside the
+subcircuits -- lines `netlist.py` never reads -- and both route to the same
+bitstream.
+
+What is still worth building, for CI and for regenerating the generated
+examples (§8), is a `mosbius netlist <sch>` subcommand that derives the four
+paths that have to agree (host mount, `-w`, `--rcfile`, `-o`) from the repo
+root and the schematic's location. The points below still apply to that, and
+the last two are why the two-directory setup was worth abolishing rather
+than documenting:
 
 - **Library path.** Schematics reference symbols bare (`C {mosbius_nmos.sym}`),
   so they only resolve if `xschem/mosbius_lib` is on the library path. The
