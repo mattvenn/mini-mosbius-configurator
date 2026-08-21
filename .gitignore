@@ -2,3 +2,9 @@ build/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# xschem's GUI Netlist button writes here -- <schematic dir>/simulation/,
+# per its simuldir proc -- while the batch `docker run` writes to build/.
+# Two netlists of the same schematic, nothing syncing them (TODO.md §4).
+# Only build/ is the one the router reads, so this side is throwaway.
+simulation/
