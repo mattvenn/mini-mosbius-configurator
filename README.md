@@ -55,20 +55,20 @@ git submodule update --init   # first time only
 # VAPWR, VDPWR, VGND). See examples/inverter/ and examples/srlatch/ for
 # two worked circuits, or follow TUTORIAL.md end to end.
 
-# Netlist it: press xschem's Netlist button. It writes
-# xschem/mosbius_lib/simulation/your_design.spice (always a simulation/
-# directory beside the schematic; gitignored, nothing to copy anywhere).
+# Netlist it: press xschem's Netlist button. It writes build/your_design.spice
+# -- the repo-root xschemrc sets that up, so launch xschem from the top of
+# the repo. build/ is gitignored; nothing needs copying anywhere.
 
 # Route it (allocates devices onto real switch-matrix positions, checks for
 # safety hazards, emits the 192-bit bitstream) -- runs on the host:
-python3 -m mosbius.cli route xschem/mosbius_lib/simulation/your_design.spice \
+python3 -m mosbius.cli route build/your_design.spice \
   --out build/your_design.mosbius.json
 
 # Upload it to a connected TT demoboard (needs mpremote: pip install mpremote):
 python3 -m mosbius.cli program <the bitstream printed above>
 ```
 
-`mosbius watch xschem/mosbius_lib/simulation/your_design.spice` re-runs
+`mosbius watch build/your_design.spice` re-runs
 route+check every time xschem re-netlists the file (polls the file's mtime, so it works across the
 Docker bind mount) -- keep it running in a terminal while you iterate in
 xschem, instead of re-running the netlist/route/check cycle by hand.
@@ -103,9 +103,11 @@ python3 -m pytest tests/ -q
 - `ttsky-mini-mosbius/` is a **read-only git submodule** (upstream,
   Apache-2.0). Never modify it.
 - This project is Apache-2.0.
-- `build/` is gitignored -- it holds routing output, never hand-edited or
-  committed. So is every `simulation/` directory, which is where xschem
-  puts the netlists it generates.
+- `build/` is gitignored -- it holds the netlists xschem generates and the
+  routing output, never hand-edited or committed.
+- `xschemrc` at the repo root is what points xschem at both symbol
+  libraries and sends netlists to `build/`. It only takes effect if xschem
+  is launched from the repo root; xschem does not search upwards for it.
 
 See `CLAUDE.md` for the full list of verified corrections ("traps") this
 project's bit map and architecture depend on -- several look authoritative

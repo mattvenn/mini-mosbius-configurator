@@ -23,12 +23,27 @@ renumbered from 1 whenever items are removed, and every citation of it in
 this repo is updated in the same commit, so a `TODO.md` §number here is
 always live.
 
-**There is only one netlist directory now: `<schematic dir>/simulation/`,
-where the GUI puts it.** Earlier docs told you to netlist a second time via
-`docker run -o build/`, which produced a second copy that nothing kept in
-sync — netlisting from the GUI left `build/` untouched, so the router
-happily re-routed a stale file and reported success. Point the router at the
-`simulation/` path instead.
+**There is one netlist directory, `build/`, and `xschemrc` at the repo root
+is what makes that true.** Launch xschem from the top of the repo and it
+reads that file, which puts sky130A *and* `xschem/mosbius_lib` on the symbol
+path and sets `netlist_dir` to `build/`. Netlist button, then point the
+router straight at `build/<name>.spice`.
+
+**Launch xschem from anywhere else and both halves of that break, silently
+and together.** xschem looks for `xschemrc` in its current working directory
+only — not the schematic's directory, and it does not search upwards. From
+`examples/inverter/` you get the container's default instead: the netlist
+lands in `simulations/` (note the plural) rather than `build/`, *and* every
+device comes out as `*  M1 -  mosbius_nmos  IS MISSING !!!!` because our
+library is not on the path. Verified 2026-08-21. The router rejects that
+file for having no devices, which is the good case; ngspice would run it as
+an empty circuit.
+
+The history worth not repeating: earlier docs had you netlist twice, once
+from the GUI and once via `docker run -o build/`, producing two copies that
+nothing kept in sync — so the router happily re-routed a stale file and
+reported success. One configured location, written by one tool, is the
+fix.
 
 ## Ground rules
 
@@ -55,19 +70,22 @@ happily re-routed a stale file and reported success. Point the router at the
 
 ## Running the EDA tools
 
-**Netlist from xschem's Netlist button, not from a container.** It writes
-`<schematic dir>/simulation/<name>.spice`, and that is the file to hand to
-`mosbius route` / `mosbius watch` directly:
+**Netlist from xschem's Netlist button, not from a container** -- with
+xschem launched from the repo root, so it picks up `xschemrc`. It writes
+`build/<name>.spice`, and that is the file to hand to `mosbius route` /
+`mosbius watch` directly:
 
 ```bash
-python3 -m mosbius.cli route examples/ringosc/simulation/ring.spice \
-  --out build/ring.mosbius.json
+python3 -m mosbius.cli route build/ring.spice --out build/ring.mosbius.json
 ```
 
-Note the `simulation/` directory is beside the *schematic*, wherever that
-is -- `examples/ringosc/simulation/` for the committed examples, and
-`xschem/mosbius_lib/simulation/` for a design drawn from the template in
-the library directory. It is gitignored either way.
+Batch netlisting is the same thing without the GUI, and needs no `-o`,
+since `netlist_dir` already points at `build/`:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+  --skip bash -lc 'xschem -n -q examples/ringosc/ring.sch'
+```
 
 Nothing needs copying to `build/`; the router takes a path. Running xschem a
 second time in a container to re-netlist a file you already have open is pure

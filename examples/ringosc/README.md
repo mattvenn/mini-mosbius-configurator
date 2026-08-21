@@ -53,7 +53,7 @@ schematic from this investigation to be kept. Open it in xschem with
 writes:
 
 ```
-$ python3 -m mosbius.cli route examples/ringosc/simulation/ring.spice
+$ python3 -m mosbius.cli route build/ring.spice
 OK -- no errors or warnings (7 info notes hidden, use --verbose).
 
 Device roles:
@@ -144,7 +144,9 @@ anywhere else, so redoing it means rebuilding from these steps:
    whichever way you netlist, it has to be running in
    `ttsky-mini-mosbius/xschem`. The GUI would do just as well: start xschem
    from that directory, open `build/ring_l2.sch`, press Netlist, and read
-   the result from `build/simulation/`.
+   the result from whatever `netlist_dir` is in force -- note this step is
+   the one case that does *not* run from the repo root, so the repo's own
+   `xschemrc` does not apply to it.
 
    The batch form is written out here only because every other step of this
    flow is scripted -- the testbench is generated (step 2) and the netlist

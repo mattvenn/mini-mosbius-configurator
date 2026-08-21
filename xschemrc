@@ -1,0 +1,32 @@
+# xschem configuration for this repo.
+#
+# xschem reads `xschemrc` from its current working directory, so this file
+# applies whenever you launch xschem from the top of the repo:
+#
+#     xschem examples/inverter/inverter.sch
+#
+# It does three things: find the PDK's device symbols and models, find our
+# own symbol library, and put every netlist in one place.
+
+# Where this file lives -- computed before sourcing anything else, because
+# `info script` follows whichever file is currently being sourced.
+set mosbius_root [file dirname [file normalize [info script]]]
+
+# 1. sky130A. The container defaults PDK to ihp-sg13g2, so name sky130A
+#    explicitly rather than relying on $PDK. This brings in nfet3_*/pfet3_*
+#    (which mosbius_nmos.sch/mosbius_pmos.sch instantiate) and devices/.
+if {[info exists env(PDK_ROOT)]} {
+    set mosbius_pdk_root $env(PDK_ROOT)
+} else {
+    set mosbius_pdk_root /foss/pdks
+}
+source $mosbius_pdk_root/sky130A/libs.tech/xschem/xschemrc
+
+# 2. Our library. Must come AFTER the source above: the sky130A xschemrc
+#    resets XSCHEM_LIBRARY_PATH to {} and builds it up, so appending before
+#    it would be silently discarded.
+append XSCHEM_LIBRARY_PATH :[file join $mosbius_root xschem mosbius_lib]
+
+# 3. One netlist directory for the whole repo, rather than a simulation/
+#    beside each schematic. build/ is gitignored.
+set netlist_dir [file join $mosbius_root build]

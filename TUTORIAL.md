@@ -71,11 +71,17 @@ more mechanical than yours will).
 
 Press xschem's **Netlist** button.
 
-That writes `xschem/mosbius_lib/simulation/my_inverter.spice` -- a flat
-SPICE netlist naming your two transistors and how their pins connect.
-xschem always puts it in a `simulation/` directory beside the schematic.
-That directory is gitignored; it is scratch output, and nothing needs
-copying anywhere.
+That writes `build/my_inverter.spice` -- a flat SPICE netlist naming your
+two transistors and how their pins connect. `build/` is gitignored; it is
+scratch output, and nothing needs copying anywhere.
+
+**This depends on having launched xschem from the top of the repo**, where
+its `xschemrc` lives. That file is what puts both sky130A and
+`xschem/mosbius_lib` on the symbol path and sends netlists to `build/`.
+xschem only looks for `xschemrc` in its current working directory, so
+starting it from somewhere else gets you a netlist in the wrong place with
+every device replaced by `IS MISSING !!!!`. If that happens, `cd` to the
+repo root and press Netlist again.
 
 This is the file everything downstream reads; nothing past this point
 touches xschem again.
@@ -89,7 +95,7 @@ that button the only manual part of the loop.
 ## 3. Route it
 
 ```bash
-python3 -m mosbius.cli route xschem/mosbius_lib/simulation/my_inverter.spice \
+python3 -m mosbius.cli route build/my_inverter.spice \
   --out build/my_inverter.mosbius.json
 ```
 
@@ -129,7 +135,7 @@ circuit this small and don't mean anything is wrong).
 Instead of re-running step 3 by hand after every edit, run:
 
 ```bash
-python3 -m mosbius.cli watch xschem/mosbius_lib/simulation/my_inverter.spice
+python3 -m mosbius.cli watch build/my_inverter.spice
 ```
 
 and leave it running in a terminal. Every time you press Netlist in xschem

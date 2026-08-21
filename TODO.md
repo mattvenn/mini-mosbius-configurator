@@ -1,13 +1,3 @@
-# new todo
-
-an annoying ux issue is that xschem wants to save simulations in its own directory. and they really want to be in ./build . There needs to be an easy workflow for someone to be able to start xschem, load the templates and see the symbols, then export the netlist and run the docker all in one place. I'm having to remember to copy the spice netlist from xdschem/mosbius/simulation -> build, then run the docker and the python.
-
-(Half of this is answered as of 2026-08-21: there is no copying and no docker
-step any more. Press Netlist in xschem, then point the router straight at
-`<schematic dir>/simulation/<name>.spice`. What remains is the rest
-of the ask: launching xschem with the library path already set, so the whole
-loop is one place.)
-
 # TODO — deferred work
 
 Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
@@ -43,15 +33,20 @@ a routed config and running it. Budget ~2 min of sky130A model load per run
 
 The container half of that workflow is now known, from re-simulating the SR
 latch at Level-1 on 2026-08-21 -- see `examples/srlatch/README.md`'s
-"Reproducing it", which has the working invocation. The one trap worth
-carrying forward: netlisting needs the sky130A xschemrc **and**
-`xschem/mosbius_lib` on the library path. With only the library path the
-schematic netlists fine, our own devices come out correctly prefixed, and the
-*inner* `nfet3_*`/`pfet3_*` instances are replaced by
-`*  M1 -  nfet3_g5v0d10v5  IS MISSING !!!!` -- a deck with no transistors in
-it, which ngspice runs quite happily. Level-2 will hit the same thing against
-`ttsky-mini-mosbius/xschem/mosbius.sym`, which pulls in `tt_asw_3v3` as well.
-That run took 54s wall clock, essentially all model load.
+"Reproducing it" for the working invocation. Netlisting is handled by the
+repo-root `xschemrc` as long as xschem runs from the repo root; that run took
+54s wall clock, essentially all sky130A model load.
+
+Level-2 is the case that `xschemrc` does *not* cover, and it is worth knowing
+before starting. `ttsky-mini-mosbius/xschem/mosbius.sym` resolves its own
+sub-symbols (`tt_asw_3v3` and friends) by bare name relative to where xschem
+is running, so that netlist has to be produced from inside
+`ttsky-mini-mosbius/xschem` -- a different working directory, hence a
+different `xschemrc`, hence a different `netlist_dir`. Either add that
+directory to the repo `xschemrc`'s `XSCHEM_LIBRARY_PATH` and check the bare
+names still resolve, or accept the second working directory and pass `-o`
+explicitly. Get it wrong and the failure is silent: devices are replaced by
+`*  x1 -  tt_asw_3v3  IS MISSING !!!!` and ngspice runs the empty deck.
 
 
 ## 2. Diagnose a probable drain/source swap instead of "doesn't fit"

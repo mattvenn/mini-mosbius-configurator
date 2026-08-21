@@ -67,7 +67,7 @@ than a `RouteError` with a diagnosis, this is very likely what it is.
 ## Routing
 
 ```
-$ python3 -m mosbius.cli route examples/srlatch/simulation/srlatch.spice
+$ python3 -m mosbius.cli route build/srlatch.spice
 WARNING -- XM5's w=1 was ignored: ndiffpair+ has a fixed width
 WARNING -- XM6's w=1 was ignored: ndiffpair- has a fixed width
 
@@ -134,20 +134,15 @@ driving it.
 ### Reproducing it
 
 Two steps, both in the IIC-OSIC-TOOLS container, because neither xschem nor
-ngspice is installed natively (CLAUDE.md). Netlist the schematic with the
-sky130A xschemrc *and* `xschem/mosbius_lib` on the library path -- with only
-the latter, the inner `nfet3_*`/`pfet3_*` devices come out as
-`IS MISSING !!!!` and the deck silently has no transistors in it:
-
-```tcl
-# /tmp/xschemrc
-source /foss/pdks/sky130A/libs.tech/xschem/xschemrc
-append XSCHEM_LIBRARY_PATH :/work/xschem/mosbius_lib
-```
+ngspice is installed natively (CLAUDE.md). Netlist the schematic **from the
+repo root**, so xschem reads the repo's `xschemrc` -- that is what puts both
+sky130A and `xschem/mosbius_lib` on the symbol path. Run it from anywhere
+else and the netlist comes out with every device replaced by
+`IS MISSING !!!!`, a deck with no transistors that ngspice runs happily:
 
 ```bash
-xschem --rcfile /tmp/xschemrc -n -q -o /work/build \
-    /work/examples/srlatch/srlatch.sch
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+  --skip bash -lc 'xschem -n -q examples/srlatch/srlatch.sch'
 ```
 
 Then prepend stimulus and append the analysis to that netlist (strip its

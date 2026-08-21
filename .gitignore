@@ -4,11 +4,14 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Where xschem's Netlist button writes, per its simuldir proc: a
-# simulation/ directory beside the schematic. Regenerated on every press
-# and read straight from there by `mosbius route`, so there is nothing
-# here worth keeping.
+# Where xschem's Netlist button writes when it is NOT reading this repo's
+# xschemrc: a simulation/ (or simulations/) directory beside the schematic,
+# per its simuldir proc. Launched from the repo root it writes build/
+# instead, so one of these appearing means xschem was started from the wrong
+# directory -- in which case the netlist is also missing every device.
+# Ignored so a stray one is never committed.
 simulation/
+simulations/
 
 # Logs from redirecting the router's output.
 *.log
