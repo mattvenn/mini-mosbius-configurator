@@ -93,3 +93,46 @@ def test_missing_config_file_does_a_fresh_route(tmp_path: Path):
     routed = route_sticky(parse_netlist(INVERTER_NETLIST), config_path)
     assert routed.config.bits == route(parse_netlist(INVERTER_NETLIST)).config.bits
     assert config_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Renames (TODO.md Sec 7): the symbols gained `@spiceprefix`, so every
+# instance went from `M1` to `XM1`. The topology hash ignores instance
+# names by design, so that rename hashes identically -- but the stored
+# device_roles are keyed by name, and replaying them would describe
+# devices that no longer exist.
+# ---------------------------------------------------------------------------
+
+RENAMED = INVERTER_NETLIST.replace("nfeta_0 ", "Xnfeta_0 ").replace("pfeta_1 ", "Xpfeta_1 ")
+
+
+def test_a_pure_rename_does_not_change_the_topology_hash():
+    # Guarding the premise: if this ever became false, the check below
+    # would be dead code rather than wrong.
+    assert design_topology_hash(parse_netlist(INVERTER_NETLIST)) == design_topology_hash(
+        parse_netlist(RENAMED)
+    )
+
+
+def test_renamed_devices_re_route_instead_of_replaying_stale_role_keys(tmp_path: Path):
+    config_path = tmp_path / "inv.mosbius.json"
+    route_sticky(parse_netlist(INVERTER_NETLIST), config_path)
+    routed = route_sticky(parse_netlist(RENAMED), config_path)
+    assert set(routed.device_roles) == {"Xnfeta_0", "Xpfeta_1"}
+    assert set(routed.device_widths) == {"Xnfeta_0", "Xpfeta_1"}
+
+
+def test_the_rename_re_keys_the_stored_file(tmp_path: Path):
+    config_path = tmp_path / "inv.mosbius.json"
+    route_sticky(parse_netlist(INVERTER_NETLIST), config_path)
+    route_sticky(parse_netlist(RENAMED), config_path)
+    assert set(load_routed_design(config_path)["device_roles"]) == {"Xnfeta_0", "Xpfeta_1"}
+
+
+def test_the_rename_produces_an_identical_bitstream(tmp_path: Path):
+    # The whole point: adding @spiceprefix is a naming change, not a
+    # circuit change. It costs one re-route and must land on the same bits.
+    config_path = tmp_path / "inv.mosbius.json"
+    original = route_sticky(parse_netlist(INVERTER_NETLIST), config_path)
+    renamed = route_sticky(parse_netlist(RENAMED), config_path)
+    assert renamed.config.to_bitstream() == original.config.to_bitstream()

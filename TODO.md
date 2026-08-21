@@ -1,3 +1,7 @@
+# another new todo
+
+for repeated warnings, don't repeat the whole warning message, give all the devices that cause the warning and one set of warning text
+
 # new todo
 
 an annoying ux issue is that xschem wants to save simulations in its own directory. and they really want to be in ./build . There needs to be an easy workflow for someone to be able to start xschem, load the templates and see the symbols, then export the netlist and run the docker all in one place. I'm having to remember to copy the spice netlist from xdschem/mosbius/simulation -> build, then run the docker and the python.
@@ -16,8 +20,8 @@ the context needed to act on it without re-deriving anything.
 
 Numbers are stable, so the list starts at 2: items 1 (redraw the symbols),
 3 (pin-direction errors), 4 (netlisting via the container), 5 (widths dropped
-on diff-pair halves) and 6 (W2 firing on every internal node) were resolved
-and removed on 2026-08-21. Other files cite these by number, so completed
+on diff-pair halves), 6 (W2 firing on every internal node) and 7 (the missing
+`@spiceprefix`) were resolved and removed on 2026-08-21. Other files cite these by number, so completed
 items are removed without renumbering the rest -- and a citation of a number
 that is no longer here means the thing it described is fixed, not that the
 reference rotted.
@@ -37,52 +41,6 @@ real switch matrix with no behavioural model of the shift register (SPEC.md
 a routed config and running it. Budget ~2 min of sky130A model load per run
 (see CLAUDE.md).
 
-
-## 7. Library symbols emit an invalid subcircuit call
-
-Every `mosbius_*.sym` declares `type=subcircuit`, but the format string omits
-`@spiceprefix`:
-
-```
-ours:    format="@name @pinlist @b @symname w=@w"  template="name=M1 w=1 b=VGND"
-sky130:  format="@spiceprefix@name @pinlist sky130_fd_pr__@model L=@L W=@W ..."
-         template="name=M1 ... spiceprefix=X"
-```
-
-Four of the five templates default to `name=M1` (`mosbius_nmos`,
-`mosbius_pmos`, `mosbius_nsink`, `mosbius_psource`), so instances netlist as
-`M1 ua1 net1 VGND VGND mosbius_nmos w=1`. `M` is ngspice's MOSFET primitive, so
-the last token has to name a `.model` -- but `mosbius_nmos` is a `.subckt`.
-Verified against the real netlist with the real PDK models loaded:
-
-```
-warning, can't find model 'mosbius_nmos' from line
-    m1 in out 0 0 mosbius_nmos w=1
-could not find a valid modelname
-    Simulation interrupted due to error!
-```
-
-Only `mosbius_ota.sym` escapes it, by accident: its template is `name=X1`.
-This is why the *inner* device netlists correctly as `XM1` -- sky130's own
-symbol includes `@spiceprefix`, ours doesn't.
-
-Fix, matching sky130's convention:
-
-```
-format="@spiceprefix@name @pinlist @b @symname w=@w"
-template="name=M1 w=1 b=VGND spiceprefix=X"
-```
-
-That emits `XM1 ua1 net1 VGND VGND mosbius_nmos w=1` and keeps the familiar
-M1/M2 names visible in the schematic. Downstream consequence:
-`mosbius/netlist.py` takes the first token as the instance name, so devices
-become `XM1`..`XM6`; that changes the `device_roles` keys and the
-`design_topology_hash`, forcing one re-route. The bitstream itself does not
-change.
-
-Note this is a **second, independent cause** of the "could not find a valid
-modelname" error that CLAUDE.md trap 7 attributes to `ngbehavior=hsa`. Both are
-real; seeing that message does not by itself mean `.spiceinit` is at fault.
 
 ## 8. Regenerate the example schematics for the new symbol geometry
 
@@ -274,3 +232,59 @@ routed a single OTA.
 Note for whoever takes this: the OTA's inputs reach only bus rows 1-3
 (CLAUDE.md trap 6), so the row picker needs to respect that once it can get
 far enough to matter.
+
+## 12. Device allocation is decided by netlist order, and fails with a traceback
+
+Raised 2026-08-21, found routing a hand-drawn SR latch.
+
+`_allocate_fets` pass 2 hands the two independent slots (`nmos_a`/`nmos_b`)
+to whichever requests come first in the netlist, then pass 3 gives the
+diff-pair halves to whatever is left. Nothing consults where those devices'
+*gates* have to land -- so whether a design routes can depend on the order
+xschem happened to list its instances in.
+
+The SR latch in `examples/srlatch/` is the worked case. Six devices, four
+NMOS all sourced on `VGND`, so two of them necessarily take diff-pair
+halves. As listed it routes: `M2`/`M4` take the independent slots and the
+halves fall to `M5`/`M6`, whose gates are on `ua1` and `ua2`. Relist the
+same six devices in a different order and:
+
+```
+KeyError: ('cfgb_dpn_inm', 6)
+```
+
+Not a `RouteError` -- a traceback out of `route_internal_net`.
+
+**Why row 6 specifically, and why no pin choice avoids it.** The free rows
+are `A{2,4,6}` and `B{1,3,5,6}`, so the only row free on *both* sides is 6.
+An internal net touching devices on both sides is therefore forced onto row
+6. Diff-pair inputs reach only rows 1-3 (CLAUDE.md trap 6). So:
+
+> a diff-pair half's gate can never sit on an internal net that spans both
+> bus sides.
+
+In the latch that net is `net1`, the cross-coupling node, which gates
+`M3`/`M4`. Moving Q from `ua3` to `ua4` does not help -- checked. The
+constraint is about the internal net, not the package pin, which makes it
+strictly harder to see than the `ua3`-as-a-gate problem
+`examples/srlatch/README.md` already describes.
+
+Two separate fixes, and the first is worth doing even alone:
+
+- **Raise a real `RouteError`.** Name the device, the net, the row it
+  needed, and say that diff-pair inputs are limited to rows 1-3 and why.
+  Every crossing of `_MATRIX_BIT_BY_PIN_ROW` with a missing key is this
+  same class -- an unreachable (pin, row) pair -- so the lookup wants
+  wrapping once rather than guarding at each call site.
+
+- **Allocate by constraint rather than by line order.** Give the
+  independent slots to the devices whose gates sit on nets a diff-pair
+  input cannot reach, and spend the halves on the ones that fit. That is
+  a genuine ordering rule (SPEC.md Sec 3.4's "spend the constrained
+  resource first"), not a heuristic: a two-sided internal net on a gate is
+  a hard exclusion, knowable before any row is picked.
+
+Note this interacts with sticky routing (SPEC.md Sec 3.2b): a better
+allocator must not silently relocate an existing working design, so it
+belongs behind the same stored-routing reuse as everything else.
+

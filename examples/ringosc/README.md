@@ -57,12 +57,12 @@ $ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/ring.spice
 OK -- no errors or warnings (7 info notes hidden, use --verbose).
 
 Device roles:
-  M1           -> nmos_a        w=4
-  M2           -> pmos_a        w=4
-  M3           -> nmos_b        w=4
-  M4           -> pmos_b        w=4
-  M5           -> ndiffpair+    w=4 (fixed)
-  M6           -> pdiffpair+    w=4 (fixed)
+  XM1          -> nmos_a        w=4
+  XM2          -> pmos_a        w=4
+  XM3          -> nmos_b        w=4
+  XM4          -> pmos_b        w=4
+  XM5          -> ndiffpair+    w=4 (fixed)
+  XM6          -> pdiffpair+    w=4 (fixed)
 
 Bitstream: 3f008803f004001801000020100804000060040100000021
 ```

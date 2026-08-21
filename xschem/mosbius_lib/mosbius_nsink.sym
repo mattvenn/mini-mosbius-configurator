@@ -19,8 +19,8 @@ v {xschem version=3.4.8RC file_version=1.2
 }
 G {}
 K {type=subcircuit
-format="@name @pinlist @b @symname ratio=@ratio"
-template="name=M1 ratio=1 b=VGND"
+format="@spiceprefix@name @pinlist @b @symname ratio=@ratio"
+template="name=M1 ratio=1 b=VGND spiceprefix=X"
 extra="b"
 }
 V {}

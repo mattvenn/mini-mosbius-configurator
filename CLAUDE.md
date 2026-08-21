@@ -14,11 +14,11 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§2), the missing `@spiceprefix` in the symbols (§7), the example
-schematics still carrying the old pin coordinates (§8), a reversed
-drain/source reported as "doesn't fit" rather than as the wiring mistake it is
-(§9), tail currents that never reach the bitstream (§10), and a single OTA
-crashing the router (§11). Its numbering is stable and completed items are
+design (§2), `examples/srlatch/srlatch.sch` still carrying the old pin
+coordinates (§8), a reversed drain/source reported as "doesn't fit" rather
+than as the wiring mistake it is (§9), tail currents that never reach the
+bitstream (§10), a single OTA crashing the router (§11), and device
+allocation depending on netlist order and failing with a traceback (§12). Its numbering is stable and completed items are
 deleted, so a §number cited elsewhere that is no longer in the file means that
 item is fixed.
 
@@ -126,10 +126,14 @@ These were all got wrong once. The sources that look authoritative are not.
    find a valid modelname". Found getting the M5 example simulations running.
 
    **"could not find a valid modelname" has a second, independent cause.**
-   `mosbius_*.sym`'s format string omits `@spiceprefix`, so instances netlist
-   as `M1 ... mosbius_nmos` — an ngspice MOSFET primitive pointing at a
-   `.subckt` — and fail identically. Seeing this message does not by itself
-   mean `.spiceinit` is at fault. See `TODO.md` §7 for the one-line fix.
+   `mosbius_*.sym`'s format string used to omit `@spiceprefix`, so instances
+   netlisted as `M1 ... mosbius_nmos` — an ngspice MOSFET primitive pointing
+   at a `.subckt` — and failed identically. Fixed 2026-08-21: all five
+   symbols now carry `@spiceprefix` and `spiceprefix=X`, and instances
+   netlist as `XM1 ...`. Kept here because the message is still ambiguous
+   if you meet it: seeing it does not by itself mean `.spiceinit` is at
+   fault, and an old schematic netlisted with an old symbol library will
+   still produce it.
 
 ## Useful facts
 

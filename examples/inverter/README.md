@@ -15,8 +15,8 @@ you through drawing, so this is the finished article for that walkthrough
 rather than a machine-made stand-in.
 
 ```
-M1 ua1 ua2 VGND VGND mosbius_nmos w=1
-M2 ua1 ua2 VAPWR VAPWR mosbius_pmos w=1
+XM1 ua1 ua2 VGND VGND mosbius_nmos w=1
+XM2 ua1 ua2 VAPWR VAPWR mosbius_pmos w=1
 ```
 
 Watch the pin order when you draw it: `mosbius_nmos` has its **drain** at
@@ -35,8 +35,8 @@ $ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/inverter.spice
 OK -- no errors or warnings (10 info notes hidden, use --verbose).
 
 Device roles:
-  M1           -> nmos_a        w=1
-  M2           -> pmos_a        w=1
+  XM1          -> nmos_a        w=1
+  XM2          -> pmos_a        w=1
 
 Bitstream: 080000004010000001000000000000000040000400000000
 ```

@@ -667,11 +667,22 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
     """Route `design`, reusing the routing stored at `config_path` verbatim
     if the design's topology hasn't changed since it was written.
     `force=True` (SPEC.md Sec 3.2b's `--reroute`) always re-solves.
+
+    The stored routing is only reusable if its `device_roles` are keyed by
+    the names this design actually uses. The topology hash deliberately
+    ignores instance names, so a pure rename -- every device going from
+    `M1` to `XM1` when the symbols gained `@spiceprefix`, say (TODO.md
+    Sec 7) -- hashes identically and would otherwise be replayed with role
+    keys naming devices that no longer exist. That used to surface as a
+    route table quietly describing the wrong names, and now as a KeyError
+    building the width table. Neither is a routing: re-solve instead.
     """
     topology = design_topology_hash(design)
     if not force:
         stored = load_routed_design(config_path)
-        if stored is not None and stored.get("topology_hash") == topology:
+        if stored is not None and stored.get("topology_hash") == topology and (
+            set(stored["device_roles"]) == {d.name for d in design.devices}
+        ):
             roles = {
                 dev: LEGACY_ROLE_NAMES.get(role, role)
                 for dev, role in stored["device_roles"].items()

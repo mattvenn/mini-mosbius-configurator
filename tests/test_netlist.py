@@ -96,3 +96,18 @@ def test_no_devices_raises():
 
 def test_port_names_match_minimosbius_template_ports():
     assert PORT_NAMES == {"ibias", "ua1", "ua2", "ua3", "ua4", "ua5", "VAPWR", "VDPWR", "VGND"}
+
+
+def test_x_prefixed_instance_names_parse():
+    """After TODO.md Sec 7 the symbols emit `XM1 ...` rather than `M1 ...`.
+
+    The instance name is taken verbatim, prefix included -- it is only ever
+    a key, never parsed for meaning.
+    """
+    design = parse_netlist(
+        "XM1 ua1 ua2 VGND VGND mosbius_nmos w=1\n"
+        "XM2 ua1 ua2 VAPWR VAPWR mosbius_pmos w=1\n"
+    )
+    assert [d.name for d in design.devices] == ["XM1", "XM2"]
+    assert [d.kind for d in design.devices] == ["nmos", "pmos"]
+    assert design.devices[0].terminals == {"g": "ua1", "d": "ua2", "s": "VGND", "b": "VGND"}
