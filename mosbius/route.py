@@ -109,6 +109,82 @@ WIDTH_SETTING = {
 }
 DEFAULT_WIDTH = 1  # mosbius_nmos/pmos/nsink/psource's own template default
 
+# The roles WIDTH_SETTING does *not* cover, and the width they are fixed
+# at anyway. A diff-pair half has no width bits on the chip -- its
+# geometry is built in silicon -- so a w= written against one is dropped,
+# and it is dropped in favour of a value that is emphatically not w=1.
+#
+# Verified against the read-only submodule rather than taken on trust:
+#
+#   nmos_prog.sch  W=10 nf=2 always-on + switchable W=10 nf=2 and W=20 nf=4
+#                  -> w=1 is W=10 nf=2, and its maximum w=4 is W=40 nf=8
+#   diff_n.sch     M1/M2 are W=40 nf=8            -> exactly that w=4
+#   pmos_prog.sch  W=30 nf=4 + W=30 nf=4 + W=60 nf=8
+#                  -> w=1 is W=30 nf=4, maximum w=4 is W=120 nf=16
+#   diff_p.sch     M3/M4 are W=120 nf=16          -> exactly that w=4
+FIXED_WIDTH = {
+    "ndiffpair+": 4, "ndiffpair-": 4,
+    "pdiffpair+": 4, "pdiffpair-": 4,
+}
+
+# The sky130 geometry behind each fixed role, for diagnostics that have to
+# show their working (CLAUDE.md: say why the hardware behaves that way).
+FIXED_GEOMETRY = {
+    "ndiffpair+": "W=40 nf=8 (diff_n.sch M1/M2)",
+    "ndiffpair-": "W=40 nf=8 (diff_n.sch M1/M2)",
+    "pdiffpair+": "W=120 nf=16 (diff_p.sch M3/M4)",
+    "pdiffpair-": "W=120 nf=16 (diff_p.sch M3/M4)",
+}
+
+# Which schematic property a kind's width comes from, so a report can echo
+# the word the user actually typed rather than normalising it to "w".
+WIDTH_PROPERTY = {
+    "nmos": "w", "pmos": "w", "nsink": "ratio", "psource": "ratio",
+}
+
+
+@dataclass(frozen=True)
+class DeviceWidth:
+    """What width a device ended up with, versus what the schematic asked
+    for (TODO.md Sec 5). `requested` is None when the symbol carries no
+    width property at all (mosbius_ota); `effective` is None when the role
+    has neither width bits nor a known fixed geometry.
+    """
+
+    prop: str                  # "w" or "ratio" -- the schematic's own word
+    requested: int | None      # what the netlist said, None if unset
+    effective: int | None      # what the chip will actually build
+    programmable: bool         # False when the role's geometry is fixed
+
+    @property
+    def dropped(self) -> bool:
+        """A width was asked for, cannot be programmed, and differs from
+        what the hardware is fixed at -- i.e. something was really lost.
+        Asking for exactly the fixed width loses nothing and is silent.
+        """
+        return (
+            not self.programmable
+            and self.requested is not None
+            and self.requested != self.effective
+        )
+
+
+def device_width(dev: DeviceRequest, role: str) -> DeviceWidth:
+    """The width story for one allocated device."""
+    # `or` rather than an explicit None test, to keep the exact fallback
+    # order the bit-emission loop below has always used.
+    requested = dev.properties.get("w") or dev.properties.get("ratio")
+    prop = WIDTH_PROPERTY.get(dev.kind, "w")
+    if role in WIDTH_SETTING:
+        return DeviceWidth(prop, requested, requested or DEFAULT_WIDTH, True)
+    return DeviceWidth(prop, requested, FIXED_WIDTH.get(role), False)
+
+
+def device_widths(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, DeviceWidth]:
+    """The width story for every device, keyed by instance name."""
+    by_name = {d.name: d for d in design.devices}
+    return {name: device_width(by_name[name], role) for name, role in roles.items()}
+
 # Pin name for a (role, terminal): matches xpt_<suffix> crosspoints
 # (model.DEVICE_TERMINALS) with the side-appropriate cfga_/cfgb_ prefix --
 # this is exactly the naming SPEC.md Sec 2.8 confirms holds everywhere.
@@ -164,6 +240,26 @@ class RoutedDesign:
     device_roles: dict[str, str] = field(default_factory=dict)   # device name -> role
     net_rows: dict[str, dict[str, int]] = field(default_factory=dict)  # net -> {side: row}
     schema: int = SCHEMA
+    # Not persisted: a pure function of (design, device_roles), so the
+    # sticky path recomputes it rather than growing the file's schema.
+    device_widths: dict[str, DeviceWidth] = field(default_factory=dict)
+
+
+def format_device_roles(routed) -> list[str]:
+    """The route table: which hardware each device became, and the width
+    it will actually be built at (TODO.md Sec 5 -- reporting the width the
+    router really programmed, not the one the schematic asked for).
+    """
+    lines = []
+    for name, role in sorted(routed.device_roles.items()):
+        width = routed.device_widths.get(name)
+        note = ""
+        if width is not None and width.effective is not None:
+            note = f"  {width.prop}={width.effective}"
+            if not width.programmable:
+                note += " (fixed)"
+        lines.append(f"  {name:<12} -> {role:<12}{note}")
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -484,12 +580,14 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             route_internal_net(net, touches)
 
     # -- Device settings: width/ratio for every allocated FET and mirror.
+    # Driven off the same device_width() the route table reports from, so
+    # the width shown and the width programmed cannot drift apart -- which
+    # is the failure TODO.md Sec 5 is about in the first place.
+    widths = device_widths(design, roles)
     for dev_name, role in roles.items():
         if role in WIDTH_SETTING:
             pin, step = WIDTH_SETTING[role]
-            dev = next(d for d in design.devices if d.name == dev_name)
-            w = dev.properties.get("w") or dev.properties.get("ratio") or DEFAULT_WIDTH
-            lsb, msb = encode_cycler(w, step)
+            lsb, msb = encode_cycler(widths[dev_name].effective, step)
             if lsb:
                 bits.add(setting_bit(pin, 0))
             if msb:
@@ -499,6 +597,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         config=SwitchConfig(bits=frozenset(bits)),
         device_roles=roles,
         net_rows=net_rows,
+        device_widths=widths,
     )
 
 
@@ -573,17 +672,22 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
     if not force:
         stored = load_routed_design(config_path)
         if stored is not None and stored.get("topology_hash") == topology:
+            roles = {
+                dev: LEGACY_ROLE_NAMES.get(role, role)
+                for dev, role in stored["device_roles"].items()
+            }
             return RoutedDesign(
                 config=SwitchConfig(
                     bits=bitstream.unpack(stored["bitstream"]),
                     ibias=stored.get("ibias", DEFAULT_IBIAS),
                 ),
-                device_roles={
-                    dev: LEGACY_ROLE_NAMES.get(role, role)
-                    for dev, role in stored["device_roles"].items()
-                },
+                device_roles=roles,
                 net_rows=stored["net_rows"],
                 schema=stored.get("schema", SCHEMA),
+                # Safe to recompute rather than read back: the topology
+                # hash covers device properties, so a stored routing only
+                # matches a design whose w=/ratio= are unchanged too.
+                device_widths=device_widths(design, roles),
             )
 
     routed = route(design)

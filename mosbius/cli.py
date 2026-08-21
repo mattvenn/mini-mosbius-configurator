@@ -13,12 +13,17 @@ import argparse
 import sys
 from pathlib import Path
 
-from mosbius.check import check
+from mosbius.check import SafetyReport, check, check_design, check_routing
 from mosbius.decode import decode, format_summary
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig
 from mosbius.netlist import NetlistError, parse_netlist
 from mosbius.program import ProgramError, program
-from mosbius.route import RouteError, route as route_fresh, route_sticky
+from mosbius.route import (
+    RouteError,
+    format_device_roles,
+    route as route_fresh,
+    route_sticky,
+)
 from mosbius.watch import watch
 
 
@@ -57,21 +62,38 @@ def cmd_route(args: argparse.Namespace) -> int:
         print(f"IMPOSSIBLE\n\n  {e}", file=sys.stderr)
         return 1
 
+    # Netlist-level checks first: a design fault can make the router fail
+    # for a reason that has nothing to do with the real mistake, and an
+    # error here means there is no point routing at all.
+    design_report = check_design(design)
+    if design_report.has_errors:
+        print(_format_report(design_report, verbose=args.verbose), file=sys.stderr)
+        return 1
+
     try:
         if args.out:
             routed = route_sticky(design, args.out, force=args.force)
         else:
             routed = route_fresh(design)
     except RouteError as e:
+        # Design warnings go out even on the failure path -- when one
+        # fires, it is usually the explanation for the failure below.
+        if design_report.warnings:
+            print(_format_report(design_report, verbose=args.verbose), file=sys.stderr)
+            print(file=sys.stderr)
         print(f"IMPOSSIBLE\n\n  {e}", file=sys.stderr)
         return 1
 
-    report = check(routed.config)
+    report = SafetyReport(
+        findings=design_report.findings
+        + check_routing(routed).findings
+        + check(routed.config).findings
+    )
     print(_format_report(report, verbose=args.verbose))
     print()
     print("Device roles:")
-    for name, role in sorted(routed.device_roles.items()):
-        print(f"  {name:<12} -> {role}")
+    for line in format_device_roles(routed):
+        print(line)
     print()
     print(f"Bitstream: {routed.config.to_bitstream()}")
     return 1 if report.has_errors else 0

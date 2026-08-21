@@ -14,10 +14,13 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-Numbers are stable, so the list starts at 2: items 1 (redraw the symbols) and
-6 (W2 firing on every internal node) were done on 2026-08-21. Other files cite these by number -- `CLAUDE.md` points at
-§4 and §7, `examples/ringosc/README.md` at §5 -- so completed items are
-removed without renumbering the rest.
+Numbers are stable, so the list starts at 2: items 1 (redraw the symbols),
+3 (pin-direction errors), 4 (netlisting via the container), 5 (widths dropped
+on diff-pair halves) and 6 (W2 firing on every internal node) were resolved
+and removed on 2026-08-21. Other files cite these by number, so completed
+items are removed without renumbering the rest -- and a citation of a number
+that is no longer here means the thing it described is fixed, not that the
+reference rotted.
 
 ## 2. Level-2 simulation of the routed design
 
@@ -34,190 +37,6 @@ real switch matrix with no behavioural model of the shift register (SPEC.md
 a routed config and running it. Budget ~2 min of sky130A model load per run
 (see CLAUDE.md).
 
-## 3. Fix the unmatched pin-direction errors -- FIXED 2026-08-21, NEEDS GUI CONFIRMATION
-
-Netlisting from the xschem GUI prints, once per device:
-
-```
-Error: Symbol mosbius_nmos.sym: Unmatched subcircuit schematic pin direction: g
-    iopin <--> in
-```
-
-Cause: the `.sym` declares the pin `dir=in`, while the `.sch` wires it with
-`devices/iopin.sym` (inout). Systematic across the library — every `dir=in`
-pin is an `iopin` in its schematic: `g` on `mosbius_nmos`/`mosbius_pmos`,
-`ibias` on `mosbius_nsink`/`mosbius_psource`, and `inp`/`inm`/`ibias` on
-`mosbius_ota`.
-
-Cosmetic, not blocking: the netlist is correct regardless, and the
-hand-drawn inverter that triggered it routed to the exact reference bitstream
-`080000004010000001000000000000000040000400000000`.
-
-Fix: change those pins to `devices/ipin.sym`. The only netlist change is the
-annotation `*.iopin g` -> `*.ipin g`, which nothing downstream reads
-(`netlist.py` skips lines starting with `*`).
-
-**Applied 2026-08-21** to `g` (nmos/pmos), `ibias` (nsink/psource) and
-`inp`/`inm`/`ibias` (ota). Netlists verified byte-identical in batch. Still
-needs someone to netlist from the GUI and confirm the log is clean, because
-batch mode with `-q` does not print these messages at all -- and without `-q`
-xschem does not exit, so there is no way to capture them non-interactively
-either. Close this item once that's seen.
-
-The same GUI netlist should also be free of two errors introduced by the
-item-1 redraw and fixed alongside:
-
-```
-Error: Symbol mosbius_nmos.sym: schematic pin: b not in symbol
-Error: Symbol mosbius_nmos.sym has 3 pins, its schematic has 4 pins
-```
-
-Cause: the body ties are supplied by the symbol's `extra` attribute, so they
-are not symbol pins, but the schematics still declared them with
-`devices/iopin.sym` -- and xschem's symbol/schematic consistency check does
-not know about `extra`.
-
-Two attempts failed before the right fix. `devices/lab_pin.sym` cleared the
-pin-count errors but produced `Error: undriven node: b` instead, because
-sky130's 4-terminal FETs declare their `B` terminal `dir=in` and so does
-`lab_pin` -- no driver on the net. A custom `dir=inout` label did not help
-either: xschem does not accept it as a driver for a net it thinks is
-internal, and `extra` ports are invisible to that check.
-
-The fix, and it is the obvious one in hindsight: **the device schematics now
-instantiate the PDK's 3-terminal FETs** (`sky130_fd_pr/nfet3_g5v0d10v5.sym`,
-`pfet3_g5v0d10v5.sym`) and pass the bulk as their `@body` template parameter
-rather than wiring it. `D`/`G`/`S` sit at identical coordinates in the 3- and
-4-terminal symbols, so only the bulk connection changed. For `mosbius_nmos`,
-`mosbius_pmos` and the OTA's `bn` there is now no bulk net on the canvas at
-all -- nothing left to call undriven. Where the net does survive
-(`mosbius_nsink`/`mosbius_psource`'s `b` and the OTA's `bp`, which are also
-the shared *source* node) it is driven by the FETs' `dir=inout` source pins.
-
-This is what the 3-terminal PDK symbols were for, and the reason they never
-showed the error themselves: their body is a parameter, not a node.
-
-Verified: every `.subckt` interface, every instance line, every internal bulk
-binding and the ring's bitstream are byte-identical to before the change.
-
-One further self-inflicted wound from the same work, fixed 2026-08-21: the
-explanatory headers added to `mosbius_*.sym` contained the literal text
-`B{}`. xschem's reader treats a brace inside the `v {...}` header as
-structure rather than text -- it ends the header there and parses the rest of
-the comment as records, printing a `SKIP RECORD` / `SKIPPING |...|` pair per
-line on every GUI netlist. **Keep `.sym` header comments brace-free.**
-`devices/nmos3.sym`'s own GPL header gets away with a long comment precisely
-because it has no braces in it.
-
-Separately, the `Warning: open net: ua3/ua4/ua5/VDPWR/ibias` lines in the same
-output are expected, not a bug — the template places all nine chip ports and
-most designs use a few. Worth saying so in `TUTORIAL.md`, since it reads as a
-problem on a first run.
-
-## 4. Let the Python CLI drive the container -- SCOPE REDUCED 2026-08-21
-
-**Most of this item evaporated.** It assumed netlisting required the long
-`docker run`. It never did: xschem's own Netlist button produces the same
-netlist, in `<schematic dir>/simulation/`, and `mosbius route` takes a path,
-so the interactive loop is *draw -> press Netlist -> read the terminal* with
-no container command and nothing to copy. `TUTORIAL.md` and `README.md` now
-say so, and the `docker run` is gone from both.
-
-Verified equivalent on the 3-stage ring: the GUI netlist and the batch one
-differ only by a redundant `m=1` on the sky130 device lines inside the
-subcircuits -- lines `netlist.py` never reads -- and both route to the same
-bitstream.
-
-What is still worth building, for CI and for regenerating the generated
-examples (§8), is a `mosbius netlist <sch>` subcommand that derives the four
-paths that have to agree (host mount, `-w`, `--rcfile`, `-o`) from the repo
-root and the schematic's location. The points below still apply to that, and
-the last two are why the two-directory setup was worth abolishing rather
-than documenting:
-
-- **Library path.** Schematics reference symbols bare (`C {mosbius_nmos.sym}`),
-  so they only resolve if `xschem/mosbius_lib` is on the library path. The
-  sky130A xschemrc already honours `XSCHEM_USER_LIBRARY_PATH` and appends it
-  ([iic-osic-tools#7](https://github.com/iic-jku/iic-osic-tools/issues/7)) —
-  set it and designs netlist from anywhere, instead of only from inside
-  `mosbius_lib`. `TUTORIAL.md` step 1 doesn't say where to save the file and
-  step 2's `-w` only works if it landed in `mosbius_lib`; this removes the
-  trap rather than documenting it.
-- **No accidental pulls.** Pass `--pull=never` so a missing image fails
-  loudly instead of starting a ~20 GB download.
-- **Say whether it worked.** The `docker run` above is silent: `-q` suppresses
-  xschem's messages, so a successful netlist and a failed one look the same on
-  the terminal, and xschem's exit status isn't a reliable signal either (it can
-  exit 0 having written nothing). Today the only way to tell is to go looking
-  for `build/<name>.spice` and check its mtime. The subcommand should report the
-  outcome explicitly — the path written, its size, and the device count found —
-  and fail loudly with a beginner-readable explanation when the file wasn't
-  produced (most likely cause: a symbol that didn't resolve on the library path,
-  see above).
-- **One netlist location, not two.** The GUI's Netlist button and the `docker
-  run` above write to *different directories*, and nothing reconciles them.
-  xschem's `simuldir` proc (`xschem.tcl`: "point netlist_dir to simulation dir
-  'simulation/' under current schematic directory") puts GUI netlists in
-  `xschem/mosbius_lib/simulation/`, while the tutorial's `-o` puts batch
-  netlists in `build/`. So you can netlist from the GUI as many times as you
-  like and `build/<name>.spice` never changes -- and the router, pointed at
-  `build/`, keeps reading a netlist from before your edits. Cost a real
-  debugging session on 2026-08-20: `build/ring.mosbius.json` held a
-  2-transistor inverter routing while `ring.sch` had been a 6-transistor ring
-  oscillator for 20 minutes, and neither the GUI nor the docker command said
-  anything was stale.
-- **Refuse to reuse a stale routing.** `route_sticky()` compares topology
-  hashes, which is the right check *once it reads the current netlist* -- it
-  can't help when the netlist itself is the stale thing. `route`/`watch` should
-  refuse (or warn loudly) when the `.mosbius.json` it is about to reuse is older
-  than the `.spice` it is routing, and when the `.spice` is older than the
-  `.sch` it came from.
-
-## 5. Widths are silently dropped for devices that land on diff-pair halves
-
-`route.py:469` applies a width only when the assigned role has one:
-
-```python
-for dev_name, role in roles.items():
-    if role in WIDTH_SETTING:
-```
-
-`WIDTH_SETTING` covers the four independent FETs and the four mirrors. It does
-not cover `ndiffpair+`/`ndiffpair-`/`pdiffpair+`/`pdiffpair-`, because those have no width bits on the
-chip -- their geometry is fixed. So a device the router assigns to a diff-pair
-half keeps whatever `w=` you wrote in the schematic in the *netlist*, has it
-ignored in the *bitstream*, and nothing tells you.
-
-This matters more than it sounds, because the fixed geometry is not `w=1`:
-
-| device | sky130 instance | equivalent |
-|---|---|---|
-| `mosbius_nmos w=1` | W=10 nf=2 (`nmos_prog.sch` M1, the always-on slice) | 1x |
-| `diff_n` input half (`ndiffpair+`/`ndiffpair-`) | W=40 nf=8 (`diff_n.sch` M1/M2) | **w=4** |
-| `mosbius_pmos w=1` | W=30 nf=4 | 1x |
-| `diff_p` input half (`pdiffpair+`/`pdiffpair-`) | W=120 nf=16 (`diff_p.sch` M3/M4) | **w=4** |
-
-`nmos_prog` is a 1x always-on slice plus switchable 1x and 2x slices, so its
-maximum, `w=4`, is W=40 nf=8 -- an exact match for the diff-pair half. That is
-why `examples/ringosc/README.md`'s measured bitstream uses `nmos_a`/`pmos_a` at
-`w=4`: at any other width the stages are mismatched. (Matched in W/L, not in
-parasitics -- the programmable FET's 2x and 1x slices sit behind drain
-switches, the diff-pair half doesn't.)
-
-Found by routing a hand-drawn 3-stage ring: with `w=1` on all six devices, the
-two stages on `nmos_a`/`nmos_b` come out 1x and the third, forced onto
-`ndiffpair+`/`pdiffpair+`, comes out 4x. The design looks symmetric in the schematic and
-isn't on silicon.
-
-Fix: the router should report the width it actually programmed per device, and
-say plainly when a `w=`/`ratio=` was discarded because the assigned role has no
-width bits -- naming the role and its fixed equivalent width, so the user can
-match the other stages to it deliberately.
-
-Related: the Level-1 simulation netlists every device at its schematic `w=`, so
-it simulates a symmetric ring the chip will not build. That is a second,
-independent reason Level-1 misses -- on top of the missing switch matrix that
-item 2 and `examples/ringosc/README.md` already quantify.
 
 ## 7. Library symbols emit an invalid subcircuit call
 
@@ -349,3 +168,96 @@ matching rail, which is the combination that has no sensible reading.
 
 Worth checking whether this belongs in `check.py` (so it fires on a netlist
 that routes, too) rather than only on the allocator's failure path.
+
+## 10. Tail currents never reach the bitstream
+
+Raised 2026-08-21, found while fixing §5.
+
+`route.py`'s device-settings loop emits width/ratio bits and nothing else:
+
+```python
+for dev_name, role in roles.items():
+    if role in WIDTH_SETTING:
+```
+
+`WIDTH_SETTING` covers the four programmable FETs and the four mirror legs.
+The three tail-current fields that exist in the bit map -- `ctrl_dpn_tail`,
+`ctrl_dpp_tail` and `ctrl_otan_tail`, each a step=2 cycler taking 2/4/6/8
+(SPEC.md §2.11) -- are never written by the router at all.
+
+Two consequences, one live and one structural.
+
+**`mosbius_ota`'s `tail=` is read by nothing.** The symbol's template is
+`template="name=X1 tail=2 bn=VGND bp=VAPWR"`, so every OTA instance carries a
+`tail` property into the netlist, and `route.py` looks only at `w` and
+`ratio`. Writing `tail=4` in the schematic changes the netlist and does not
+change one bit of the bitstream.
+
+This is masked by an unlucky coincidence: an all-zero cycler field decodes to
+`step * (1 + 0)` = 2, exactly the symbol's default, so `tail=2` is
+accidentally correct and only the other three values are silently wrong. The
+masking is the dangerous part -- the bug cannot be found by trying the
+default.
+
+**A real differential pair has no way to set its tail at all.**
+`mosbius_nmos`/`mosbius_pmos` expose only `w=`, so when two of them share a
+source and `_allocate_fets` pass 1 pairs them onto `ndiffpair+`/`ndiffpair-`,
+the tail current of the pair they have just formed is unreachable from the
+schematic. `ctrl_dpn_tail` is the only thing that sets it, and nothing the
+user can draw reaches that bit.
+
+Fix, in two parts:
+
+- Read `tail=` on `mosbius_ota` and emit `ctrl_otan_tail` -- a `TAIL_SETTING`
+  table beside `WIDTH_SETTING`, keyed by role, with step=2.
+- Decide how a diff pair's tail is expressed in the schematic at all. It is
+  not a per-device property, since the two halves share one tail, which is
+  why `w=`'s shape does not fit it. Worth weighing: a `tail=` on both halves
+  that must agree, versus a separate symbol wired to the shared source node.
+
+Either way §5's rule applies, and it is now enforced for widths by `R1` in
+`check.py`: a property that cannot reach the bitstream gets said out loud
+rather than dropped.
+
+## 11. A single OTA crashes the router
+
+Raised 2026-08-21, found while writing §10.
+
+Routing any design containing one `mosbius_ota` raises an unhandled
+`KeyError: 'ota'` out of `_collect_touches`:
+
+```
+    side=ROLE_SIDE[role], pin=_pin_name(role, terminal))
+         ~~~~~~~~~^^^^^^
+KeyError: 'ota'
+```
+
+It looks like a missing dictionary entry and is not one. `ROLE_SIDE` maps a
+role to *one* bus side, and the OTA is the only device that straddles both:
+
+| terminal | crosspoint pin | side |
+|---|---|---|
+| `inp`  | `cfga_otan_inp`  | A |
+| `outp` | `cfga_otan_outp` | A |
+| `inm`  | `cfgb_otan_inm`  | B |
+| `outm` | `cfgb_otan_outm` | B |
+
+So side is a property of the *terminal*, not of the role, and no value put
+into `ROLE_SIDE["ota"]` can be right. `_pin_name()` has the same shape --
+it builds the `cfga_`/`cfgb_` prefix from `ROLE_SIDE[role]`.
+
+Fix: make the side per (role, terminal). `DEVICE_TERMINALS` already maps a
+terminal to its crosspoint, and a crosspoint's side is knowable from the bit
+map, so both `ROLE_SIDE` and `_pin_name` can be *derived* from `bitmap.py`
+rather than transcribed -- which is the discipline `route.py`'s own module
+docstring already claims for its row tables ("so a bit-map correction there
+can't silently drift out of sync with the router").
+
+Why it survived: the only OTA test is
+`test_two_ota_devices_reports_doesnt_fit`, and two OTAs raise in
+`allocate_devices` before `_collect_touches` is ever reached. No test has
+routed a single OTA.
+
+Note for whoever takes this: the OTA's inputs reach only bus rows 1-3
+(CLAUDE.md trap 6), so the row picker needs to respect that once it can get
+far enough to matter.

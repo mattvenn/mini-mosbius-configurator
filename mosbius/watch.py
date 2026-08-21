@@ -17,9 +17,9 @@ import sys
 import time
 from pathlib import Path
 
-from mosbius.check import check
+from mosbius.check import check, check_design, check_routing
 from mosbius.netlist import NetlistError, parse_netlist
-from mosbius.route import RouteError, route
+from mosbius.route import RouteError, format_device_roles, route
 
 POLL_INTERVAL_SECONDS = 0.2
 
@@ -42,10 +42,36 @@ def _report(netlist_path: Path) -> str:
     except NetlistError as e:
         return f"{header}   IMPOSSIBLE\n\n  {e}"
 
+    # Netlist-level checks (check.py's check_design) run before routing:
+    # an error here makes routing pointless, and a warning here is usually
+    # the explanation for whatever the router says next.
+    design_report = check_design(design)
+    if design_report.has_errors:
+        lines = [f"{header}   DANGEROUS"]
+        for f in design_report.errors:
+            lines.append("")
+            lines.append("\n".join(f"  {line}" for line in f.message.splitlines()))
+        return "\n".join(lines)
+    design_notes = [
+        "\n".join(f"  {line}" for line in f.message.splitlines())
+        for f in design_report.warnings
+    ]
+
     try:
         routed = route(design)
     except RouteError as e:
-        return f"{header}   IMPOSSIBLE\n\n  {e}"
+        lines = [f"{header}   IMPOSSIBLE"]
+        for note in design_notes:
+            lines += ["", note]
+        lines += ["", f"  {e}"]
+        return "\n".join(lines)
+
+    # Post-routing checks join the netlist-level ones: both describe the
+    # design rather than the bitstream, so both print in full here.
+    design_notes += [
+        "\n".join(f"  {line}" for line in f.message.splitlines())
+        for f in check_routing(routed).warnings
+    ]
 
     result = check(routed.config)
     if result.has_errors:
@@ -55,9 +81,10 @@ def _report(netlist_path: Path) -> str:
             lines.append("\n".join(f"  {line}" for line in f.message.splitlines()))
         return "\n".join(lines)
 
-    lines = [f"{header}   OK"]
-    for dev_name, role in sorted(routed.device_roles.items()):
-        lines.append(f"  {dev_name:<12} -> {role}")
+    lines = [f"{header}   OK"] if not design_notes else [f"{header}   OK, with warnings"]
+    for note in design_notes:
+        lines += ["", note, ""]
+    lines += format_device_roles(routed)
     if result.warnings:
         lines.append("")
         lines.append(f"  {len(result.warnings)} warning(s) -- see 'mosbius check' for detail")

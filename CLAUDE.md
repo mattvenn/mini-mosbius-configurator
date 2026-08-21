@@ -13,13 +13,14 @@ anything. Do not re-derive facts that are already marked VERIFIED there.
 Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
-`TODO.md` holds deferred work, mostly raised by the first outside user running
-through the tutorial (Level-2 simulation, pin-direction errors, driving the
-container from the CLI for CI, silently-dropped transistor widths, W2 false alarms on
-internal nodes, and the missing `@spiceprefix` in the symbols), plus two from
-the symbol redraw: the example schematics still carry the old pin coordinates
-and need regenerating (§8), and a reversed drain/source is reported as
-"doesn't fit" rather than as the wiring mistake it is (§9).
+`TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
+design (§2), the missing `@spiceprefix` in the symbols (§7), the example
+schematics still carrying the old pin coordinates (§8), a reversed
+drain/source reported as "doesn't fit" rather than as the wiring mistake it is
+(§9), tail currents that never reach the bitstream (§10), and a single OTA
+crashing the router (§11). Its numbering is stable and completed items are
+deleted, so a §number cited elsewhere that is no longer in the file means that
+item is fixed.
 
 **There is only one netlist directory now: `<schematic dir>/simulation/`,
 where the GUI puts it.** Earlier docs told you to netlist a second time via

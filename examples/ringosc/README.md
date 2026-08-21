@@ -31,10 +31,12 @@ have no width bits -- their geometry is fixed at W=40 nf=8 for NMOS
 programmable FET is a 1x always-on slice plus switchable 1x and 2x slices
 (`nmos_prog.sch`), so `mosbius_nmos w=1` is W=10 nf=2 and its maximum, `w=4`,
 is W=40 nf=8 -- an exact match. Any other width leaves the `nmos_a`/`pmos_a`
-stage weaker than the two diff-pair stages. Note the router **silently
-discards** a `w=` on a device it assigns to a diff-pair half (`TODO.md` §5), so
-a schematic drawn at `w=1` throughout produces a 1x/1x/4x ring while looking
-symmetric on screen.
+stage weaker than the two diff-pair stages. Note that a `w=` on a device the
+router assigns to a diff-pair half cannot be programmed at all -- those halves
+have no width bits -- so a schematic drawn at `w=1` throughout produces a
+1x/1x/4x ring while looking symmetric on screen. The router used to drop that
+`w=` in silence; as of 2026-08-21 it warns (`check.py`'s `R1`) and reports the
+width every device is actually built at.
 
 **Three inverting stages is the longest odd ring this chip can build.** Only
 four devices per polarity expose both a drain and a source/tail to the matrix:

@@ -1,9 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
 """The circuit safety checker (SPEC.md Sec 3.1).
 
-Runs on a SwitchConfig -- from a routed design or pasted in from anywhere,
-including the web configurator -- and finds shorts, contention and other
-hazards before a bitstream reaches real silicon.
+Two entry points, because there are two things worth checking and they
+see different information.
+
+`check()` runs on a SwitchConfig -- from a routed design or pasted in from
+anywhere, including the web configurator -- and finds shorts, contention
+and other hazards before a bitstream reaches real silicon. It asks "is
+this bitstream dangerous?", and it is the mandatory pre-upload gate.
+
+`check_routing()` runs on what the router decided -- which role each
+device became, and the width that role can actually be built at. It asks
+"did the router have to quietly change your circuit?", which neither of
+the other two can see: the netlist does not know the roles yet, and the
+bitstream no longer knows what was asked for.
+
+`check_design()` runs on a MosbiusDesign, i.e. on the netlist, *before*
+routing. It asks "is this circuit wrong?" -- a question the switch graph
+cannot answer, because a fault in the schematic can be gone by the time
+the netlist is written (D1 below is exactly that case) and because a
+design that fails to route never produces a SwitchConfig to check at all.
 
 Every finding follows SPEC.md Sec 1.1: state what happened, why the hardware
 behaves that way, and what to try instead. A bare "short detected" teaches a
@@ -15,6 +31,8 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 
+from mosbius.netlist import IMPLICIT_PINS, MosbiusDesign
+from mosbius.route import FIXED_GEOMETRY, DeviceWidth
 from mosbius.model import (
     DEVICE_DC_PATHS,
     DEVICE_TERMINALS,
@@ -385,6 +403,219 @@ def _check_i1_sparse_bus(graph: Graph) -> list[Finding]:
         )
         findings.append(Finding(code="I1", severity=INFO, message=message))
     return findings
+
+
+# ---------------------------------------------------------------------------
+# Design checks: these run on the netlist, not on a SwitchConfig.
+# ---------------------------------------------------------------------------
+
+# Which rail each FET kind's body sits on. This is a silicon fact, not a
+# choice: the body is hard-wired on the chip, which is why the symbols
+# supply it from their own template rather than from a drawn wire
+# (mosbius_nmos.sym: template="... b=VGND", mosbius_pmos.sym: b=VAPWR,
+# both with extra="b"). A FET's source belongs on the same rail.
+BODY_RAIL = {"nmos": "VGND", "pmos": "VAPWR"}
+OTHER_RAIL = {"VAPWR": "VGND", "VGND": "VAPWR"}
+
+# Per-kind vocabulary for D1's messages: the shared diff-pair tail tie,
+# the two independent slots, and the word the router's own "DOESN'T FIT"
+# message uses -- so the two diagnostics visibly describe one situation.
+_PAIR_TAIL_BIT = {"nmos": "ctrl_dpn_source", "pmos": "ctrl_dpp_source"}
+_INDEPENDENT_SLOTS = {"nmos": "nmos_a and nmos_b", "pmos": "pmos_a and pmos_b"}
+_ROUTER_LABEL = {"nmos": "NMOS", "pmos": "PMOS"}
+
+
+def _name_list(devices: list) -> str:
+    return ", ".join(d.name for d in devices)
+
+
+def _why_it_costs_the_pair(kind: str, wrong_rail: str) -> str:
+    """The paragraph that connects D1 to the failure the user actually saw.
+
+    A source on the wrong rail does not merely look odd -- it makes the two
+    diff-pair halves unusable, because their shared tail has no matrix
+    terminal of its own and its one tie goes to the *right* rail. So the
+    first thing the user sees is the allocator running out of transistors,
+    which points at circuit size instead of at the wiring.
+    """
+    return (
+        f"  It also costs you the two differential-pair halves. Their shared\n"
+        f"  tail has no terminal on the switch matrix (SPEC.md Sec 2.12), so the\n"
+        f"  only way to give it a voltage is {_PAIR_TAIL_BIT[kind]}, and that bit\n"
+        f"  ties it to {OTHER_RAIL[wrong_rail]}. A half therefore cannot take a device whose\n"
+        f"  source is on {wrong_rail}, which leaves only {_INDEPENDENT_SLOTS[kind]}. That is\n"
+        f"  why this first shows up as \"DOESN'T FIT -- not enough "
+        f"{_ROUTER_LABEL[kind]} with\n  independent sources\".\n\n"
+    )
+
+
+def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
+    """A FET whose source sits on the rail opposite its own body.
+
+    Two readings, distinguished by whether the correct rail appears
+    anywhere else in the design:
+
+    - It appears nowhere. Then the two rails were wired together in the
+      schematic: xschem merged them into one net, kept one of the two
+      names, and every wire of the other name came back renamed. The body
+      is the one connection that cannot be merged -- it is a template
+      string, not a wire -- so it still reads the original rail, and that
+      disagreement is the only surviving trace of the short. ERROR: the
+      circuit as drawn ties 3.3V to ground.
+
+    - It appears elsewhere. Then the rails are fine and these particular
+      devices are wired wrongly, usually a vertically flipped symbol.
+      WARN, not ERROR: the router *can* reach the opposite rail from a
+      source terminal through a bus row and a cfg_bus_pwr tap, so this is
+      routable, just almost certainly not what was meant. Same reasoning
+      as TODO.md Sec 9 keeps the drain/source-swap hint a hint.
+    """
+    wired_nets = {
+        net
+        for d in design.devices
+        for terminal, net in d.terminals.items()
+        if terminal not in IMPLICIT_PINS
+    }
+
+    findings = []
+    for kind in ("nmos", "pmos"):
+        home = BODY_RAIL[kind]
+        wrong = OTHER_RAIL[home]
+        offenders = [
+            d for d in design.devices
+            if d.kind == kind and d.terminals.get("s") == wrong
+        ]
+        if not offenders:
+            continue
+
+        names = _name_list(offenders)
+        n = len(offenders)
+        if n == 1:
+            subject = f"  {names} is a mosbius_{kind} with its source on {wrong}"
+        else:
+            subject = (
+                f"  {n} of your mosbius_{kind} devices have their source on "
+                f"{wrong}:\n    {names}"
+            )
+
+        if home not in wired_nets:
+            message = (
+                f"DANGEROUS -- VAPWR and VGND are joined somewhere in your schematic\n\n"
+                f"{subject}\n\n"
+                f"  Meanwhile {home} does not appear on a single device terminal\n"
+                f"  anywhere in this netlist.\n\n"
+                f"  Why that combination means the rails are shorted: a "
+                f"mosbius_{kind}'s\n"
+                f"  body is hard-wired to {home} on silicon, and its source belongs on\n"
+                f"  that same rail. The body still reads {home} here because it is not a\n"
+                f"  wire you drew -- it comes from the symbol's own template\n"
+                f"  (mosbius_{kind}.sym, template=\"... b={home}\" with extra=\"b\"), so it\n"
+                f"  is the one connection xschem cannot merge with anything else.\n"
+                f"  Everything you did draw as {home} came back as {wrong} instead.\n\n"
+                f"  That is what happens when the two rails are wired together: xschem\n"
+                f"  merges them into a single net, keeps one of the two names, and the\n"
+                f"  short itself vanishes from the netlist before this tool ever sees\n"
+                f"  it. Nothing here can find it by looking at connectivity, because\n"
+                f"  by then there is only one rail left to look at.\n\n"
+                f"  On real silicon this ties the 3.3V supply straight to ground and\n"
+                f"  draws unlimited current, so nothing is routed or uploaded from\n"
+                f"  here.\n\n"
+                f"  To fix: find the wire joining {wrong} and {home} in your schematic,\n"
+                f"  delete it, and press Netlist again. Both rail names should then be\n"
+                f"  back on the terminals you drew them on."
+            )
+            findings.append(Finding(code="D1", severity=ERROR, message=message))
+            continue
+
+        message = (
+            f"WARNING -- source on {wrong} where {home} is expected\n\n"
+            f"{subject}.\n"
+            f"  A mosbius_{kind}'s body is hard-wired to {home} on silicon "
+            f"(that is what\n"
+            f"  mosbius_{kind}.sym's template=\"... b={home}\" records), and its source\n"
+            f"  belongs on the same rail.\n\n"
+            f"{_why_it_costs_the_pair(kind, wrong)}"
+            f"  The usual cause is a symbol flipped vertically: mosbius_nmos has its\n"
+            f"  source at the bottom and its drain at the top, and mosbius_pmos is\n"
+            f"  the other way up.\n\n"
+            f"  This is a warning rather than a hard stop because the router can\n"
+            f"  still reach {wrong} from a source terminal, through a bus row and a\n"
+            f"  cfg_bus_pwr tap -- so the circuit may well route. It just probably\n"
+            f"  is not the circuit you meant to draw.\n\n"
+            f"  To fix: wire the source of {names} to {home}."
+        )
+        findings.append(Finding(code="D1", severity=WARN, message=message))
+
+    return findings
+
+
+def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
+                            device_roles: dict[str, str]) -> list[Finding]:
+    """A width the schematic asked for that the assigned role cannot carry
+    (TODO.md Sec 5).
+
+    The diff-pair halves have no width bits -- their geometry is fixed in
+    silicon -- so a device the allocator puts on one keeps its w= in the
+    netlist, has it ignored in the bitstream, and used to be told nothing.
+    The reason that is worth a warning rather than a footnote is the value
+    it is dropped *to*: a half is the equivalent of w=4, not w=1, so a
+    schematic that looks symmetric is built asymmetric.
+    """
+    findings = []
+    for name in sorted(device_widths):
+        width = device_widths[name]
+        if not width.dropped:
+            continue
+        role = device_roles[name]
+        geometry = FIXED_GEOMETRY.get(role, "a geometry fixed in silicon")
+        kind = "NMOS" if role.startswith("n") else "PMOS"
+        prog = "nmos_prog.sch" if kind == "NMOS" else "pmos_prog.sch"
+        message = (
+            f"WARNING -- {name}'s {width.prop}={width.requested} was ignored: "
+            f"{role} has a fixed width\n\n"
+            f"  The router put {name} on {role}, one of the two halves of the\n"
+            f"  {kind} differential pair. Those halves have no width bits on the\n"
+            f"  chip -- their geometry is built in silicon -- so there is nothing\n"
+            f"  in the bitstream that could carry {width.prop}={width.requested}, "
+            f"and it was dropped.\n\n"
+            f"  What you get instead is {width.prop}={width.effective}. A half is "
+            f"{geometry},\n"
+            f"  which is exactly the geometry of a programmable FET at its maximum\n"
+            f"  {width.prop}={width.effective} ({prog}'s 1x always-on slice plus its "
+            f"switchable 1x\n  and 2x slices).\n\n"
+            f"  Why this matters: it is built at {width.prop}={width.effective} "
+            f"where your schematic says\n"
+            f"  {width.prop}={width.requested}. In a circuit that looks symmetric "
+            f"-- the three stages of a\n"
+            f"  ring oscillator, say -- the stages that land on the programmable\n"
+            f"  FETs come out at the width you asked for and this one does not, and\n"
+            f"  the mismatch exists only on silicon, not in the drawing.\n\n"
+            f"  To fix: set the other devices of the same kind to "
+            f"{width.prop}={width.effective} as well, so\n"
+            f"  every stage matches deliberately -- examples/ringosc/README.md does\n"
+            f"  exactly that. They match in W/L, though not in parasitics: the\n"
+            f"  programmable FET's 1x and 2x slices sit behind drain switches and\n"
+            f"  the diff-pair half does not."
+        )
+        findings.append(Finding(code="R1", severity=WARN, message=message))
+    return findings
+
+
+def check_routing(routed) -> SafetyReport:
+    """Run the post-routing checks against a RoutedDesign.
+
+    Typed loosely on purpose: this only needs `.device_widths` and
+    `.device_roles`, and taking the object by duck type keeps check.py
+    from importing the router's result class.
+    """
+    return SafetyReport(
+        findings=_check_r1_width_dropped(routed.device_widths, routed.device_roles)
+    )
+
+
+def check_design(design: MosbiusDesign) -> SafetyReport:
+    """Run the netlist-level checks against `design`, before routing."""
+    return SafetyReport(findings=_check_d1_source_on_wrong_rail(design))
 
 
 # ---------------------------------------------------------------------------
