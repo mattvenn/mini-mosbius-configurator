@@ -14,7 +14,7 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work raised by the first outside user running through
-the tutorial (symbol polish, Level-2 simulation, pin-direction errors, wrapping
+the tutorial (Level-2 simulation, pin-direction errors, wrapping
 the `docker run` in the CLI, silently-dropped transistor widths, W2 false
 alarms on internal nodes, and the missing `@spiceprefix` in the symbols).
 
@@ -97,6 +97,12 @@ These were all got wrong once. The sources that look authoritative are not.
 
 ## Useful facts
 
+- **The generic-device symbols have no body pin.** It is hard-wired to a rail
+  on silicon, so `mosbius_*.sym` supplies it through xschem's `extra`
+  attribute (`extra="b"`, `template="... b=VGND"`), which appends the net to
+  both the instance line and the `.subckt` port list. So the netlist still
+  carries 4 connections for a FET and `DEVICE_PINS` still counts them, but
+  there is nothing to draw. Same trick sky130's own `nfet3_*.sym` uses.
 - 192-bit shift chain. Transmit **MSB first** (bit 191 first). 48 hex chars.
 - `enable` (ui[1]) gates all switch outputs combinationally — **must be low
   throughout the shift**, or the chip walks through 192 arbitrary configurations.

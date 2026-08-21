@@ -87,3 +87,89 @@ def test_ports_placed_for_external_nets(inverter_config):
     port_nets = {l.split("lab=")[1].rstrip("}") for l in port_lines}
     assert "ua1" in port_nets
     assert "ua2" in port_nets
+
+
+def _parse_wires(text: str) -> list[tuple[int, int, int, int, str]]:
+    """Every wire segment in a generated .sch as (x1, y1, x2, y2, net)."""
+    lines = text.splitlines()
+    wires = []
+    for i, line in enumerate(lines):
+        if not line.startswith("N "):
+            continue
+        _, x1, y1, x2, y2, _ = line.split(maxsplit=5)
+        net = lines[i + 1].removeprefix("lab=").rstrip("}")
+        wires.append((int(x1), int(y1), int(x2), int(y2), net))
+    return wires
+
+
+def _placed_pins(text: str) -> list[tuple[int, int, str, str]]:
+    """Every device pin's absolute (x, y, instance, terminal) in a
+    generated .sch, resolved through schgen's own symbol geometry."""
+    from mosbius.schgen import _DEVICE_SYMBOLS, DEVICE_PITCH
+
+    pins = []
+    for i, line in enumerate(l for l in text.splitlines() if l.startswith("C {mosbius_")):
+        inst = line.split("name=")[1].split()[0].rstrip("}")
+        role = inst.rsplit("_", 1)[0]
+        _, pin_table, _ = _DEVICE_SYMBOLS[role]
+        for term, (dx, dy) in pin_table.items():
+            pins.append((i * DEVICE_PITCH + dx, dy, inst, term))
+    return pins
+
+
+def _touches(x1, y1, x2, y2, px, py) -> bool:
+    """Does the axis-aligned segment pass through the point?"""
+    if x1 == x2:
+        return px == x1 and min(y1, y2) <= py <= max(y1, y2)
+    if y1 == y2:
+        return py == y1 and min(x1, x2) <= px <= max(x1, x2)
+    return False
+
+
+def test_no_wire_crosses_a_pin_it_does_not_belong_to():
+    """The routing's core promise: a connection's stub and column may
+    never pass over another pin. It very nearly could -- jog columns are
+    numbered by a counter that keeps growing, so a column measured from
+    the pin itself walks rightwards until it lands on that device's own
+    drain or source. Columns start past the symbol's rightmost pin so
+    that can't happen; this test is what says so.
+    """
+    from mosbius.model import SwitchConfig
+
+    # Every device schgen knows how to draw, all terminals wired, on nets
+    # chosen so no two pins share a net -- any contact at all is a bug.
+    from mosbius.decode import DecodedDesign, DeviceInstance
+    from mosbius.schgen import _DEVICE_SYMBOLS
+
+    devices = [
+        DeviceInstance(
+            name=role,
+            terminals={t: f"{role}_{t}" for t in pin_table},
+            settings={},
+        )
+        for role, (_, pin_table, _) in _DEVICE_SYMBOLS.items()
+    ]
+    text = generate_schematic(DecodedDesign(devices=devices, nets=[], ibias=100e-6))
+
+    wires = _parse_wires(text)
+    for px, py, inst, term in _placed_pins(text):
+        pin_net = f"{inst.rsplit('_', 1)[0]}_{term}"
+        for x1, y1, x2, y2, net in wires:
+            if net == pin_net:
+                continue
+            assert not _touches(x1, y1, x2, y2, px, py), (
+                f"{net} wire ({x1},{y1})-({x2},{y2}) passes through "
+                f"{inst}.{term} at ({px},{py})"
+            )
+
+
+def test_no_two_pins_of_one_device_share_a_row():
+    """Pin-to-column stubs run horizontally off the symbol, so two pins
+    on the same y would be shorted together by the stub of whichever one
+    is further left. Guards the .sym geometry, not just this module.
+    """
+    from mosbius.schgen import _DEVICE_SYMBOLS
+
+    for role, (symname, pin_table, _) in _DEVICE_SYMBOLS.items():
+        rows = [dy for _, dy in pin_table.values()]
+        assert len(rows) == len(set(rows)), f"{symname} has two pins on one row"

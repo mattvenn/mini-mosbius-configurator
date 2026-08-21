@@ -4,17 +4,10 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-## 1. Improve the xschem symbols
-
-`xschem/mosbius_lib/mosbius_*.sym` are functional but plain. Worth a pass for
-legibility while drawing: clearer terminal labelling, better visual distinction
-between the five device kinds, and symbol shapes that read as what they are
-(the mirrors and the OTA especially).
-
-Constraint: the `B {}` box declaration order in each `.sym` **is** the netlist
-pin order, and `mosbius/netlist.py`'s `DEVICE_PINS` table hardcodes a matching
-copy. Reordering boxes silently breaks the router. Change both together, and
-`tools/gen_example_schematic.py`'s `_PINS_BY_KIND` offsets too.
+Numbers are stable, so the list starts at 2: item 1 (redraw the symbols) was
+done on 2026-08-21. Other files cite these by number -- `CLAUDE.md` points at
+§4 and §7, `examples/ringosc/README.md` at §5 -- so completed items are
+removed without renumbering the rest.
 
 ## 2. Level-2 simulation of the routed design
 

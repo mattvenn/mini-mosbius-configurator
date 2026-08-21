@@ -1,23 +1,41 @@
-v {xschem version=3.4.8RC file_version=1.2}
+v {xschem version=3.4.8RC file_version=1.2
+*
+* mini-MOSbius programmable PMOS current source (a 1:ratio mirror slave).
+* Drawn as a current source because that is what it behaves like: the
+* only two current-carrying terminals are `out` and the VAPWR end, and
+* the VAPWR end is fixed. `ibias` is the mirror's reference leg.
+*
+* The body terminal is NOT drawn. On silicon it is hard-wired to a rail
+* and you cannot route it, so drawing it would only add a wire you are
+* never allowed to place anywhere else. It is supplied instead by the
+* `extra` mechanism below: the netlist still gets the connection, the
+* schematic does not. Override per instance with b=<net> if you ever need to.
+*
+* The B{} box ORDER below is the netlist pin order and the .subckt port
+* order (extra pins are appended, in the order `extra` lists them).
+* mosbius/netlist.py's DEVICE_PINS holds a matching copy, and
+* mosbius/schgen.py holds the pin coordinates. Change all three together.
+}
 G {}
 K {type=subcircuit
-format="@name @pinlist @symname ratio=@ratio"
-template="name=M1 ratio=1"
+format="@name @pinlist @b @symname ratio=@ratio"
+template="name=M1 ratio=1 b=VAPWR"
+extra="b"
 }
 V {}
 S {}
 E {}
-L 4 -60 -40 -60 40 {}
-L 4 -60 -40 -20 -40 {}
-L 4 -60 40 -20 40 {}
-L 4 -20 -60 -20 60 {}
-L 4 -20 0 20 0 {}
-B 5 -62.5 -2.5 -57.5 2.5 {name=ibias dir=in}
-B 5 17.5 -2.5 22.5 2.5 {name=out dir=inout}
-B 5 -2.5 -62.5 2.5 -57.5 {name=b dir=inout}
-T {@symname} -50 -80 0 0 0.3 0.3 {}
-T {@name} 30 -80 0 0 0.2 0.2 {}
-T {ratio=@ratio} 30 70 0 0 0.2 0.2 {}
-T {ibias} -55 -15 0 1 0.15 0.15 {}
-T {out} 5 15 0 1 0.15 0.15 {}
-T {b (tie to VAPWR)} 5 -55 0 0 0.12 0.12 {}
+L 4 -12 -35 12 -35 {}
+L 4 0 -35 0 -15 {}
+L 4 0 15 0 40 {}
+L 4 -40 0 -15 0 {}
+A 4 0 0 15 270 360 {}
+P 4 7 0 -7.5 0 2.5 2.5 2.5 0 10 -2.5 2.5 0 2.5 0 -7.5 {fill=true}
+B 5 -42.5 -2.5 -37.5 2.5 {name=ibias dir=in}
+B 5 -2.5 37.5 2.5 42.5 {name=out dir=inout}
+T {@name} 24 -17 0 0 0.2 0.2 {}
+T {ratio=@ratio} 24 1 0 0 0.15 0.15 {}
+T {ibias} -42 -16 0 0 0.13 0.13 {}
+T {@b} 14 -42 0 0 0.15 0.15 {}
+T {@#1:net_name} 6 44 0 0 0.15 0.15 {layer=15 hide=instance}
+T {@#0:net_name} -42 6 0 0 0.15 0.15 {layer=15 hide=instance}

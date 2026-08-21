@@ -26,19 +26,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mosbius.netlist import DEVICE_PINS, PORT_NAMES, SYMBOL_KIND, parse_netlist
+from mosbius.netlist import (
+    DEVICE_PINS, IMPLICIT_PINS, PORT_NAMES, SYMBOL_KIND, parse_netlist,
+)
+from mosbius.schgen import (
+    _NMOS_PINS, _NSINK_PINS, _OTA_PINS, _PMOS_PINS, _PSOURCE_PINS,
+)
 
-_NMOS_PMOS_PINS = {"g": (-60, 0), "d": (60, -60), "s": (60, 60), "b": (0, 80)}
-_MIRROR_PINS = {"ibias": (-60, 0), "out": (20, 0), "b": (0, -60)}
-_OTA_PINS = {
-    "inp": (-80, -40), "inm": (-80, 40),
-    "outp": (80, -20), "outm": (80, 20),
-    "ibias": (0, -80), "bn": (-40, 0), "bp": (40, 0),
-}
-
+# Reuse schgen's pin coordinates rather than keeping a second copy: they
+# have to match xschem/mosbius_lib/*.sym exactly, and one table that is
+# wrong is easier to spot than two tables that disagree.
 _PINS_BY_KIND = {
-    "nmos": _NMOS_PMOS_PINS, "pmos": _NMOS_PMOS_PINS,
-    "nsink": _MIRROR_PINS, "psource": _MIRROR_PINS,
+    "nmos": _NMOS_PINS, "pmos": _PMOS_PINS,
+    "nsink": _NSINK_PINS, "psource": _PSOURCE_PINS,
     "ota": _OTA_PINS,
 }
 _SYMBOL_BY_KIND = {v: k for k, v in SYMBOL_KIND.items()}
@@ -54,6 +54,7 @@ class _Connection:
     pin_x: int
     pin_y: int
     net: str
+    jog_base_x: int  # see schgen._Connection
 
 
 def generate(netlist_text: str, title: str) -> str:
@@ -83,8 +84,13 @@ def generate(netlist_text: str, title: str) -> str:
             f"C {{{symname}.sym}} {origin_x} 0 0 0 {{name={dev.name} {prop_str}}}"
         )
         for term, net in dev.terminals.items():
+            if term in IMPLICIT_PINS:
+                continue  # symbol supplies the body tie; nothing to draw
             dx, dy = pins[term]
-            conn = _Connection(pin_x=origin_x + dx, pin_y=dy, net=net)
+            conn = _Connection(
+                pin_x=origin_x + dx, pin_y=dy, net=net,
+                jog_base_x=origin_x + max(px for px, _ in pins.values()),
+            )
             connections.append(conn)
             net_connections.setdefault(net, []).append(conn)
 
@@ -100,14 +106,14 @@ def generate(netlist_text: str, title: str) -> str:
     wire_lines = []
     for conn in connections:
         jog_col = jog_x_by_conn[id(conn)]
-        jog_x = conn.pin_x + JOG_STEP + jog_col
+        jog_x = conn.jog_base_x + JOG_STEP + jog_col
         channel_y = channel_y_by_net[conn.net]
         wire_lines.append(f"N {conn.pin_x} {conn.pin_y} {jog_x} {conn.pin_y} {{\nlab={conn.net}}}")
         wire_lines.append(f"N {jog_x} {conn.pin_y} {jog_x} {channel_y} {{\nlab={conn.net}}}")
 
     for net, conns in net_connections.items():
-        min_x = min(c.pin_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
-        max_x = max(c.pin_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
+        min_x = min(c.jog_base_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
+        max_x = max(c.jog_base_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
         channel_y = channel_y_by_net[net]
         if min_x != max_x:
             wire_lines.append(f"N {min_x} {channel_y} {max_x} {channel_y} {{\nlab={net}}}")

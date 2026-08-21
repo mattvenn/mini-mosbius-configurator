@@ -31,6 +31,13 @@ DEVICE_PINS: dict[str, tuple[str, ...]] = {
     "ota": ("inp", "inm", "outp", "outm", "ibias", "bn", "bp"),
 }
 
+# Terminals the symbols supply implicitly, via xschem's `extra` attribute
+# (see any mosbius_*.sym header): the body ties. They are hard-wired to a
+# rail on silicon, so they are never drawn on the schematic and the router
+# has nothing to do with them -- but they DO appear on the netlist's
+# instance line, so DEVICE_PINS above still counts them.
+IMPLICIT_PINS = frozenset({"b", "bn", "bp"})
+
 # xschem symbol name -> device kind.
 SYMBOL_KIND = {
     "mosbius_nmos": "nmos",

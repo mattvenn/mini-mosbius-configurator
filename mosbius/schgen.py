@@ -24,13 +24,23 @@ from mosbius.netlist import PORT_NAMES
 # Each mosbius_lib symbol's pin -> local (x, y) offset, i.e. the exact
 # coordinate of that pin when the symbol is placed at (0, 0) unrotated.
 # These are authored coordinates (xschem/mosbius_lib/*.sym B{} boxes) --
-# see tools' xschem symbol geometry notes in each .sym file.
-_NMOS_PMOS_PINS = {"g": (-60, 0), "d": (60, -60), "s": (60, 60), "b": (0, 80)}
-_MIRROR_PINS = {"ibias": (-60, 0), "out": (20, 0), "b": (0, -60)}
+# see the geometry notes in each .sym file's header.
+#
+# The body terminals (b / bn / bp) are absent on purpose: the symbols
+# supply them implicitly via xschem's `extra` mechanism, so there is no
+# pin to draw a wire to. See netlist.IMPLICIT_PINS.
+#
+# NMOS and PMOS differ: pmos3-style symbols put the source at the top
+# (towards VAPWR) and the drain at the bottom, which is the reverse of
+# nmos3.
+_NMOS_PINS = {"g": (-20, 0), "d": (20, -30), "s": (20, 30)}
+_PMOS_PINS = {"g": (-20, 0), "d": (20, 30), "s": (20, -30)}
+_NSINK_PINS = {"ibias": (-40, 0), "out": (0, -40)}
+_PSOURCE_PINS = {"ibias": (-40, 0), "out": (0, 40)}
 _OTA_PINS = {
-    "inp": (-80, -40), "inm": (-80, 40),
-    "outp": (80, -20), "outm": (80, 20),
-    "ibias": (0, -80), "bn": (-40, 0), "bp": (40, 0),
+    "inp": (-70, -25), "inm": (-70, 25),
+    "outp": (70, -15), "outm": (70, 15),
+    "ibias": (-30, 70),
 }
 
 # Device name -> (symbol name, pin-offset table, property template).
@@ -38,18 +48,18 @@ _OTA_PINS = {
 # Sec 2.12: diff-pair transistors are fixed-size, only their shared tail
 # current is configurable) -- rendered at a fixed representative width.
 _DEVICE_SYMBOLS = {
-    "nfeta": ("mosbius_nmos", _NMOS_PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "nfetb": ("mosbius_nmos", _NMOS_PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "pfeta": ("mosbius_pmos", _NMOS_PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "pfetb": ("mosbius_pmos", _NMOS_PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
-    "dpn+": ("mosbius_nmos", _NMOS_PMOS_PINS, lambda s: {"w": 4}),
-    "dpn-": ("mosbius_nmos", _NMOS_PMOS_PINS, lambda s: {"w": 4}),
-    "dpp+": ("mosbius_pmos", _NMOS_PMOS_PINS, lambda s: {"w": 4}),
-    "dpp-": ("mosbius_pmos", _NMOS_PMOS_PINS, lambda s: {"w": 4}),
-    "mirn_a": ("mosbius_nsink", _MIRROR_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "mirn_b": ("mosbius_nsink", _MIRROR_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "mirp_a": ("mosbius_psource", _MIRROR_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
-    "mirp_b": ("mosbius_psource", _MIRROR_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "nfeta": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "nfetb": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "pfeta": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "pfetb": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": s.get("width", 4)}),
+    "dpn+": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": 4}),
+    "dpn-": ("mosbius_nmos", _NMOS_PINS, lambda s: {"w": 4}),
+    "dpp+": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": 4}),
+    "dpp-": ("mosbius_pmos", _PMOS_PINS, lambda s: {"w": 4}),
+    "mirn_a": ("mosbius_nsink", _NSINK_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "mirn_b": ("mosbius_nsink", _NSINK_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "mirp_a": ("mosbius_psource", _PSOURCE_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
+    "mirp_b": ("mosbius_psource", _PSOURCE_PINS, lambda s: {"ratio": s.get("ratio", 1)}),
     "otan": ("mosbius_ota", _OTA_PINS, lambda s: {"tail": s.get("tail", 2)}),
 }
 
@@ -69,6 +79,12 @@ class _Connection:
     pin_x: int
     pin_y: int
     net: str
+    # x of this device's rightmost pin. Jog columns start to the right of
+    # it so a connection's vertical run can never sit on top of another
+    # pin of the same device -- which is exactly what happens if columns
+    # are measured from each pin individually and the counter grows past
+    # the symbol's own width.
+    jog_base_x: int
 
 
 def _sym_props(name: str, value: object) -> str:
@@ -123,7 +139,10 @@ def generate_schematic(decoded: DecodedDesign, title: str = "decoded circuit") -
                 raise ValueError(f"{dev.name} has no pin {term!r} on {symname}")
             dx, dy = pins[term]
             net = _port_net_name(net)
-            conn = _Connection(pin_x=origin_x + dx, pin_y=dy, net=net)
+            conn = _Connection(
+                pin_x=origin_x + dx, pin_y=dy, net=net,
+                jog_base_x=origin_x + max(px for px, _ in pins.values()),
+            )
             connections.append(conn)
             net_connections.setdefault(net, []).append(conn)
 
@@ -142,15 +161,15 @@ def generate_schematic(decoded: DecodedDesign, title: str = "decoded circuit") -
     wire_lines = []
     for conn in connections:
         jog_col = jog_x_by_conn[id(conn)]
-        jog_x = conn.pin_x + JOG_STEP + jog_col
+        jog_x = conn.jog_base_x + JOG_STEP + jog_col
         channel_y = channel_y_by_net[conn.net]
         # pin -> jog (horizontal), jog -> channel (vertical).
         wire_lines.append(f"N {conn.pin_x} {conn.pin_y} {jog_x} {conn.pin_y} {{\nlab={conn.net}}}")
         wire_lines.append(f"N {jog_x} {conn.pin_y} {jog_x} {channel_y} {{\nlab={conn.net}}}")
 
     for net, conns in net_connections.items():
-        min_x = min(c.pin_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
-        max_x = max(c.pin_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
+        min_x = min(c.jog_base_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
+        max_x = max(c.jog_base_x + JOG_STEP + jog_x_by_conn[id(c)] for c in conns)
         channel_y = channel_y_by_net[net]
         if min_x != max_x:
             wire_lines.append(f"N {min_x} {channel_y} {max_x} {channel_y} {{\nlab={net}}}")

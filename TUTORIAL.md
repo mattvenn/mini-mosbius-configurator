@@ -47,15 +47,17 @@ PMOS source to VAPWR.
 2. Wire both gates to `ua1` (the input).
 3. Wire both drains to `ua2` (the output).
 4. Wire the NMOS source to `VGND`, the PMOS source to `VAPWR`.
-5. Wire both bodies (`b`) to their own source rail too (`VGND` for the
-   NMOS, `VAPWR` for the PMOS) -- the symbol's own label says so
-   (`b (tie to VGND)`), and it matters for simulation even though the
-   router ignores body connections entirely (there's no switch-matrix
-   control over bulk; it's fixed at layout).
-6. Leave `w=1` on both (the smallest, default size) -- SPEC.md Sec 3.4:
+5. Leave `w=1` on both (the smallest, default size) -- SPEC.md Sec 3.4:
    `w` is the only adjustable parameter these two symbols have, 1-4, and
    it sets a parallel transistor count, not a channel length (there's no
    length control on this hardware).
+
+That's the whole circuit -- there is no body/bulk terminal to wire. On
+silicon the NMOS bodies are tied to `VGND` and the PMOS bodies to
+`VAPWR`, and no switch in the matrix can change that, so the symbols
+supply the connection themselves: it appears in the netlist, never on
+your sheet. (Should you ever need to override it, set `b=<net>` on the
+instance.)
 
 Compare against `examples/inverter/inverter.sch` if anything looks off --
 it's the same circuit, laid out slightly differently (that file was

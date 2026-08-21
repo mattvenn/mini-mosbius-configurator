@@ -1,27 +1,46 @@
-v {xschem version=3.4.8RC file_version=1.2}
+v {xschem version=3.4.8RC file_version=1.2
+*
+* mini-MOSbius generic device symbol. Drawing and pin coordinates are
+* taken from xschem's own devices/pmos3.sym so these read and snap like
+* any other FET on the sheet.
+*
+* The body terminal is NOT drawn. On silicon it is hard-wired to a rail
+* and you cannot route it, so drawing it would only add a wire you are
+* never allowed to place anywhere else. It is supplied instead by the
+* `extra` mechanism below: the netlist still gets a 4th connection, the
+* schematic does not. Override per instance with b=<net> if you ever
+* need to (mosbius_ota.sch does, to reach its own bulk port).
+*
+* The B{} box ORDER below is the netlist pin order and the .subckt port
+* order. mosbius/netlist.py's DEVICE_PINS holds a matching copy, and
+* mosbius/schgen.py holds the pin coordinates. Change all three together.
+* (Note this is g,d,s -- devices/pmos3.sym declares d,g,s. Geometry matches,
+* declaration order deliberately does not: reordering would rename every
+* routed device and force a re-route for no visible gain.)
+}
 G {}
 K {type=subcircuit
-format="@name @pinlist @symname w=@w"
-template="name=M1 w=1"
+format="@name @pinlist @b @symname w=@w"
+template="name=M1 w=1 b=VAPWR"
+extra="b"
 }
 V {}
 S {}
 E {}
-L 4 20 -40 20 40 {}
-L 4 20 -40 60 -40 {}
-L 4 20 40 60 40 {}
-L 4 60 -60 60 60 {}
-L 4 60 0 100 0 {}
-L 4 -20 -40 -20 40 {}
-L 4 -60 0 -20 0 {}
-B 5 -62.5 -2.5 -57.5 2.5 {name=g dir=in}
-B 5 57.5 -62.5 62.5 -57.5 {name=d dir=inout}
-B 5 57.5 57.5 62.5 62.5 {name=s dir=inout}
-B 5 -2.5 77.5 2.5 82.5 {name=b dir=inout}
-T {@symname} -50 -80 0 0 0.3 0.3 {}
-T {@name} 70 -80 0 0 0.2 0.2 {}
-T {w=@w} 70 70 0 0 0.2 0.2 {}
-T {d} 65 -60 0 1 0.15 0.15 {}
-T {g} -55 5 0 1 0.15 0.15 {}
-T {s} 65 60 0 1 0.15 0.15 {}
-T {b (tie to VAPWR)} 5 80 0 0 0.12 0.12 {}
+L 4 5 -30 5 30 {}
+L 4 5 -20 20 -20 {}
+L 4 20 -30 20 -20 {}
+L 4 5 20 20 20 {}
+L 4 20 20 20 30 {}
+L 4 -5 -15 -5 15 {}
+L 4 -20 0 -12.5 0 {}
+A 4 -8.75 0 3.75 270 360 {}
+B 5 -22.5 -2.5 -17.5 2.5 {name=g dir=in}
+B 5 17.5 27.5 22.5 32.5 {name=d dir=inout}
+B 5 17.5 -32.5 22.5 -27.5 {name=s dir=inout}
+T {@name} 26 -17 0 0 0.2 0.2 {}
+T {w=@w} 26 1 0 0 0.2 0.2 {}
+T {@b} 26 19 0 0 0.15 0.15 {layer=1}
+T {@#1:net_name} 25 32.5 0 0 0.15 0.15 {layer=15 hide=instance}
+T {@#2:net_name} 25 -42.5 0 0 0.15 0.15 {layer=15 hide=instance}
+T {@#0:net_name} -25 -12.5 0 1 0.15 0.15 {layer=15 hide=instance}

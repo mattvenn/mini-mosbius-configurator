@@ -14,11 +14,11 @@ N 320 -50 320 -20 {
 lab=tail}
 N 320 -20 600 -20 {
 lab=tail}
-N 600 -20 600 -250 {
+N 600 -20 600 -290 {
 lab=tail}
-N 600 -250 570 -250 {
+N 550 -290 600 -290 {
 lab=tail}
-N 300 -250 490 -250 {
+N 300 -250 510 -250 {
 lab=ibias}
 N 100 -80 90 -80 {
 lab=bn}
@@ -29,10 +29,6 @@ lab=bn}
 N 330 -80 330 50 {
 lab=bn}
 N 90 50 330 50 {
-lab=bn}
-N 330 50 550 50 {
-lab=bn}
-N 550 50 550 -310 {
 lab=bn}
 N 100 -400 100 -430 {
 lab=bp}
@@ -102,7 +98,7 @@ sa=0 sb=0 sd=0
 model=pfet_g5v0d10v5
 spiceprefix=X
 }
-C {mosbius_nsink.sym} 550 -250 0 0 {name=Mtail ratio="tail"}
+C {mosbius_nsink.sym} 550 -250 0 0 {name=Mtail ratio="tail" b=bn}
 C {devices/iopin.sym} 60 -80 0 1 {name=p1 lab=inp}
 C {devices/iopin.sym} 280 -80 0 1 {name=p2 lab=inm}
 C {devices/iopin.sym} 100 -200 0 1 {name=p3 lab=outp}
