@@ -31,7 +31,7 @@ to its rail (`ctrl_nfeta_source`/`ctrl_pfeta_source`). See `TODO.md` §2.
 ## Routing
 
 ```
-$ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/inverter.spice
+$ python3 -m mosbius.cli route examples/inverter/simulation/inverter.spice
 OK -- no errors or warnings (10 info notes hidden, use --verbose).
 
 Device roles:

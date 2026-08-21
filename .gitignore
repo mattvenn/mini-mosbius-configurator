@@ -13,10 +13,9 @@ simulation/
 # Logs from redirecting the router's output.
 *.log
 
-# Work in progress: hand-drawn designs living in the library directory
-# alongside the tracked symbols and templates. Named individually rather
-# than ignoring xschem/mosbius_lib/*.sch, which would also cover
-# minimosbius_template.sch and tb_template.sch -- those are library files
-# and belong in git. `git add -f <path>` when one is ready to keep.
-xschem/mosbius_lib/ring.sch
-xschem/mosbius_lib/inverter.sch
+# Work in progress: if you draw a design in the library directory rather
+# than in its own, name it here individually -- NOT xschem/mosbius_lib/*.sch,
+# which would also cover minimosbius_template.sch, tb_template.sch and the
+# five mosbius_*.sch device schematics, all of which belong in git. Finished
+# designs go to examples/<name>/ and are tracked there; there are no ignored
+# schematics at the moment.

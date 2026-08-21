@@ -53,7 +53,7 @@ schematic from this investigation to be kept. Open it in xschem with
 writes:
 
 ```
-$ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/ring.spice
+$ python3 -m mosbius.cli route examples/ringosc/simulation/ring.spice
 OK -- no errors or warnings (7 info notes hidden, use --verbose).
 
 Device roles:

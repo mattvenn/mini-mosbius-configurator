@@ -67,7 +67,7 @@ than a `RouteError` with a diagnosis, this is very likely what it is.
 ## Routing
 
 ```
-$ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/srlatch.spice
+$ python3 -m mosbius.cli route examples/srlatch/simulation/srlatch.spice
 WARNING -- XM5's w=1 was ignored: ndiffpair+ has a fixed width
 WARNING -- XM6's w=1 was ignored: ndiffpair- has a fixed width
 

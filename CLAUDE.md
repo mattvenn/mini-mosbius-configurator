@@ -59,9 +59,14 @@ happily re-routed a stale file and reported success. Point the router at the
 `mosbius route` / `mosbius watch` directly:
 
 ```bash
-python3 -m mosbius.cli route xschem/mosbius_lib/simulation/ring.spice \
+python3 -m mosbius.cli route examples/ringosc/simulation/ring.spice \
   --out build/ring.mosbius.json
 ```
+
+Note the `simulation/` directory is beside the *schematic*, wherever that
+is -- `examples/ringosc/simulation/` for the committed examples, and
+`xschem/mosbius_lib/simulation/` for a design drawn from the template in
+the library directory. It is gitignored either way.
 
 Nothing needs copying to `build/`; the router takes a path. Running xschem a
 second time in a container to re-netlist a file you already have open is pure
