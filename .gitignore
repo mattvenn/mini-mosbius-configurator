@@ -1,10 +1,22 @@
+# Routing output: <name>.mosbius.json and anything else generated.
 build/
 __pycache__/
 *.pyc
 .pytest_cache/
 
-# xschem's GUI Netlist button writes here -- <schematic dir>/simulation/,
-# per its simuldir proc -- while the batch `docker run` writes to build/.
-# Two netlists of the same schematic, nothing syncing them (TODO.md §4).
-# Only build/ is the one the router reads, so this side is throwaway.
+# Where xschem's Netlist button writes, per its simuldir proc: a
+# simulation/ directory beside the schematic. Regenerated on every press
+# and read straight from there by `mosbius route`, so there is nothing
+# here worth keeping.
 simulation/
+
+# Logs from redirecting the router's output.
+*.log
+
+# Work in progress: hand-drawn designs living in the library directory
+# alongside the tracked symbols and templates. Named individually rather
+# than ignoring xschem/mosbius_lib/*.sch, which would also cover
+# minimosbius_template.sch and tb_template.sch -- those are library files
+# and belong in git. `git add -f <path>` when one is ready to keep.
+xschem/mosbius_lib/ring.sch
+xschem/mosbius_lib/inverter.sch
