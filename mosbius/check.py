@@ -468,7 +468,7 @@ def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
       WARN, not ERROR: the router *can* reach the opposite rail from a
       source terminal through a bus row and a cfg_bus_pwr tap, so this is
       routable, just almost certainly not what was meant. Same reasoning
-      as TODO.md Sec 9 keeps the drain/source-swap hint a hint.
+      as TODO.md Sec 2 keeps the drain/source-swap hint a hint.
     """
     wired_nets = {
         net
@@ -552,7 +552,7 @@ def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
 def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
                             device_roles: dict[str, str]) -> list[Finding]:
     """A width the schematic asked for that the assigned role cannot carry
-    (TODO.md Sec 5).
+    (the silently-dropped-width item, now closed).
 
     The diff-pair halves have no width bits -- their geometry is fixed in
     silicon -- so a device the allocator puts on one keeps its w= in the

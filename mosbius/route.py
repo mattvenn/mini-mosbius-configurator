@@ -146,7 +146,7 @@ WIDTH_PROPERTY = {
 @dataclass(frozen=True)
 class DeviceWidth:
     """What width a device ended up with, versus what the schematic asked
-    for (TODO.md Sec 5). `requested` is None when the symbol carries no
+    for. `requested` is None when the symbol carries no
     width property at all (mosbius_ota); `effective` is None when the role
     has neither width bits nor a known fixed geometry.
     """
@@ -247,8 +247,8 @@ class RoutedDesign:
 
 def format_device_roles(routed) -> list[str]:
     """The route table: which hardware each device became, and the width
-    it will actually be built at (TODO.md Sec 5 -- reporting the width the
-    router really programmed, not the one the schematic asked for).
+    it will actually be built at -- the width the router really programmed,
+    not the one the schematic asked for.
     """
     lines = []
     for name, role in sorted(routed.device_roles.items()):
@@ -582,7 +582,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
     # -- Device settings: width/ratio for every allocated FET and mirror.
     # Driven off the same device_width() the route table reports from, so
     # the width shown and the width programmed cannot drift apart -- which
-    # is the failure TODO.md Sec 5 is about in the first place.
+    # is the failure that motivated reporting it at all.
     widths = device_widths(design, roles)
     for dev_name, role in roles.items():
         if role in WIDTH_SETTING:
@@ -671,8 +671,7 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
     The stored routing is only reusable if its `device_roles` are keyed by
     the names this design actually uses. The topology hash deliberately
     ignores instance names, so a pure rename -- every device going from
-    `M1` to `XM1` when the symbols gained `@spiceprefix`, say (TODO.md
-    Sec 7) -- hashes identically and would otherwise be replayed with role
+    `M1` to `XM1` when the symbols gained `@spiceprefix`, say -- hashes identically and would otherwise be replayed with role
     keys naming devices that no longer exist. That used to surface as a
     route table quietly describing the wrong names, and now as a KeyError
     building the width table. Neither is a routing: re-solve instead.

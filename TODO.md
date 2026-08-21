@@ -8,7 +8,7 @@ an annoying ux issue is that xschem wants to save simulations in its own directo
 
 (Half of this is answered as of 2026-08-21: there is no copying and no docker
 step any more. Press Netlist in xschem, then point the router straight at
-`<schematic dir>/simulation/<name>.spice` -- see §4. What remains is the rest
+`<schematic dir>/simulation/<name>.spice`. What remains is the rest
 of the ask: launching xschem with the library path already set, so the whole
 loop is one place.)
 
@@ -18,15 +18,19 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-Numbers are stable, so the list starts at 2: items 1 (redraw the symbols),
-3 (pin-direction errors), 4 (netlisting via the container), 5 (widths dropped
-on diff-pair halves), 6 (W2 firing on every internal node) and 7 (the missing
-`@spiceprefix`) were resolved and removed on 2026-08-21. Other files cite these by number, so completed
-items are removed without renumbering the rest -- and a citation of a number
-that is no longer here means the thing it described is fixed, not that the
-reference rotted.
+**Renumbered from 1 on 2026-08-21**, when the first eight items were resolved
+and removed: the symbol redraw, the pin-direction errors, netlisting via the
+container, widths silently dropped on diff-pair halves, W2 firing on every
+internal node, the missing `@spiceprefix`, and the example schematics left on
+the old pin geometry.
 
-## 2. Level-2 simulation of the routed design
+This file used to keep numbers stable and leave gaps, because other files cite
+items by number. Renumbering instead means those citations move too, and they
+are updated in the same commit that renumbers -- so a `TODO.md` §number in the
+repo is always live. Nothing outside this file should cite an item that no
+longer exists.
+
+## 1. Level-2 simulation of the routed design
 
 Today you can only simulate the *pre-route* schematic — SPEC.md §3.1b's
 Level-1 "ideal" result, real sky130 device sizing but no switch-matrix
@@ -42,67 +46,7 @@ a routed config and running it. Budget ~2 min of sky130A model load per run
 (see CLAUDE.md).
 
 
-## 8. Regenerate the example schematics for the new symbol geometry
-
-Raised 2026-08-21, immediately after the item-1 redraw.
-
-**Only `examples/srlatch/srlatch.sch` is left.** The two inverter files were
-replaced with hand-drawn versions on 2026-08-21 (`examples/inverter/` now
-holds a real schematic drawn in xschem, and `inverter_w4.sch` is that same
-file with one `w=` changed), and `examples/ringosc/ring.sch` was added the
-same way. That leaves the srlatch as the last generated file still on the
-old geometry.
-
-`examples/inverter/inverter.sch`, `examples/inverter/inverter_w4.sch` and
-`examples/srlatch/srlatch.sch` were produced by
-`tools/gen_example_schematic.py` against the *old* pin coordinates (g at
-`(-60,0)`, d at `(60,-60)`, s at `(60,60)`, b at `(0,80)`). Every symbol now
-has pins at `nmos3`'s coordinates instead, so those files' wires end nowhere
-near the pins.
-
-Verified 2026-08-21: *every* pin is now dangling. The inverter netlists as
-
-```
-nfeta_0 net1 net2 net3 VGND mosbius_nmos w=1
-pfeta_1 net4 net5 net6 VAPWR mosbius_pmos w=1
-```
-
--- six pins, six auto-named nets, no connectivity at all; the srlatch gives
-nineteen. Routing does fail, but on the first thing it happens to run out of:
-
-```
-DOESN'T FIT -- no free bus_A[] row left for 'net4'
-```
-
-which says nothing about the actual problem. Another instance of item 9.
-
-These are generated, not hand-drawn, so the fix is to re-run the generator
-rather than to edit them:
-
-```bash
-python3 tools/gen_example_schematic.py <netlist.spice> <out.sch>
-```
-
-The input each one was built from is the wrinkle -- `build/` is gitignored, so
-the source netlists are not in the repo. Recover each from its example README's
-netlist listing, or from the committed bitstream via `schgen.generate_schematic`
-(that is a different layout algorithm but the same pin tables, and it is what
-`mosbius decode` would draw).
-
-While regenerating, check the result actually netlists in the container before
-committing it -- `examples/*/README.md` quote device connectivity that has to
-keep matching.
-
-Related: the same geometry change broke a hand-drawn `ring.sch` in a way that
-took a routing failure to notice (see item 9).
-
-Note the hand-drawn route taken for the inverter and the ring is not a
-rejection of the generator -- `gen_example_schematic.py` reads the pin
-coordinates out of the `.sym` files at run time, so it would produce correct
-geometry today. It is simply that a schematic a person drew is the better
-artifact for an example a person is meant to learn from.
-
-## 9. Diagnose a probable drain/source swap instead of "doesn't fit"
+## 2. Diagnose a probable drain/source swap instead of "doesn't fit"
 
 Raised 2026-08-21, from a real 15-minute misdiagnosis.
 
@@ -140,9 +84,10 @@ matching rail, which is the combination that has no sensible reading.
 Worth checking whether this belongs in `check.py` (so it fires on a netlist
 that routes, too) rather than only on the allocator's failure path.
 
-## 10. Tail currents never reach the bitstream
+## 3. Tail currents never reach the bitstream
 
-Raised 2026-08-21, found while fixing §5.
+Raised 2026-08-21, found while fixing the dropped-width item (now
+resolved: widths are reported per device and a drop is warned about).
 
 `route.py`'s device-settings loop emits width/ratio bits and nothing else:
 
@@ -186,13 +131,13 @@ Fix, in two parts:
   why `w=`'s shape does not fit it. Worth weighing: a `tail=` on both halves
   that must agree, versus a separate symbol wired to the shared source node.
 
-Either way §5's rule applies, and it is now enforced for widths by `R1` in
-`check.py`: a property that cannot reach the bitstream gets said out loud
+Either way the same rule applies that `R1` in `check.py` now enforces for
+widths: a property that cannot reach the bitstream gets said out loud
 rather than dropped.
 
-## 11. A single OTA crashes the router
+## 4. A single OTA crashes the router
 
-Raised 2026-08-21, found while writing §10.
+Raised 2026-08-21, found while writing §3.
 
 Routing any design containing one `mosbius_ota` raises an unhandled
 `KeyError: 'ota'` out of `_collect_touches`:
@@ -233,7 +178,7 @@ Note for whoever takes this: the OTA's inputs reach only bus rows 1-3
 (CLAUDE.md trap 6), so the row picker needs to respect that once it can get
 far enough to matter.
 
-## 12. Device allocation is decided by netlist order, and fails with a traceback
+## 5. Device allocation is decided by netlist order, and fails with a traceback
 
 Raised 2026-08-21, found routing a hand-drawn SR latch.
 

@@ -96,7 +96,7 @@ def test_missing_config_file_does_a_fresh_route(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Renames (TODO.md Sec 7): the symbols gained `@spiceprefix`, so every
+# Renames: the symbols gained `@spiceprefix`, so every
 # instance went from `M1` to `XM1`. The topology hash ignores instance
 # names by design, so that rename hashes identically -- but the stored
 # device_roles are keyed by name, and replaying them would describe

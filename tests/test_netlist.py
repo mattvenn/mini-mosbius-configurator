@@ -99,7 +99,8 @@ def test_port_names_match_minimosbius_template_ports():
 
 
 def test_x_prefixed_instance_names_parse():
-    """After TODO.md Sec 7 the symbols emit `XM1 ...` rather than `M1 ...`.
+    """The symbols emit `XM1 ...` rather than `M1 ...` since they gained
+    `@spiceprefix`.
 
     The instance name is taken verbatim, prefix included -- it is only ever
     a key, never parsed for meaning.

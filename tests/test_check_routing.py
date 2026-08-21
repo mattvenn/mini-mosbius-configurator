@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """mosbius/check.py -- check_routing(), the post-routing checks (R1), and
-the width bookkeeping in route.py that feeds it (TODO.md Sec 5).
+the width bookkeeping in route.py that feeds it.
 
 A device the allocator puts on a diff-pair half keeps its w= in the
 netlist and has it ignored in the bitstream, because those halves have no
@@ -113,7 +113,7 @@ def test_legacy_role_names_still_get_their_widths(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# The route table itself: TODO.md Sec 5 asks for the width actually
+# The route table itself: the width actually
 # programmed to be reported per device, not just the roles.
 # ---------------------------------------------------------------------------
 

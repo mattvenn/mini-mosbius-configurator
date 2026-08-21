@@ -26,7 +26,7 @@ inverter are not drawn the same way up, and flipping both the same
 direction leaves exactly one of them reversed. That is not a circuit that
 fails to route -- it routes clean and passes the safety checker -- it just
 quietly costs a bus row, because only the *source* terminal has a free tie
-to its rail (`ctrl_nfeta_source`/`ctrl_pfeta_source`). See `TODO.md` §9.
+to its rail (`ctrl_nfeta_source`/`ctrl_pfeta_source`). See `TODO.md` §2.
 
 ## Routing
 

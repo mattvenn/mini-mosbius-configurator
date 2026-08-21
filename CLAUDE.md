@@ -14,20 +14,20 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§2), `examples/srlatch/srlatch.sch` still carrying the old pin
-coordinates (§8), a reversed drain/source reported as "doesn't fit" rather
-than as the wiring mistake it is (§9), tail currents that never reach the
-bitstream (§10), a single OTA crashing the router (§11), and device
-allocation depending on netlist order and failing with a traceback (§12). Its numbering is stable and completed items are
-deleted, so a §number cited elsewhere that is no longer in the file means that
-item is fixed.
+design (§1), a reversed drain/source reported as "doesn't fit" rather than
+as the wiring mistake it is (§2), tail currents that never reach the
+bitstream (§3), a single OTA crashing the router (§4), and device allocation
+depending on netlist order and failing with a traceback (§5). It is
+renumbered from 1 whenever items are removed, and every citation of it in
+this repo is updated in the same commit, so a `TODO.md` §number here is
+always live.
 
 **There is only one netlist directory now: `<schematic dir>/simulation/`,
 where the GUI puts it.** Earlier docs told you to netlist a second time via
 `docker run -o build/`, which produced a second copy that nothing kept in
 sync — netlisting from the GUI left `build/` untouched, so the router
 happily re-routed a stale file and reported success. Point the router at the
-`simulation/` path instead. `TODO.md` §4.
+`simulation/` path instead.
 
 ## Ground rules
 
@@ -65,14 +65,13 @@ python3 -m mosbius.cli route xschem/mosbius_lib/simulation/ring.spice \
 
 Nothing needs copying to `build/`; the router takes a path. Running xschem a
 second time in a container to re-netlist a file you already have open is pure
-redundancy, and it was the source of a whole class of stale-netlist bugs
-(`TODO.md` §4).
+redundancy, and it was the source of a whole class of stale-netlist bugs.
 
 xschem and ngspice are not installed natively -- they live in the
 IIC-OSIC-TOOLS container, which is also where you draw. `--skip` must be the
 first argument to the image. Batch netlisting from that container is still
-the right tool for CI and for regenerating the generated examples
-(`TODO.md` §8), just not for a person mid-edit; `git log` has the exact
+the right tool for CI, just not for a person mid-edit -- every example
+schematic is hand-drawn now; `git log` has the exact
 invocation if you need it.
 
 Two option meanings that are easy to get backwards: xschem's `-q` is
@@ -146,7 +145,7 @@ These were all got wrong once. The sources that look authoritative are not.
   not a wire: they instantiate sky130's **3-terminal** `nfet3_*`/`pfet3_*`
   symbols and pass it as the `@body` parameter. Wiring it instead makes
   xschem's GUI netlist report `undriven node: b`, because `extra` ports are
-  invisible to its connectivity check (`TODO.md` §3).
+  invisible to its connectivity check.
 - 192-bit shift chain. Transmit **MSB first** (bit 191 first). 48 hex chars.
 - `enable` (ui[1]) gates all switch outputs combinationally — **must be low
   throughout the shift**, or the chip walks through 192 arbitrary configurations.
