@@ -1,3 +1,13 @@
+# new todo
+
+an annoying ux issue is that xschem wants to save simulations in its own directory. and they really want to be in ./build . There needs to be an easy workflow for someone to be able to start xschem, load the templates and see the symbols, then export the netlist and run the docker all in one place. I'm having to remember to copy the spice netlist from xdschem/mosbius/simulation -> build, then run the docker and the python.
+
+(Overlaps §4, which already has the two-directories trap and the stale-netlist
+checks as bullets under a `mosbius netlist <sch>` subcommand. What this adds
+that §4 does not: the ask is the *whole loop* in one place -- start xschem with
+the library path already set, draw, netlist, route, program -- not just one
+subcommand. Fold together when someone picks it up.)
+
 # TODO — deferred work
 
 Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
