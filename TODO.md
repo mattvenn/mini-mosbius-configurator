@@ -35,35 +35,109 @@ longer exists.
 
 ## 1. Level-2 simulation of the routed design
 
-Today you can only simulate the *pre-route* schematic — SPEC.md §3.1b's
-Level-1 "ideal" result, real sky130 device sizing but no switch-matrix
-parasitics. `examples/inverter/README.md` quantifies the gap: 84.4 ns
-simulated at `w=1` against tnt's ~50 ns on real silicon.
+**Status as of 2026-08-22: real progress, not closed.** Best result so far is
+**93.5MHz simulated vs. ~30MHz on real silicon (~3.1x too fast)** -- down from
+an earlier "no switch-matrix simulation possible at all" state, and from an
+intermediate hand-built attempt that only reached ~12x too fast. Full
+reasoning, dead ends, and the exact numbers are in this project's memory
+(`ring_oscillator_l2_sim` -- ask to recall it, or see below for the parts
+that matter for resuming in a fresh session/repo checkout).
 
-The mechanism for the accurate version already exists and is unused:
-`mosbius/spice.py`'s `render_config_spice()` emits a tie for all 192 config
-pins of `mosbius.sym`, so a routed `SwitchConfig` can be simulated through the
-real switch matrix with no behavioural model of the shift register (SPEC.md
-§3.7). What's missing is the workflow around it — generating a testbench from
-a routed config and running it. Budget ~2 min of sky130A model load per run
-(see CLAUDE.md).
+**The unlock: use the submodule's own testbench, not a hand-built one.**
+`ttsky-mini-mosbius/xschem/tb_mosbius_ringo.sch` is the upstream author's
+own ring-oscillator testbench -- instantiates `mosbius.sym` with real
+VAPWR=3.3V/VDPWR=1.8V/Ibias=100µA, real PDK device symbols with
+`spiceprefix=X` set correctly, a working `.control` block, and a real
+`pad_model.sym` already wired onto its 5 observable nodes (`n1`-`n5`,
+`out`). A hand-built testbench (wiring `mosbius.sym`'s 192 pins from
+scratch via `mosbius/spice.py`'s `render_config_spice()`, the approach
+originally planned below) hit a spurious "could not find a valid
+modelname" error that turned out to be an artifact of hand-copying a
+`.lib` line rather than using `sky130_fd_pr/corner.sym` the way the
+upstream testbench does -- not a real device limitation, but a wasted
+detour. **Look for an existing upstream testbench before building one.**
+`ttsky-mini-mosbius/xschem/tb_*.sch` has several more (device-level DC/AC
+sweeps, OTA stability/CMRR, etc.) that are likely similarly useful
+reference points for other simulation work, not just this one.
 
-The container half of that workflow is now known, from re-simulating the SR
-latch at Level-1 on 2026-08-21 -- see `examples/srlatch/README.md`'s
-"Reproducing it" for the working invocation. `examples/ringosc/README.md`'s
-"Reproducing this" carries the rest of the plan: how to wire all 192
-`mosbius.sym` config pins from its `B` (pin box) lines, and why those
-coordinates must be generated rather than typed -- xschem merges net names
-only across wire segments that genuinely touch, so one coordinate off by
-a hair gives you a schematic that looks right, netlists without complaint,
-and has a floating pin in it. Netlisting is handled by the
-repo-root `xschemrc` as long as xschem runs from the repo root; that run took
-54s wall clock, essentially all sky130A model load.
+**The other unlock: this dev host's 1.9GB RAM is not enough**, even
+filtered down to ~90 of the 188 switch instances (confirmed OOM). The user
+has a second, occasionally-available machine with more RAM -- that's what
+actually ran the 93.5MHz result, interactively in xschem, measuring
+`v(out)` (not `v(out_ref)`, the testbench's own parallel *ideal*
+discrete-transistor reference circuit with no switch matrix at all --
+easy to grab by mistake, reads ~2.09GHz). A script for reproducing this
+headlessly now exists: `tools/run_ringo_full_sim.sh` (netlists
+`tb_mosbius_ringo.sch` unmodified, patches only the generated `build/`
+netlist's `.control` block to `wrdata` instead of interactive `plot` so it
+works headless, runs ngspice, measures the period). **Currently untracked
+in git** -- decide whether to commit it before relying on it surviving a
+fresh checkout.
 
-Level-2 is the case that `xschemrc` does *not* cover, and it is worth knowing
-before starting. `ttsky-mini-mosbius/xschem/mosbius.sym` resolves its own
-sub-symbols (`tt_asw_3v3` and friends) by bare name relative to where xschem
-is running, so that netlist has to be produced from inside
+**Ruled out, don't re-test:** pad/ESD/bond-wire loading (the real
+`pad_model.sym` contributes only 250fF at the chip-side node once the
+1nH bond wire and two series resistors isolate it from its bigger
+2pF/3pF stages further out -- measuring pre- vs. post-pad gave the same
+period to within noise); and a flat lumped capacitance standing in for
+an open switch's off-state loading (an MVP attempt -- real transistor
+model when closed, single 9.9fF cap when open -- only reached ~365MHz/
+~12.2x too fast, vs. 93.5MHz/~3.1x for the real full switch matrix. The
+lesson, not just the number: an open `tt_asw_3v3`'s real contribution
+isn't well approximated by one flat capacitance value, so don't reach for
+that shortcut again expecting it to hold up).
+
+**What's still untested, roughly in order of likely payoff:**
+1. The 93.5MHz result is for `tb_mosbius_ringo.sch`'s own baked-in ring
+   config, not the exact measured bitstream
+   (`380088007001000010000404250109000400000040000014`, per
+   `examples/ringosc/README.md`) -- same class of 3-stage ring, not a
+   strict apples-to-apples. Re-run the same full-switch-matrix approach
+   against that exact bitstream's config for a real comparison.
+2. The within-column row-to-row coupling capacitance (~43fF between
+   adjacent switches in one `asw_col_*` column, a real value found via
+   magic PEX extraction of `ttsky-mini-mosbius/mag/asw_col_a.mag` with
+   `cthresh=5fF`/`rthresh=10Ω`) was skipped for simplicity, twice. Unlike
+   the ruled-out flat open-switch cap, this one is a measured layout
+   value, not a guess -- worth adding on top of the full real-transistor
+   model.
+3. Only the "tt" (typical) process corner was tried.
+4. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
+   between real switch-matrix devices) hasn't been tried at all yet --
+   an early analytical estimate suggested it's negligible, but that was
+   before the 93.5MHz baseline existed and is worth re-checking now.
+
+**Reusable groundwork from this pass, if any of the above needs it:**
+a full, verified static mapping from `mosbius/bitmap.py`'s 156
+switch-matrix bits (chain positions 0-155, grouped in 26 columns of 6) to
+`ttsky-mini-mosbius/mag/asw_matrix.mag`'s 26 physical column instances (no
+LVS needed -- matched by x-coordinate order, exact type-sequence match)
+plus the row order within a column (physical array index is the *reverse*
+of the RTL's per-column row order `[1,4,2,5,3,6]` -- confirmed against all
+5 real `ua[]` pads, not guessed). Netgen/LVS-based net-correspondence was
+tried and abandoned as unnecessarily heavyweight for this -- the static
+mapping above supersedes it; don't redo the LVS route.
+
+---
+
+Original plan (superseded above, kept for the parts still relevant to a
+from-scratch hand-built testbench if the upstream-testbench route above
+ever stops being viable): the mechanism for the accurate version is
+`mosbius/spice.py`'s `render_config_spice()`, which emits a tie for all 192
+config pins of `mosbius.sym`, so a routed `SwitchConfig` can be simulated
+through the real switch matrix with no behavioural model of the shift
+register (SPEC.md §3.7). Budget ~2 min of sky130A model load per run (see
+CLAUDE.md).
+
+`examples/ringosc/README.md`'s "Reproducing this" has the plan: how to wire
+all 192 `mosbius.sym` config pins from its `B` (pin box) lines, and why
+those coordinates must be generated rather than typed -- xschem merges net
+names only across wire segments that genuinely touch, so one coordinate off
+by a hair gives you a schematic that looks right, netlists without
+complaint, and has a floating pin in it.
+
+`ttsky-mini-mosbius/xschem/mosbius.sym` resolves its own sub-symbols
+(`tt_asw_3v3` and friends) by bare name relative to where xschem is
+running, so that netlist has to be produced from inside
 `ttsky-mini-mosbius/xschem` -- a different working directory, hence a
 different `xschemrc`, hence a different `netlist_dir`. Either add that
 directory to the repo `xschemrc`'s `XSCHEM_LIBRARY_PATH` and check the bare
