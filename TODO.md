@@ -35,24 +35,24 @@ longer exists.
 
 ## 1. Level-2 simulation of the routed design
 
-**Status as of 2026-08-22: real progress, not closed.** Best *validated*
-result is **93.5MHz simulated vs. ~30MHz on real silicon (~3.1x too fast)**
--- down from an earlier "no switch-matrix simulation possible at all" state
-and an intermediate hand-built attempt that only reached ~12x too fast. A
-row-coupling-capacitance experiment briefly reported 78.81MHz but that
-result was **retracted the same day** -- a real bug (coupling caps inserted
-at the wrong netlist scope, disconnected from the actual switch nodes, see
-`tools/run_ringo_row_coupling.sh`'s own history) made it invalid. The
-script is now fixed and verified, but not yet re-run to a real number --
-see memory for the full story before citing either number. Full reasoning,
-dead ends, and exact numbers are in this project's memory
+**Status as of 2026-08-22: real progress, not closed.** Best validated
+result is **67.66MHz simulated vs. ~30MHz on real silicon (~2.26x too
+fast)** -- down from an earlier "no switch-matrix simulation possible at
+all" state, an intermediate hand-built attempt that only reached ~12x too
+fast, and a 93.5MHz milestone (~3.1x too fast) improved on by the
+row-coupling capacitance below. (An earlier "78.81MHz" row-coupling result
+was briefly reported and retracted the same day -- a real bug, coupling
+caps inserted at the wrong netlist scope, disconnected from the actual
+switch nodes. Fixed and re-run for the real 67.66MHz number above -- see
+memory for the full story if this comes up again.) Full reasoning, dead
+ends, and exact numbers are in this project's memory
 (`ring_oscillator_l2_sim` and `dc_resistance_validation` -- ask to recall
 them, or see below for the parts that matter for resuming in a fresh
 session/repo checkout). A separate, independent DC validation (different
 bitstream: real device + pad models matched a real multimeter reading,
 300Ω, to within ~1%, 303.4Ω simulated) strongly suggests the remaining gap
-is capacitance-related, not resistance/on-state modeling -- still the
-standing hypothesis, just not yet confirmed by a valid row-coupling result.
+is capacitance-related, not resistance/on-state modeling -- which the
+row-coupling result now confirms.
 
 **The unlock: use the submodule's own testbench, not a hand-built one.**
 `ttsky-mini-mosbius/xschem/tb_mosbius_ringo.sch` is the upstream author's
@@ -100,23 +100,21 @@ The lesson, not just the number: an open `tt_asw_3v3`'s real contribution
 isn't well approximated by one flat capacitance value, so don't reach for
 that shortcut again expecting it to hold up).
 
-**Real but NOT yet validly measured: within-column coupling capacitance.**
-Corrected from an earlier "row-to-row adjacency" description (that was
-wrong; re-verified via a fresh magic PEX extraction of
+**Confirmed real, now with a valid measurement: within-column coupling
+capacitance.** Corrected from an earlier "row-to-row adjacency" description
+(that was wrong; re-verified via a fresh magic PEX extraction of
 `ttsky-mini-mosbius/mag/asw_col_a.mag`): every one of a column's 6 switches
 shares the same `mod` net (its one fixed device terminal), and each
 switch's own `bus` stub couples to that shared trace at a consistent
 ~43.19fF regardless of row. `tools/run_ringo_row_coupling.sh` applies this
-to all 150 real matrix-column switches, but its first version had a real
+to all 150 real matrix-column switches -- its first version had a real
 netlist-scoping bug (caps landed outside `.subckt mosbius`, disconnected
-from the real nodes) that invalidated its 78.81MHz result -- now fixed and
-verified structurally, but not yet re-run to a trustworthy number. **Rerun
-this before citing any row-coupling result.**
+from the real nodes), fixed and re-run: **67.66MHz, a genuine ~27.6%
+slowdown from the 93.5MHz baseline**, closing real ground (3.12x -> 2.26x
+too fast).
 
 **What's still untested, roughly in order of likely payoff:**
-1. A valid row-coupling-cap result -- the fix landed but hasn't been
-   re-run yet.
-2. `tools/run_ringo_measured_bitstream.sh`: the first true
+1. `tools/run_ringo_measured_bitstream.sh`: the first true
    apples-to-apples test against the real ~30MHz measurement in this
    investigation -- every prior result used either `tb_mosbius_ringo.sch`'s
    own baked-in config or this project's own `ring.sch`, neither of which
@@ -125,12 +123,13 @@ this before citing any row-coupling result.**
    models on all three of its package pins (all three loop connections are
    pinned in this bitstream, no isolation buffer) plus the row-coupling
    cap. Verified structurally, not yet run to completion (needs the
-   higher-RAM machine).
-3. Only the "tt" (typical) process corner was tried.
-4. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
+   higher-RAM machine) -- top priority now.
+2. Only the "tt" (typical) process corner was tried.
+3. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
    between real switch-matrix devices) hasn't been tried at all yet --
    an early analytical estimate suggested it's negligible, but that was
-   before the 93.5MHz baseline existed and is worth re-checking now.
+   before either the 93.5MHz or 67.66MHz baselines existed and is worth
+   re-checking now.
 
 **Reusable groundwork from this pass, if any of the above needs it:**
 a full, verified static mapping from `mosbius/bitmap.py`'s 156
