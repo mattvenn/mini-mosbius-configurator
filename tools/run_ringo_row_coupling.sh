@@ -81,19 +81,37 @@ for line in lines:
 
 assert n_matched == 150, f"expected 150 real matrix-column switches, matched {n_matched} -- xschem's netlist format or instance count may have changed, check before trusting this run"
 
-# Insert the coupling caps right before the .control block (same
-# 3-space-indented-.control-block netlist as always -- insert before the
-# bare ".control" line, not inside it).
+# BUG FIX (2026-08-22): these caps reference `mod`/`bus` node names that
+# are local to .subckt mosbius's internal hierarchy. Inserting them before
+# the bare ".control" line put them at TOP-LEVEL scope, outside any
+# .subckt/.ends block -- which does NOT connect to the real internal
+# nodes of the same name. SPICE subcircuit-internal nodes are scoped to
+# that subcircuit; a top-level element referencing the same bare name
+# creates a separate, disconnected phantom node instead. Confirmed
+# empirically (a minimal scope test) before trusting this diagnosis --
+# the original 150 caps were floating and had zero real effect, and the
+# "78.81MHz" result this script previously produced does not reflect the
+# row-coupling capacitance at all. Real fix: insert the caps INSIDE
+# .subckt mosbius's body, right after its (possibly multi-line,
+# "+"-continued) port header, before any other content.
 out_lines = []
 inserted = False
-for line in lines:
-    if not inserted and line == ".control":
+i = 0
+while i < len(lines):
+    line = lines[i]
+    out_lines.append(line)
+    if not inserted and line.startswith(".subckt mosbius "):
+        i += 1
+        while i < len(lines) and lines[i].startswith("+"):
+            out_lines.append(lines[i])
+            i += 1
         out_lines.append("* Row-coupling caps added by tools/run_ringo_row_coupling.sh")
         out_lines.extend(coupling_lines)
         out_lines.append("")
         inserted = True
-    out_lines.append(line)
-assert inserted, "could not find the .control block to insert coupling caps before"
+        continue
+    i += 1
+assert inserted, "could not find .subckt mosbius to insert coupling caps inside"
 
 text = "\n".join(out_lines)
 
