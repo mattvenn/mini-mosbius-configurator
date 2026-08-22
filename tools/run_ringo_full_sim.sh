@@ -98,11 +98,21 @@ if not t:
     print("No data in build/ringo_full_tb.txt -- simulation likely didn't complete. Check ngspice output above for errors.")
     sys.exit(1)
 
-mid = (max(v) + min(v)) / 2
-ps = periods(t, v, mid)
+# Restrict to steady state before computing the threshold -- the global
+# min/max otherwise includes the 0V startup transient, which skews the
+# midpoint low enough to miss real steady-state crossings (found the hard
+# way on run_ring_pad_loaded.sh/run_ringo_no_stage2_pad.sh; this script
+# hadn't been fixed the same way yet).
+steady = [(ti, vi) for ti, vi in zip(t, v) if ti > 20e-9]
+if len(steady) < 10:
+    print(f"Only {len(steady)} points after the 20ns startup cutoff -- widen the window or check the run completed.")
+    sys.exit(1)
+st, sv = zip(*steady)
+mid = (max(sv) + min(sv)) / 2
+ps = periods(list(st), list(sv), mid)
 if len(ps) < 3:
     print(f"Only {len(ps)} period(s) found on v(out) -- not enough to confirm oscillation. "
-          f"Signal range was {min(v):.3f}V to {max(v):.3f}V over {t[-1]*1e9:.1f}ns simulated. "
+          f"Signal range was {min(sv):.3f}V to {max(sv):.3f}V over {t[-1]*1e9:.1f}ns simulated. "
           f"May need a longer .tran window if the real frequency is much lower than expected.")
     sys.exit(0)
 
