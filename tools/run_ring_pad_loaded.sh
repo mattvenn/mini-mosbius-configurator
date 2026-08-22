@@ -126,8 +126,23 @@ assert not missing, f"port list has config nets not in bitmap.py's ALL_BITS: {mi
 # Positional call list: reuse each port's own name as our testbench net
 # name (so the Rcfg ties below reference the exact same net objects),
 # except the 3 power ports (renamed to match the working tb_mosbius_ringo
-# convention: VGND port -> net "GND") and ibias (-> net "Ibias").
-call_nets = ["GND" if t == "VGND" else ("Ibias" if t == "ibias" else t) for t in toks]
+# convention: VGND port -> net "GND") and ibias (-> net "Ibias"). Also
+# rename bus_A[1] specifically to a bracket-free alias: it's the one net
+# we need to measure with v(...) inside the .control block below, and
+# ngspice's expression parser treats [n] as vector-indexing syntax there
+# (not literal name text) -- both `wrdata file v(bus_A[1])` directly and
+# `let alias = v(bus_A[1])` were tried and both failed ("bad v() syntax" /
+# "vector bus_a is not available"). Elsewhere in the netlist (device
+# connections, Rcfg ties, .subckt port lists) brackets in net names are
+# completely fine -- this only matters for names referenced inside .control
+# expressions, so only this one net needs renaming, not every bus_A[n].
+BUS_A1_ALIAS = "bus_a1_net"
+call_nets = [
+    "GND" if t == "VGND" else
+    ("Ibias" if t == "ibias" else
+     (BUS_A1_ALIAS if t == "bus_A[1]" else t))
+    for t in toks
+]
 
 def wrap_call(nets, width=10):
     lines = ["X1 " + " ".join(nets[:width])]
@@ -162,19 +177,20 @@ Ibias GND Ibias 100u
 
 {rcfg_lines}
 
-* The one real pad on this design's one real package pin (ua1 = bus_A[1]).
-* pin=out_pad (external/probe side), mod=bus_A[1] (same net the X1 call
-* above already uses for that position), VGND=GND.
-Xpad_ua1 GND out_pad bus_A[1] pad_model
+* The one real pad on this design's one real package pin (ua1 = bus_A[1],
+* renamed to bracket-free "{BUS_A1_ALIAS}" everywhere it's used as a net --
+* see the call_nets comment above for why).
+* pin=out_pad (external/probe side), mod={BUS_A1_ALIAS} (same net the X1
+* call above already uses for that position), VGND=GND.
+Xpad_ua1 GND out_pad {BUS_A1_ALIAS} pad_model
 
-.nodeset v(bus_A[1])=0
+.nodeset v({BUS_A1_ALIAS})=0
 .control
    save all
    set temp = 27
    tran 100p 500n UIC
-   let bus_a1_alias = v(bus_A[1])
    wrdata ring_pad_loaded_out_pad.txt v(out_pad)
-   wrdata ring_pad_loaded_bus_a1.txt bus_a1_alias
+   wrdata ring_pad_loaded_bus_a1.txt v({BUS_A1_ALIAS})
 .endc
 
 """
