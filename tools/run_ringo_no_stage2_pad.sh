@@ -49,7 +49,13 @@ src, dst = sys.argv[1], sys.argv[2]
 text = open(src).read()
 
 old = "x2[1] GND n1 bus_A[1] pad_model"
-new = "Rshort_stage2pad n1 bus_A[1] 1m  * pad on stage 2's input removed for comparison"
+# Comment on its own line (a trailing "* comment" after other tokens is NOT
+# valid SPICE -- * only starts a comment at the start of a line), and no
+# apostrophe (ngspice uses ' for expression syntax, e.g. the ad="'int(...)'"
+# parameters elsewhere in this netlist -- a stray ' in what should be plain
+# text breaks its parser with a confusing "closing } not found" error).
+new = ("* pad on stage 2 input removed for comparison\n"
+       "Rshort_stage2pad n1 bus_A[1] 1m")
 assert text.count(old) == 1, f"expected exactly one match, found {text.count(old)}"
 text = text.replace(old, new)
 
