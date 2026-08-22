@@ -36,12 +36,19 @@ longer exists.
 ## 1. Level-2 simulation of the routed design
 
 **Status as of 2026-08-22: real progress, not closed.** Best result so far is
-**93.5MHz simulated vs. ~30MHz on real silicon (~3.1x too fast)** -- down from
-an earlier "no switch-matrix simulation possible at all" state, and from an
-intermediate hand-built attempt that only reached ~12x too fast. Full
-reasoning, dead ends, and the exact numbers are in this project's memory
-(`ring_oscillator_l2_sim` -- ask to recall it, or see below for the parts
-that matter for resuming in a fresh session/repo checkout).
+**78.81MHz simulated vs. ~30MHz on real silicon (~2.63x too fast)** -- down
+from an earlier "no switch-matrix simulation possible at all" state, an
+intermediate hand-built attempt that only reached ~12x too fast, and a
+93.5MHz milestone (~3.1x too fast) that the row-coupling capacitance below
+has since improved on. Full reasoning, dead ends, and the exact numbers are
+in this project's memory (`ring_oscillator_l2_sim` and
+`dc_resistance_validation` -- ask to recall them, or see below for the parts
+that matter for resuming in a fresh session/repo checkout). A separate,
+independent DC validation (different bitstream: real device + pad models
+matched a real multimeter reading, 300Ω, to within ~1%, 303.4Ω simulated)
+strongly suggests the remaining gap is capacitance-related, not
+resistance/on-state modeling -- which is exactly what the row-coupling cap
+result below bore out.
 
 **The unlock: use the submodule's own testbench, not a hand-built one.**
 `ttsky-mini-mosbius/xschem/tb_mosbius_ringo.sch` is the upstream author's
@@ -70,41 +77,50 @@ easy to grab by mistake, reads ~2.09GHz). A script for reproducing this
 headlessly now exists: `tools/run_ringo_full_sim.sh` (netlists
 `tb_mosbius_ringo.sch` unmodified, patches only the generated `build/`
 netlist's `.control` block to `wrdata` instead of interactive `plot` so it
-works headless, runs ngspice, measures the period). **Currently untracked
-in git** -- decide whether to commit it before relying on it surviving a
-fresh checkout.
+works headless, runs ngspice, measures the period). Committed, along with
+`tools/run_ringo_no_stage2_pad.sh`, `tools/run_ring_pad_loaded.sh`, and
+`tools/run_ringo_row_coupling.sh` (the current best-result script) --
+all four follow the same pattern and all need the higher-RAM machine.
 
-**Ruled out, don't re-test:** pad/ESD/bond-wire loading (the real
-`pad_model.sym` contributes only 250fF at the chip-side node once the
-1nH bond wire and two series resistors isolate it from its bigger
-2pF/3pF stages further out -- measuring pre- vs. post-pad gave the same
-period to within noise); and a flat lumped capacitance standing in for
-an open switch's off-state loading (an MVP attempt -- real transistor
-model when closed, single 9.9fF cap when open -- only reached ~365MHz/
-~12.2x too fast, vs. 93.5MHz/~3.1x for the real full switch matrix. The
-lesson, not just the number: an open `tt_asw_3v3`'s real contribution
+**Ruled out, don't re-test:** pad/ESD/bond-wire loading *on non-loop-critical
+nodes* (the real `pad_model.sym` contributes only 250fF at the chip-side
+node once the 1nH bond wire and two series resistors isolate it -- measuring
+pre- vs. post-pad on the testbench's output-buffer tap gave the same period
+to within noise; note pad loading on a *loop-critical* node did matter,
+~22%, when tested separately -- it's driver-strength-dependent, not a fixed
+rule, see memory for the full comparison); and a flat lumped capacitance
+standing in for an open switch's off-state loading (an MVP attempt -- real
+transistor model when closed, single 9.9fF cap when open -- only reached
+~365MHz/~12.2x too fast, vs. 93.5MHz/~3.1x for the real full switch matrix.
+The lesson, not just the number: an open `tt_asw_3v3`'s real contribution
 isn't well approximated by one flat capacitance value, so don't reach for
 that shortcut again expecting it to hold up).
 
+**Confirmed real and already included in the 78.81MHz result:** the
+within-column coupling capacitance -- corrected from an earlier "row-to-row
+adjacency" description (that was wrong; re-verified via a fresh magic PEX
+extraction of `ttsky-mini-mosbius/mag/asw_col_a.mag`): every one of a
+column's 6 switches shares the same `mod` net (its one fixed device
+terminal), and each switch's own `bus` stub couples to that shared trace at
+a consistent ~43.19fF regardless of row. Applied to all 150 real
+matrix-column switches via `tools/run_ringo_row_coupling.sh` -- real
+~16% slowdown (93.5MHz -> 78.81MHz), closing real ground.
+
 **What's still untested, roughly in order of likely payoff:**
-1. The 93.5MHz result is for `tb_mosbius_ringo.sch`'s own baked-in ring
+1. The 78.81MHz result is for `tb_mosbius_ringo.sch`'s own baked-in ring
    config, not the exact measured bitstream
    (`380088007001000010000404250109000400000040000014`, per
    `examples/ringosc/README.md`) -- same class of 3-stage ring, not a
-   strict apples-to-apples. Re-run the same full-switch-matrix approach
-   against that exact bitstream's config for a real comparison.
-2. The within-column row-to-row coupling capacitance (~43fF between
-   adjacent switches in one `asw_col_*` column, a real value found via
-   magic PEX extraction of `ttsky-mini-mosbius/mag/asw_col_a.mag` with
-   `cthresh=5fF`/`rthresh=10Ω`) was skipped for simplicity, twice. Unlike
-   the ruled-out flat open-switch cap, this one is a measured layout
-   value, not a guess -- worth adding on top of the full real-transistor
-   model.
-3. Only the "tt" (typical) process corner was tried.
-4. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
+   strict apples-to-apples with the real ~30MHz measurement. Re-run the
+   same full-switch-matrix-plus-row-coupling approach against that exact
+   bitstream's config for a real comparison -- this hasn't been done for
+   ANY result in this investigation yet.
+2. Only the "tt" (typical) process corner was tried.
+3. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
    between real switch-matrix devices) hasn't been tried at all yet --
    an early analytical estimate suggested it's negligible, but that was
-   before the 93.5MHz baseline existed and is worth re-checking now.
+   before either the 93.5MHz or 78.81MHz baselines existed and is worth
+   re-checking now.
 
 **Reusable groundwork from this pass, if any of the above needs it:**
 a full, verified static mapping from `mosbius/bitmap.py`'s 156
