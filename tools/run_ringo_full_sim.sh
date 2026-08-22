@@ -36,10 +36,12 @@ python3 - "$NETLIST" <<'PYEOF'
 import re, sys
 path = sys.argv[1]
 text = open(path).read()
-text = text.replace(
-    "plot v(out)\nplot v(out_ref)",
-    "wrdata ringo_full_tb.txt v(out) v(out_ref)"
-)
+# Note the 3-space indentation in the .control block -- an unindented
+# match silently does nothing (no error), leaving the interactive `plot`
+# in place and producing no wrdata output under `ngspice -b`.
+old_ctrl = "   plot v(out)\n   plot v(out_ref)"
+assert old_ctrl in text, "control block plot lines not found -- check the netlist's .control section"
+text = text.replace(old_ctrl, "   wrdata ringo_full_tb.txt v(out) v(out_ref)")
 open(path, "w").write(text)
 PYEOF
 
