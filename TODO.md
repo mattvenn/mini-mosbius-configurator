@@ -35,20 +35,24 @@ longer exists.
 
 ## 1. Level-2 simulation of the routed design
 
-**Status as of 2026-08-22: real progress, not closed.** Best result so far is
-**78.81MHz simulated vs. ~30MHz on real silicon (~2.63x too fast)** -- down
-from an earlier "no switch-matrix simulation possible at all" state, an
-intermediate hand-built attempt that only reached ~12x too fast, and a
-93.5MHz milestone (~3.1x too fast) that the row-coupling capacitance below
-has since improved on. Full reasoning, dead ends, and the exact numbers are
-in this project's memory (`ring_oscillator_l2_sim` and
-`dc_resistance_validation` -- ask to recall them, or see below for the parts
-that matter for resuming in a fresh session/repo checkout). A separate,
-independent DC validation (different bitstream: real device + pad models
-matched a real multimeter reading, 300Ω, to within ~1%, 303.4Ω simulated)
-strongly suggests the remaining gap is capacitance-related, not
-resistance/on-state modeling -- which is exactly what the row-coupling cap
-result below bore out.
+**Status as of 2026-08-22: real progress, not closed.** Best *validated*
+result is **93.5MHz simulated vs. ~30MHz on real silicon (~3.1x too fast)**
+-- down from an earlier "no switch-matrix simulation possible at all" state
+and an intermediate hand-built attempt that only reached ~12x too fast. A
+row-coupling-capacitance experiment briefly reported 78.81MHz but that
+result was **retracted the same day** -- a real bug (coupling caps inserted
+at the wrong netlist scope, disconnected from the actual switch nodes, see
+`tools/run_ringo_row_coupling.sh`'s own history) made it invalid. The
+script is now fixed and verified, but not yet re-run to a real number --
+see memory for the full story before citing either number. Full reasoning,
+dead ends, and exact numbers are in this project's memory
+(`ring_oscillator_l2_sim` and `dc_resistance_validation` -- ask to recall
+them, or see below for the parts that matter for resuming in a fresh
+session/repo checkout). A separate, independent DC validation (different
+bitstream: real device + pad models matched a real multimeter reading,
+300Ω, to within ~1%, 303.4Ω simulated) strongly suggests the remaining gap
+is capacitance-related, not resistance/on-state modeling -- still the
+standing hypothesis, just not yet confirmed by a valid row-coupling result.
 
 **The unlock: use the submodule's own testbench, not a hand-built one.**
 `ttsky-mini-mosbius/xschem/tb_mosbius_ringo.sch` is the upstream author's
@@ -96,31 +100,37 @@ The lesson, not just the number: an open `tt_asw_3v3`'s real contribution
 isn't well approximated by one flat capacitance value, so don't reach for
 that shortcut again expecting it to hold up).
 
-**Confirmed real and already included in the 78.81MHz result:** the
-within-column coupling capacitance -- corrected from an earlier "row-to-row
-adjacency" description (that was wrong; re-verified via a fresh magic PEX
-extraction of `ttsky-mini-mosbius/mag/asw_col_a.mag`): every one of a
-column's 6 switches shares the same `mod` net (its one fixed device
-terminal), and each switch's own `bus` stub couples to that shared trace at
-a consistent ~43.19fF regardless of row. Applied to all 150 real
-matrix-column switches via `tools/run_ringo_row_coupling.sh` -- real
-~16% slowdown (93.5MHz -> 78.81MHz), closing real ground.
+**Real but NOT yet validly measured: within-column coupling capacitance.**
+Corrected from an earlier "row-to-row adjacency" description (that was
+wrong; re-verified via a fresh magic PEX extraction of
+`ttsky-mini-mosbius/mag/asw_col_a.mag`): every one of a column's 6 switches
+shares the same `mod` net (its one fixed device terminal), and each
+switch's own `bus` stub couples to that shared trace at a consistent
+~43.19fF regardless of row. `tools/run_ringo_row_coupling.sh` applies this
+to all 150 real matrix-column switches, but its first version had a real
+netlist-scoping bug (caps landed outside `.subckt mosbius`, disconnected
+from the real nodes) that invalidated its 78.81MHz result -- now fixed and
+verified structurally, but not yet re-run to a trustworthy number. **Rerun
+this before citing any row-coupling result.**
 
 **What's still untested, roughly in order of likely payoff:**
-1. The 78.81MHz result is for `tb_mosbius_ringo.sch`'s own baked-in ring
-   config, not the exact measured bitstream
-   (`380088007001000010000404250109000400000040000014`, per
-   `examples/ringosc/README.md`) -- same class of 3-stage ring, not a
-   strict apples-to-apples with the real ~30MHz measurement. Re-run the
-   same full-switch-matrix-plus-row-coupling approach against that exact
-   bitstream's config for a real comparison -- this hasn't been done for
-   ANY result in this investigation yet.
-2. Only the "tt" (typical) process corner was tried.
-3. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
+1. A valid row-coupling-cap result -- the fix landed but hasn't been
+   re-run yet.
+2. `tools/run_ringo_measured_bitstream.sh`: the first true
+   apples-to-apples test against the real ~30MHz measurement in this
+   investigation -- every prior result used either `tb_mosbius_ringo.sch`'s
+   own baked-in config or this project's own `ring.sch`, neither of which
+   was ever measured on real silicon. Builds the exact measured bitstream
+   (`380088007001000010000404250109000400000040000014`) with real pad
+   models on all three of its package pins (all three loop connections are
+   pinned in this bitstream, no isolation buffer) plus the row-coupling
+   cap. Verified structurally, not yet run to completion (needs the
+   higher-RAM machine).
+3. Only the "tt" (typical) process corner was tried.
+4. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
    between real switch-matrix devices) hasn't been tried at all yet --
    an early analytical estimate suggested it's negligible, but that was
-   before either the 93.5MHz or 78.81MHz baselines existed and is worth
-   re-checking now.
+   before the 93.5MHz baseline existed and is worth re-checking now.
 
 **Reusable groundwork from this pass, if any of the above needs it:**
 a full, verified static mapping from `mosbius/bitmap.py`'s 156
