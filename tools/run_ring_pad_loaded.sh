@@ -212,11 +212,17 @@ python3 - <<'PYEOF'
 import sys
 
 def load(path):
+    # Defensive: take the first two whitespace-separated fields as
+    # (time, value) and ignore anything after -- see run_ringo_full_sim.sh
+    # for why an exact column count is fragile here (ngspice's wrdata
+    # duplicates the time column per vector if a call is ever given more
+    # than one, which isn't the case in this script's own calls, but this
+    # loader is copy-pasted between all three scripts so keep it robust).
     t, v = [], []
     with open(path) as f:
         for line in f:
             parts = line.split()
-            if len(parts) != 2:
+            if len(parts) < 2:
                 continue
             try:
                 t.append(float(parts[0]))

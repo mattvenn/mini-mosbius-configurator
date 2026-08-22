@@ -38,10 +38,15 @@ path = sys.argv[1]
 text = open(path).read()
 # Note the 3-space indentation in the .control block -- an unindented
 # match silently does nothing (no error), leaving the interactive `plot`
-# in place and producing no wrdata output under `ngspice -b`.
+# in place and producing no wrdata output under `ngspice -b`. Also: a
+# SINGLE wrdata call with two vectors duplicates the time column per
+# vector (time,v(out),time,v(out_ref) -- 4 columns per line, not 2), which
+# silently broke this script's own parser below (every line failed a
+# 2-column check and got skipped, "No data" with no real error). Two
+# separate single-vector calls instead -- we only need v(out) anyway.
 old_ctrl = "   plot v(out)\n   plot v(out_ref)"
 assert old_ctrl in text, "control block plot lines not found -- check the netlist's .control section"
-text = text.replace(old_ctrl, "   wrdata ringo_full_tb.txt v(out) v(out_ref)")
+text = text.replace(old_ctrl, "   wrdata ringo_full_tb.txt v(out)")
 open(path, "w").write(text)
 PYEOF
 
@@ -60,11 +65,17 @@ python3 - <<'PYEOF'
 import sys
 
 def load(path):
+    # Defensive: take the first two whitespace-separated fields as
+    # (time, value) and ignore anything after. wrdata's exact column count
+    # can vary (e.g. it duplicates the time column per extra vector if a
+    # single call is ever given more than one), so requiring an exact
+    # column count is fragile -- this already broke once on a 4-column
+    # file when the script assumed 2.
     t, v = [], []
     with open(path) as f:
         for line in f:
             parts = line.split()
-            if len(parts) != 2:
+            if len(parts) < 2:
                 continue
             try:
                 t.append(float(parts[0]))
