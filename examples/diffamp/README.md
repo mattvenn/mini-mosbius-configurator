@@ -106,16 +106,82 @@ docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
 python3 -m mosbius.cli route build/diffamp.spice
 ```
 
-## What's not here yet
+## Simulation
 
-Every other example in this directory ships a Level-1 simulation plot
-(SPEC.md §3.1b: real device sizing, no switch-matrix parasitics). This one
-doesn't -- simulating a design that actually draws current through
-`ibias` (rather than the standalone-FET examples, which never touch it) is
-TODO.md §1's still-open work, not the (since closed) tail-symbol item's,
-and this example is scoped to proving the *drawing and routing* half of
-the tail feature. Worth knowing for whoever picks up §1 next: this is the
-first committed design where
-`ibias` needs a real forced current in the testbench for the mirror and
-the tail bank to do anything meaningful, which none of `inverter`/`srlatch`
-/`ringosc` needed.
+`diffamp.sch` netlists to the *same real sky130 transistor sizing* as the
+hardware blocks it stands in for, just without the switch-matrix overhead
+in between (SPEC.md §3.1b's Level-1 "ideal" simulation).
+
+![Diff amp Level-1 waveform: out steps up and down in decreasing increments as +-2/5/10/20/40mV differential steps are applied to ua1 against ua2 held at 1.5V, visibly compressing at the largest steps](diffamp.png)
+
+`ua2` (inm) is held at a fixed 1.5V common-mode bias; `ua1` (inp) steps
+through a differential offset of 2, 5, 10, 20 and 40mV, then the same five
+values negative, each held for 50ns. `out` starts at **2.0998V** with both
+inputs equal -- not railed to either supply, confirming the mirror and
+tail bank are both biased into their normal operating region, not cut off
+or saturated by the (arbitrarily chosen) 1.5V common-mode point.
+
+The response is genuine differential gain, not a digital switch: each
+step moves `out` by roughly 21x itself near the origin, and that ratio
+holds essentially flat out to about ±10mV before visibly compressing
+towards the rails at the largest steps -- exactly the large-signal
+transfer characteristic a single differential pair is supposed to have.
+
+| input step | output delta | gain (V/V) |
+|---|---|---|
+| +2mV | +42.7mV | 21.3 |
+| +5mV | +106.6mV | 21.3 |
+| +10mV | +212.3mV | 21.2 |
+| +20mV | +418.1mV | 20.9 |
+| +40mV | +780.6mV | 19.5 |
+| -2mV | -42.7mV | 21.4 |
+| -5mV | -106.9mV | 21.4 |
+| -10mV | -213.5mV | 21.3 |
+| -20mV | -424.0mV | 21.2 |
+| -40mV | -822.1mV | 20.6 |
+
+Small-signal gain is **~21.3 V/V (26.6dB)**, symmetric to within rounding
+either side of the bias point, falling to ~19.5-20.6 V/V by ±40mV as the
+pair starts steering all of the tail current to one side.
+
+### Reproducing it
+
+Netlist the schematic as above, then prepend stimulus and append the
+analysis to it (strip its trailing `.end` first), same recipe as
+`examples/srlatch/README.md`'s. `Iibias` is the part every other example
+in this directory could skip: `ibias` is a current *input*, not a
+voltage, and it has to be forced for the tail bank and mirror to do
+anything meaningful at all (SPEC.md §3.4b, 100uA is upstream's own
+testbench convention).
+
+```spice
+.lib /foss/pdks/sky130A/libs.tech/ngspice/sky130.lib.spice tt
+Vapwr  VAPWR 0 3.3
+Vgnd   VGND  0 0
+Iibias VAPWR ibias 100u
+Vinp   ua1 0 PWL(0 1.5 49n 1.5 50n 1.502 99n 1.502 100n 1.505 ...)
+Vinm   ua2 0 1.5
+* ... netlist body ...
+.tran 500p 649n
+.control
+run
+wrdata diffamp_sweep.txt v(ua1) v(ua2) v(out)
+.endc
+```
+
+```bash
+python3 tools/plot_tb.py build/diffamp_sweep.txt examples/diffamp/diffamp.png \
+  "Diff amp (Level-1): +-2/5/10/20/40mV steps on ua1, ua2 fixed 1.5V" \
+  "ua1 (inp):0" "ua2 (inm):1" "out:2"
+```
+
+`plot_tb.py`/`ngspice` need `numpy`/`matplotlib`, which live in the
+container's Python, not the host's -- run both inside the same
+`docker run` invocation CLAUDE.md documents for xschem/ngspice, not on
+the host.
+
+The full 13-level `PWL(...)` (the actual steps table above, each held
+50ns with a 1ns transition to avoid ngspice's "non-increasing PWL time
+points" warning) is mechanical to generate but tedious to type by hand;
+build it with a short loop over `[0, 2, 5, 10, 20, 40, 0, -2, -5, -10,
+-20, -40, 0]` rather than transcribing it.
