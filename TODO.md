@@ -37,34 +37,39 @@ longer exists.
 
 **Status as of 2026-08-22: real progress, not closed.** Best result --
 and the first genuine apples-to-apples comparison in this whole
-investigation -- is **42.92MHz simulated vs. ~30MHz on real silicon
-(~1.43x too fast)**, from `tools/run_ringo_measured_bitstream.sh`: the
-exact measured bitstream (`380088007001000010000404250109000400000040000014`,
-not a stand-in config), with real pad models on all three of its package
-pins and the row-coupling cap (below) applied. All three loop nodes agree
-to within noise (23.3008-23.3012ns), a good sign the sim converged
-cleanly. This is down from an earlier "no switch-matrix simulation
-possible at all" state, an intermediate hand-built attempt (~12x too
-fast), a 93.5MHz milestone (~3.1x too fast, on a *different* config --
-`tb_mosbius_ringo.sch`'s own baked-in one, never measured on real
-silicon), and 67.66MHz (~2.26x too fast, same wrong-config caveat, +
-row-coupling cap). Not yet known how much of the 93.5->42.92MHz drop is
-the exact-bitstream/3-real-pads switch vs. the row-coupling cap
-specifically -- worth isolating if pursued further. (An earlier "78.81MHz"
-row-coupling result was briefly reported and retracted the same day -- a
-real bug, coupling caps inserted at the wrong netlist scope, disconnected
-from the actual switch nodes. Fixed; 67.66MHz above is the real number for
-that specific test.) Full reasoning, dead ends, and exact numbers are in
-this project's memory (`ring_oscillator_l2_sim` and
-`dc_resistance_validation` -- ask to recall them, or see below for the
-parts that matter for resuming in a fresh session/repo checkout). A
-separate, independent DC validation (different bitstream: real device +
-pad models matched a real multimeter reading, 300Ω, to within ~1%, 303.4Ω
-simulated) strongly suggests the remaining gap is capacitance-related, not
-resistance/on-state modeling -- which the row-coupling result confirms.
-Given how close 42.92MHz already is, worth asking whether the remaining
-gap is worth chasing further or whether this answers the investigation's
-core question well enough.
+investigation -- is **37.62MHz simulated vs. ~30MHz on real silicon
+(~1.25x too fast)**, from `tools/run_ringo_measured_bitstream_wire_cap.sh`:
+the exact measured bitstream
+(`380088007001000010000404250109000400000040000014`, not a stand-in
+config), with real pad models on all three of its package pins, the
+row-coupling cap, and real bus-wire self-capacitance (20-40x bigger than
+an old, never-verified hand-estimate -- see below) all applied together.
+All three loop nodes agree to within noise (26.5841-26.5845ns), a good
+sign the sim converged cleanly. This is down from an earlier "no
+switch-matrix simulation possible at all" state, an intermediate
+hand-built attempt (~12x too fast), a 93.5MHz milestone (~3.1x too fast,
+on a *different* config -- `tb_mosbius_ringo.sch`'s own baked-in one,
+never measured on real silicon), 67.66MHz (~2.26x too fast, same
+wrong-config caveat, + row-coupling cap), and 42.92MHz (~1.43x too fast,
+the same exact-bitstream/pads/row-coupling combo as the current best, but
+without bus-wire capacitance). Not yet known how much of the total
+93.5->37.62MHz drop is attributable to which specific factor (exact
+bitstream+pads, row-coupling cap, bus-wire cap) -- each was added
+cumulatively, never isolated. (An earlier "78.81MHz" row-coupling result
+was briefly reported and retracted the same day -- a real bug, coupling
+caps inserted at the wrong netlist scope, disconnected from the actual
+switch nodes. Fixed; 67.66MHz above is the real number for that specific
+test.) Full reasoning, dead ends, and exact numbers are in this project's
+memory (`ring_oscillator_l2_sim` and `dc_resistance_validation` -- ask to
+recall them, or see below for the parts that matter for resuming in a
+fresh session/repo checkout). A separate, independent DC validation
+(different bitstream: real device + pad models matched a real multimeter
+reading, 300Ω, to within ~1%, 303.4Ω simulated) strongly suggests the
+remaining gap is capacitance-related, not resistance/on-state modeling --
+which both the row-coupling and bus-wire results confirm. Given how close
+37.62MHz already is, worth asking whether the remaining gap is worth
+chasing further or whether this answers the investigation's core question
+well enough.
 
 **The unlock: use the submodule's own testbench, not a hand-built one.**
 `ttsky-mini-mosbius/xschem/tb_mosbius_ringo.sch` is the upstream author's
@@ -125,18 +130,27 @@ from the real nodes), fixed and re-run: **67.66MHz, a genuine ~27.6%
 slowdown from the 93.5MHz baseline**, closing real ground (3.12x -> 2.26x
 too fast).
 
+**Also confirmed real, now included in the best result: bus-wire
+capacitance.** Every result before 2026-08-22's later pass left the
+horizontal bus wire itself as a zero-length ideal net (distinct from the
+row-coupling cap, a short-distance switch-to-column-terminal effect).
+Real magic PEX extraction of the full `ttsky-mini-mosbius/mag/asw_matrix.mag`
+(not just one column) gives the true full-length wire capacitance per
+bus row: `bus_A[1]`=885.88fF, `bus_A[2]`=874.86fF, `bus_A[3]`=864.71fF,
+`bus_B[2]`=1819.36fF, `bus_B[3]`=908.76fF -- all 20-40x bigger than an old
+hand-estimate (~30-50fF) that had justified skipping this. Applied via
+`tools/run_ringo_measured_bitstream_wire_cap.sh`: 42.92MHz -> 37.62MHz.
+
 **What's still untested, roughly in order of likely payoff:**
-1. Isolating how much of the 93.5->42.92MHz drop is the exact-bitstream
+1. Isolating how much of the 93.5->37.62MHz drop is the exact-bitstream
    (3 real pads, different topology) switch versus the row-coupling cap
-   specifically -- run the exact measured bitstream WITHOUT the coupling
-   cap to split credit. Not yet done.
-2. Only the "tt" (typical) process corner was tried.
-3. Real layout-extracted wire R/C (vs. today's zero-length ideal wiring
-   between real switch-matrix devices) hasn't been tried at all yet --
-   an early analytical estimate suggested it's negligible, but that was
-   before any of the 93.5/67.66/42.92MHz results existed and is worth
-   re-checking now.
-4. At ~1.43x too fast, it's worth explicitly deciding whether to keep
+   versus the bus-wire cap specifically -- each was added cumulatively,
+   never in isolation. Not yet done.
+2. Real layout wire *resistance* -- only capacitance has been added so
+   far; the same wire that carries this capacitance also has real series
+   resistance, untested.
+3. Only the "tt" (typical) process corner was tried.
+4. At ~1.25x too fast, it's worth explicitly deciding whether to keep
    chasing this gap or treat it as close enough -- not purely a technical
    question, ask the user.
 
