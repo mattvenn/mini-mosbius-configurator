@@ -38,14 +38,16 @@ longer exists.
 **Status as of 2026-08-22: real progress, not closed.** Best result --
 and the first genuine apples-to-apples comparison in this whole
 investigation -- is **37.62MHz simulated vs. ~30MHz on real silicon
-(~1.25x too fast)**, from `tools/run_ringo_measured_bitstream_wire_cap.sh`:
-the exact measured bitstream
-(`380088007001000010000404250109000400000040000014`, not a stand-in
-config), with real pad models on all three of its package pins, the
-row-coupling cap, and real bus-wire self-capacitance (20-40x bigger than
-an old, never-verified hand-estimate -- see below) all applied together.
-All three loop nodes agree to within noise (26.5841-26.5845ns), a good
-sign the sim converged cleanly. This is down from an earlier "no
+(~1.25x too fast), though this exact number needs a re-run with a
+since-corrected value before being fully trusted (see below -- likely to
+land slightly higher, i.e. slightly further from 30MHz, not lower)**, from
+`tools/run_ringo_measured_bitstream_wire_cap.sh`: the exact measured
+bitstream (`380088007001000010000404250109000400000040000014`, not a
+stand-in config), with real pad models on all three of its package pins,
+the row-coupling cap, and real bus-wire self-capacitance (20-40x bigger
+than an old, never-verified hand-estimate -- see below) all applied
+together. All three loop nodes agree to within noise (26.5841-26.5845ns),
+a good sign the sim converged cleanly. This is down from an earlier "no
 switch-matrix simulation possible at all" state, an intermediate
 hand-built attempt (~12x too fast), a 93.5MHz milestone (~3.1x too fast,
 on a *different* config -- `tb_mosbius_ringo.sch`'s own baked-in one,
@@ -99,9 +101,14 @@ headlessly now exists: `tools/run_ringo_full_sim.sh` (netlists
 `tb_mosbius_ringo.sch` unmodified, patches only the generated `build/`
 netlist's `.control` block to `wrdata` instead of interactive `plot` so it
 works headless, runs ngspice, measures the period). Committed, along with
-`tools/run_ringo_no_stage2_pad.sh`, `tools/run_ring_pad_loaded.sh`, and
-`tools/run_ringo_row_coupling.sh` (the current best-result script) --
-all four follow the same pattern and all need the higher-RAM machine.
+`tools/run_ringo_no_stage2_pad.sh`, `tools/run_ring_pad_loaded.sh`,
+`tools/run_ringo_row_coupling.sh`, `tools/run_ringo_measured_bitstream.sh`,
+and `tools/run_ringo_measured_bitstream_wire_cap.sh` (the current
+best-result script, pending the `bus_B[2]` correction above) -- all follow
+the same pattern and all need the higher-RAM machine except
+`tools/run_ringo_measured_bitstream_lowmem.sh`, which runs fine on this
+dev host directly but is a documented negative result, not a viable
+shortcut (see below).
 
 **Ruled out, don't re-test:** pad/ESD/bond-wire loading *on non-loop-critical
 nodes* (the real `pad_model.sym` contributes only 250fF at the chip-side
@@ -136,23 +143,77 @@ horizontal bus wire itself as a zero-length ideal net (distinct from the
 row-coupling cap, a short-distance switch-to-column-terminal effect).
 Real magic PEX extraction of the full `ttsky-mini-mosbius/mag/asw_matrix.mag`
 (not just one column) gives the true full-length wire capacitance per
-bus row: `bus_A[1]`=885.88fF, `bus_A[2]`=874.86fF, `bus_A[3]`=864.71fF,
-`bus_B[2]`=1819.36fF, `bus_B[3]`=908.76fF -- all 20-40x bigger than an old
-hand-estimate (~30-50fF) that had justified skipping this. Applied via
+bus row -- all roughly 20-40x bigger than an old hand-estimate (~30-50fF)
+that had justified skipping this. Applied via
 `tools/run_ringo_measured_bitstream_wire_cap.sh`: 42.92MHz -> 37.62MHz.
+**Correction (2026-08-22, later the same day): that run's `bus_B[2]` value
+(1819.36fF) was wrong**, found while independently re-extracting all 12
+rows for the reusable feature below -- it was measured through the special
+`asw_col_short` column assuming its per-index row order matches the
+regular, hardware-validated columns' `[6,3,5,2,4,1]` pattern; re-checking
+directly proved that wrong for `asw_col_short` specifically (its supposed
+row-2 node isn't even electrically the same net as the real `bus_B[2]`,
+measured through a regular column: **922.84fF**, roughly half the original
+value). The 37.62MHz headline number therefore has too much capacitance on
+one of its five bus-wire caps -- the true value is probably somewhat
+*higher* than 37.62MHz (less loading = faster), not yet re-run with the
+correction (needs the higher-RAM machine). Treat 37.62MHz as directionally
+right but not the final word until re-run with the corrected value (trivial
+now: use `mosbius/spice.py`'s `render_bus_wire_caps()` instead of the
+hand-copied constants in that script).
+
+**New reusable feature, real code not just a script (2026-08-22):
+`mosbius/spice.py`'s `BUS_WIRE_CAPACITANCE_F` + `render_bus_wire_caps()`.**
+All 12 bus rows' real capacitance (not just the 5 this investigation's
+bitstream happened to use), extracted once via the same full-matrix PEX
+recipe, committed as real data with tests (`tests/test_spice.py`) so future
+testbenches never need to re-run the slow (~5min) magic extraction --
+matches `render_config_spice()`'s existing pattern (include unconditionally
+alongside a `mosbius.sym` instance, ties to `VGND`). One row (`bus_B[5]`)
+couldn't be found as a distinctly-labeled node in either extraction attempt
+(an `ext2spice` net-naming quirk specific to that one row/column
+combination, not understood) -- uses `bus_A[5]`'s value as a same-row
+estimate, documented in the module rather than silently guessed.
+
+**Tried and rejected, real negative result: dropping open switches
+entirely.** Hypothesis: since the bus-wire cap (aggregate, whole-matrix)
+and the row-coupling cap (one column) looked like they might be measuring
+the same physical effect at different scales (26 columns x ~43fF ~= 1.1pF
+lines up with the ~900fF-1.8pF per-row values), maybe real transistor
+models are only needed for *closed* switches, with every *open* switch
+dropped from the netlist entirely (no transistor, no cap) and the bus-wire
+cap alone standing in for their aggregate contribution -- cutting the real
+transistor count from 188 to about a dozen, small enough to run on a normal
+1.9GB host without needing the second machine at all.
+**Tested directly (`tools/run_ringo_measured_bitstream_lowmem.sh`, ran
+successfully right here, no OOM): 63.17MHz -- not close to the 37.62MHz
+reference (68% higher, worse than even the 67.66MHz row-coupling-only
+result).** A real transistor's off-state electrical behaviour and a wire's
+layout capacitance are additive, different physical effects, not
+redundant -- confirmed, not just suspected. **Don't build a low-memory
+"closed switches only" shortcut on this basis; keeping every switch in the
+matrix as a real transistor, open or closed, is load-bearing for accuracy.**
+The low-memory win instead comes from the reusable bus-wire-cap lookup
+table above -- it doesn't reduce simulation cost, but it does remove the
+"someone has to babysit a 5-minute magic extraction" cost from every new
+design.
 
 **What's still untested, roughly in order of likely payoff:**
-1. Isolating how much of the 93.5->37.62MHz drop is the exact-bitstream
+1. Re-run the exact-measured-bitstream result with the corrected
+   `bus_B[2]` value (via `render_bus_wire_caps()` now, not hand-copied
+   constants) for a trustworthy final number -- needs the higher-RAM
+   machine.
+2. Isolating how much of the 93.5->37.62MHz(ish) drop is the exact-bitstream
    (3 real pads, different topology) switch versus the row-coupling cap
    versus the bus-wire cap specifically -- each was added cumulatively,
    never in isolation. Not yet done.
-2. Real layout wire *resistance* -- only capacitance has been added so
+3. Real layout wire *resistance* -- only capacitance has been added so
    far; the same wire that carries this capacitance also has real series
    resistance, untested.
-3. Only the "tt" (typical) process corner was tried.
-4. At ~1.25x too fast, it's worth explicitly deciding whether to keep
-   chasing this gap or treat it as close enough -- not purely a technical
-   question, ask the user.
+4. Only the "tt" (typical) process corner was tried.
+5. At ~1.25x too fast (pending the `bus_B[2]` re-run above), it's worth
+   explicitly deciding whether to keep chasing this gap or treat it as
+   close enough -- not purely a technical question, ask the user.
 
 **Reusable groundwork from this pass, if any of the above needs it:**
 a full, verified static mapping from `mosbius/bitmap.py`'s 156

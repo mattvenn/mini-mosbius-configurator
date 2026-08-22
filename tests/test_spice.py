@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from mosbius.bitmap import ALL_BITS
 from mosbius.model import SwitchConfig
-from mosbius.spice import SINGLE_BIT_PINS, render_config_spice
+from mosbius.spice import (
+    BUS_WIRE_CAPACITANCE_F,
+    SINGLE_BIT_PINS,
+    render_bus_wire_caps,
+    render_config_spice,
+)
 
 from .conftest import bit_for, setting_bit
 
@@ -67,3 +72,39 @@ def test_multibit_pins_get_bracket_suffix(inverter_config):
     g_bit = bit_for("cfga_nfeta_g", 1)
     line = next(l for l in text.splitlines() if l.startswith(f"Rcfg{g_bit} "))
     assert line.split()[1] == "cfga_nfeta_g[1]"
+
+
+def test_bus_wire_capacitance_covers_all_12_rows():
+    assert len(BUS_WIRE_CAPACITANCE_F) == 12
+    for side in ("A", "B"):
+        for row in range(1, 7):
+            assert f"bus_{side}[{row}]" in BUS_WIRE_CAPACITANCE_F
+
+
+def test_bus_wire_capacitance_values_are_real_not_placeholder():
+    # These are real magic PEX extraction values (see the module docstring
+    # for how they were derived) -- not a flat guess. The earlier,
+    # never-verified hand-estimate this replaced was ~30-50fF; the real
+    # values are all at least an order of magnitude bigger than that,
+    # which is the whole point of extracting them instead of guessing.
+    for farads in BUS_WIRE_CAPACITANCE_F.values():
+        assert farads > 500e-15, "value looks too close to the old, wrong hand-estimate"
+        assert farads < 2000e-15, "value looks implausibly large, double check the extraction"
+
+
+def test_render_bus_wire_caps_has_12_capacitors():
+    text = render_bus_wire_caps()
+    cap_lines = [l for l in text.splitlines() if l.startswith("Cwire")]
+    assert len(cap_lines) == 12
+
+
+def test_render_bus_wire_caps_ties_to_vgnd():
+    text = render_bus_wire_caps()
+    cap_lines = [l for l in text.splitlines() if l.startswith("Cwire")]
+    assert all(l.split()[2] == "VGND" for l in cap_lines)
+
+
+def test_render_bus_wire_caps_covers_every_bus_node_name():
+    text = render_bus_wire_caps()
+    for net in BUS_WIRE_CAPACITANCE_F:
+        assert f" {net} VGND " in text

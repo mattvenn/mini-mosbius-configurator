@@ -848,6 +848,30 @@ include file. This is faster to simulate and far less error-prone than shifting
 The shift register only appears on the hardware path, where it is a trivially
 simple serialiser.
 
+**Real bus-wire capacitance** (added 2026-08-22, from the ring-oscillator
+Level-2 investigation, TODO.md Sec 1): a Level-2 simulation built purely from
+`render_config_spice()` plus the real switch-matrix devices still treats
+every switch-matrix bus row (`bus_A[1..6]`/`bus_B[1..6]`) as a zero-length
+ideal net -- the actual physical metal trace running a bus row's full length
+across the matrix has real capacitance to substrate that a schematic-level
+netlist has no way to represent on its own. `mosbius/spice.py`'s
+`render_bus_wire_caps()` adds it: a real, magic-PEX-extracted (not
+estimated) capacitor per bus row, safe to include unconditionally alongside
+`render_config_spice()`. Closed real ground in the ring-oscillator
+investigation (~93.5MHz -> ~37.62MHz simulated, vs. ~30MHz measured on real
+silicon, on the same routed circuit). Extracting the values behind
+`BUS_WIRE_CAPACITANCE_F` took a slow (~5 minute) full-matrix `asw_matrix.mag`
+PEX run -- that's now a one-time cost, not a per-design one.
+
+A cheaper alternative was tried and rejected: dropping every *open* switch
+from the netlist entirely (keeping real transistor models only for closed
+switches, on the theory that the bus-wire capacitance already captures an
+open switch's aggregate contribution) gave a materially worse result
+(~63MHz, not ~37.62MHz) -- a real transistor's off-state electrical
+behaviour and a wire's layout capacitance are additive, different physical
+effects, not redundant. Keeping every switch in the matrix as a real
+transistor, open or closed, is load-bearing for Level-2 accuracy.
+
 ---
 
 ### 3.8 Bitstream decoding — circuit extraction
