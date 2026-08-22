@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mosbius.check import check_routing
+from mosbius.check import check_routing, merge_findings
 from mosbius.cli import main
 from mosbius.netlist import parse_netlist
 from mosbius.route import FIXED_WIDTH, device_widths, route
@@ -72,6 +72,65 @@ def test_message_names_the_geometry_and_the_matching_fix():
 def test_asking_for_the_fixed_width_loses_nothing_and_is_silent():
     # w=4 is what a half is anyway, so nothing was dropped.
     assert check_routing(routed(MATCHED_RING)).warnings == []
+
+
+# ---------------------------------------------------------------------------
+# merge_findings (TODO.md was Sec 3, closed 2026-08-22): several
+# near-identical findings collapse into one for display, naming every
+# device and explaining once, without shrinking SafetyReport.findings.
+# ---------------------------------------------------------------------------
+
+# Four independent-source NMOS: M1/M2 take the two independent slots
+# (netlist order, wholly on side A/B respectively), M3/M4 fall through to
+# standalone diff-pair halves -- same kind, same requested/effective
+# width, so R1 should merge them. M1/M2's gates sit on ua1/ua4 (their own
+# pinned row, off the free-row pool) so the free rows left on each side
+# comfortably fit the other three nets each side needs -- a from-scratch
+# fixture hits the same row-budget limits RING's does.
+FOUR_NMOS = """
+M1 ua1 d1  VGND VGND mosbius_nmos w=1
+M2 ua4 d2  VGND VGND mosbius_nmos w=1
+M3 0g3 d3  VGND VGND mosbius_nmos w=1
+M4 0g4 d4  VGND VGND mosbius_nmos w=1
+"""
+
+
+def test_ring_r1_warnings_do_not_merge_across_kind():
+    # RING's two dropped-width devices are M5 (NMOS) and M6 (PMOS) --
+    # different geometry, different prog file, so merging them would
+    # either lose information or require inventing a two-value sentence.
+    # kind is part of R1's merge_key precisely to keep them apart.
+    report = check_routing(routed(RING))
+    merged = merge_findings(report.warnings)
+    assert len(merged) == 2
+    assert {f.message.splitlines()[0] for f in merged} == {
+        "WARNING -- M5's w=1 was ignored: ndiffpair+ has a fixed width",
+        "WARNING -- M6's w=1 was ignored: pdiffpair+ has a fixed width",
+    }
+
+
+def test_same_kind_same_width_r1_warnings_merge_into_one():
+    report = check_routing(routed(FOUR_NMOS))
+    assert len(report.warnings) == 2          # SafetyReport.findings: unmerged, still one per device
+    merged = merge_findings(report.warnings)
+    assert len(merged) == 1                   # display: collapsed to one block
+    headline = merged[0].message.splitlines()[0]
+    assert headline == "WARNING -- M3 and M4 had their w=1 ignored: ndiffpair+ and ndiffpair-"
+    assert "have a fixed width" in merged[0].message.splitlines()[1]
+    # The shared explanation appears exactly once.
+    assert merged[0].message.count("Those halves have no width bits") == 1
+
+
+def test_merging_does_not_shrink_the_underlying_report():
+    # program.py's gate and every per-code test read report.warnings
+    # directly -- merging must only ever affect what gets printed.
+    report = check_routing(routed(FOUR_NMOS))
+    assert [f.code for f in report.warnings] == ["R1", "R1"]
+
+
+def test_merge_findings_is_a_no_op_when_nothing_can_merge():
+    report = check_routing(routed(RING))
+    assert merge_findings(report.warnings) == list(report.warnings)
 
 
 def test_pmos_half_reports_pmos_geometry():

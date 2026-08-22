@@ -29,7 +29,8 @@ beginner nothing.
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 
 from mosbius.netlist import IMPLICIT_PINS, PORT_NAMES, MosbiusDesign
 from mosbius.route import FIXED_GEOMETRY, DeviceTail, DeviceWidth
@@ -57,7 +58,21 @@ BUS_SEGMENTS = [f"bus_{side}[{row}]" for side in ("A", "B") for row in range(1, 
 class Finding:
     code: str            # "E1".."E4", "W1".."W3", "I1"
     severity: str         # ERROR / WARN / INFO
-    message: str          # full beginner-facing text, ready to print
+    message: str          # full beginner-facing text for THIS finding alone, ready to print
+
+    # The two fields below exist only so several near-identical findings can
+    # be shown as one (TODO.md was Sec 3, closed 2026-08-22): a check that
+    # fires on N similar devices still returns N Findings -- `program.py`'s
+    # gate and every test that counts by code depends on that -- but a
+    # display layer (merge_findings() below) can collapse a same-`merge_key`
+    # group into a single re-rendered block naming every `subject`, instead
+    # of printing the same explanation N times. Both default to "never
+    # merges", so every check that doesn't opt in is completely unaffected.
+    subject: str = ""                                    # this finding's short id, e.g. "XM5"
+    merge_key: tuple | None = None                        # same (code, merge_key) => mergeable
+    render: Callable[[list[str]], str] | None = field(default=None, repr=False, compare=False)
+    # render(subjects) rebuilds the message for an arbitrary nonempty list of
+    # subjects, correctly pluralised -- render([this.subject]) == this.message.
 
 
 @dataclass(frozen=True)
@@ -75,6 +90,55 @@ class SafetyReport:
     @property
     def has_errors(self) -> bool:
         return bool(self.errors)
+
+
+def _join_and(items: list[str]) -> str:
+    """'A', 'A and B', or 'A, B and C' -- the natural-language list join
+    used everywhere a merged finding names several subjects at once."""
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + f" and {items[-1]}"
+
+
+def merge_findings(findings: list[Finding]) -> list[Finding]:
+    """Collapse findings sharing (code, merge_key) into one, naming every
+    subject and explaining once (TODO.md was Sec 3, closed 2026-08-22) --
+    the SR latch used to print two near-identical 23-line R1 warnings, 21
+    of those lines identical.
+
+    Display-only: `findings` (and hence `SafetyReport.findings`) keeps one
+    entry per offending device -- `program.py`'s gate and every per-code
+    test depend on that -- so this runs at the point a report is about to
+    be printed (`cli.py`'s `_format_report`, `watch.py`'s `_report`), not
+    inside a check function. A finding with `merge_key=None` (every check
+    that hasn't opted in) always passes through unchanged, alone in its
+    own group of one. Order is first-occurrence, same as the input.
+    """
+    groups: dict[tuple[str, tuple], list[Finding]] = {}
+    order: list[Finding | tuple[str, tuple]] = []
+    for f in findings:
+        if f.merge_key is None:
+            order.append(f)
+            continue
+        key = (f.code, f.merge_key)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(f)
+
+    merged = []
+    for item in order:
+        if isinstance(item, Finding):
+            merged.append(item)
+            continue
+        group = groups[item]
+        if len(group) == 1:
+            merged.append(group[0])
+            continue
+        subjects = [f.subject for f in group]
+        text = group[0].render(subjects)
+        merged.append(Finding(code=group[0].code, severity=group[0].severity, message=text))
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -386,22 +450,45 @@ def _check_w3_unconnected_terminal(graph: Graph) -> list[Finding]:
     return findings
 
 
+def _render_i1(subjects: list[str], degree: int) -> str:
+    """The I1 explanation for one or several bus segments at once
+    (TODO.md was Sec 3, closed 2026-08-22) -- the worse-in-bulk case: an
+    empty config fires this on all 12 segments, one identical sentence
+    each, every one of them at the same degree (0).
+    """
+    count = "zero" if degree == 0 else "only one"
+    plural = "s" if degree != 1 else ""
+    if len(subjects) == 1:
+        seg = subjects[0]
+        headline = f"INFO -- {seg} does nothing"
+        intro = f"  {seg} has {degree} connection{plural}."
+    else:
+        segs = _join_and(subjects)
+        headline = f"INFO -- {segs} do nothing"
+        intro = f"  {segs} each have {degree} connection{plural}."
+    return (
+        f"{headline}\n\n"
+        f"{intro} A bus segment needs at least\n"
+        f"  two (to actually join two things) to have any effect -- with "
+        f"{count},\n"
+        f"  this switch setting isn't wiring anything together."
+    )
+
+
 def _check_i1_sparse_bus(graph: Graph) -> list[Finding]:
     findings = []
     for seg in BUS_SEGMENTS:
         degree = len(graph.get(seg, []))
         if degree >= 2:
             continue
-        count = "zero" if degree == 0 else "only one"
-        message = (
-            f"INFO -- {seg} does nothing\n\n"
-            f"  {seg} has {degree} connection{'s' if degree != 1 else ''}. "
-            f"A bus segment needs at least\n"
-            f"  two (to actually join two things) to have any effect -- with "
-            f"{count},\n"
-            f"  this switch setting isn't wiring anything together."
-        )
-        findings.append(Finding(code="I1", severity=INFO, message=message))
+
+        def render(subjects: list[str], _d=degree) -> str:
+            return _render_i1(subjects, _d)
+
+        findings.append(Finding(
+            code="I1", severity=INFO, message=render([seg]),
+            subject=seg, merge_key=(degree,), render=render,
+        ))
     return findings
 
 
@@ -759,6 +846,54 @@ def _check_d4_tail_on_rail(design: MosbiusDesign) -> list[Finding]:
     return findings
 
 
+def _render_r1(subjects: list[str], device_roles: dict[str, str], prop: str,
+                requested: int, effective: int, kind: str, geometry: str, prog: str) -> str:
+    """The R1 explanation for one or several devices at once (TODO.md was
+    Sec 3, closed 2026-08-22). Only the headline and the intro's first
+    line ever name a device/role -- everything from "Those halves..."
+    onward is already subject-independent, so it appears once regardless
+    of how many devices triggered this.
+    """
+    roles = [device_roles[s] for s in subjects]
+    if len(subjects) == 1:
+        name, role = subjects[0], roles[0]
+        headline = f"WARNING -- {name}'s {prop}={requested} was ignored: {role} has a fixed width"
+        intro = f"  The router put {name} on {role}, one of the two halves of the"
+    else:
+        names, role_list = _join_and(subjects), _join_and(roles)
+        headline = (
+            f"WARNING -- {names} had their {prop}={requested} ignored: {role_list}\n"
+            f"           have a fixed width"
+        )
+        intro = f"  The router put {names} on {role_list}, the two halves of the"
+    return (
+        f"{headline}\n\n"
+        f"{intro}\n"
+        f"  {kind} differential pair. Those halves have no width bits on the\n"
+        f"  chip -- their geometry is built in silicon -- so there is nothing\n"
+        f"  in the bitstream that could carry {prop}={requested}, "
+        f"and it was dropped.\n\n"
+        f"  What you get instead is {prop}={effective}. A half is "
+        f"{geometry},\n"
+        f"  which is exactly the geometry of a programmable FET at its maximum\n"
+        f"  {prop}={effective} ({prog}'s 1x always-on slice plus its "
+        f"switchable 1x\n  and 2x slices).\n\n"
+        f"  Why this matters: it is built at {prop}={effective} "
+        f"where your schematic says\n"
+        f"  {prop}={requested}. In a circuit that looks symmetric "
+        f"-- the three stages of a\n"
+        f"  ring oscillator, say -- the stages that land on the programmable\n"
+        f"  FETs come out at the width you asked for and this one does not, and\n"
+        f"  the mismatch exists only on silicon, not in the drawing.\n\n"
+        f"  To fix: set the other devices of the same kind to "
+        f"{prop}={effective} as well, so\n"
+        f"  every stage matches deliberately -- examples/ringosc/README.md does\n"
+        f"  exactly that. They match in W/L, though not in parasitics: the\n"
+        f"  programmable FET's 1x and 2x slices sit behind drain switches and\n"
+        f"  the diff-pair half does not."
+    )
+
+
 def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
                             device_roles: dict[str, str]) -> list[Finding]:
     """A width the schematic asked for that the assigned role cannot carry
@@ -770,6 +905,12 @@ def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
     The reason that is worth a warning rather than a footnote is the value
     it is dropped *to*: a half is the equivalent of w=4, not w=1, so a
     schematic that looks symmetric is built asymmetric.
+
+    A design's two halves of one pair trigger this identically (same
+    requested/effective width, same polarity) and are exactly the case
+    `merge_findings` exists for -- but NMOS and PMOS halves never merge
+    with each other, since their geometry differs (`kind` is part of the
+    key), and neither do two pairs that asked for different widths.
     """
     findings = []
     for name in sorted(device_widths):
@@ -780,35 +921,49 @@ def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
         geometry = FIXED_GEOMETRY.get(role, "a geometry fixed in silicon")
         kind = "NMOS" if role.startswith("n") else "PMOS"
         prog = "nmos_prog.sch" if kind == "NMOS" else "pmos_prog.sch"
-        message = (
-            f"WARNING -- {name}'s {width.prop}={width.requested} was ignored: "
-            f"{role} has a fixed width\n\n"
-            f"  The router put {name} on {role}, one of the two halves of the\n"
-            f"  {kind} differential pair. Those halves have no width bits on the\n"
-            f"  chip -- their geometry is built in silicon -- so there is nothing\n"
-            f"  in the bitstream that could carry {width.prop}={width.requested}, "
-            f"and it was dropped.\n\n"
-            f"  What you get instead is {width.prop}={width.effective}. A half is "
-            f"{geometry},\n"
-            f"  which is exactly the geometry of a programmable FET at its maximum\n"
-            f"  {width.prop}={width.effective} ({prog}'s 1x always-on slice plus its "
-            f"switchable 1x\n  and 2x slices).\n\n"
-            f"  Why this matters: it is built at {width.prop}={width.effective} "
-            f"where your schematic says\n"
-            f"  {width.prop}={width.requested}. In a circuit that looks symmetric "
-            f"-- the three stages of a\n"
-            f"  ring oscillator, say -- the stages that land on the programmable\n"
-            f"  FETs come out at the width you asked for and this one does not, and\n"
-            f"  the mismatch exists only on silicon, not in the drawing.\n\n"
-            f"  To fix: set the other devices of the same kind to "
-            f"{width.prop}={width.effective} as well, so\n"
-            f"  every stage matches deliberately -- examples/ringosc/README.md does\n"
-            f"  exactly that. They match in W/L, though not in parasitics: the\n"
-            f"  programmable FET's 1x and 2x slices sit behind drain switches and\n"
-            f"  the diff-pair half does not."
-        )
-        findings.append(Finding(code="R1", severity=WARN, message=message))
+
+        def render(subjects: list[str], _dr=device_roles, _p=width.prop,
+                   _rq=width.requested, _ef=width.effective, _k=kind, _g=geometry,
+                   _pr=prog) -> str:
+            return _render_r1(subjects, _dr, _p, _rq, _ef, _k, _g, _pr)
+
+        findings.append(Finding(
+            code="R1", severity=WARN, message=render([name]),
+            subject=name, merge_key=(width.prop, width.requested, width.effective, kind),
+            render=render,
+        ))
     return findings
+
+
+def _render_r2(subjects: list[str], device_roles: dict[str, str], requested: int) -> str:
+    """The R2 explanation for one or several devices at once (TODO.md was
+    Sec 3, closed 2026-08-22) -- same shape as `_render_r1`: only the
+    headline and the intro's first line ever name a device/role.
+    """
+    roles = [device_roles[s] for s in subjects]
+    if len(subjects) == 1:
+        name, role = subjects[0], roles[0]
+        headline = f"WARNING -- {name}'s tail={requested} was ignored: {role} has no tail current"
+        intro = f"  The router put {name} on {role}, which has no tail-current bit of its"
+    else:
+        names, role_list = _join_and(subjects), _join_and(roles)
+        headline = (
+            f"WARNING -- {names} had their tail={requested} ignored: {role_list}\n"
+            f"           have no tail current"
+        )
+        intro = f"  The router put {names} on {role_list}, which have no tail-current bit of their"
+    return (
+        f"{headline}\n\n"
+        f"{intro}\n  own, so there is nothing here for tail= to set and it "
+        f"was dropped.\n\n"
+        f"  Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail "
+        f"you can\n  write in the schematic. If you meant to change how hard "
+        f"this device\n  drives, that is w= (1, 2, 3 or 4) on a "
+        f"mosbius_nmos/mosbius_pmos, or\n  ratio= on a mosbius_nsink/"
+        f"mosbius_psource. If you meant a differential\n  pair's tail "
+        f"current, that belongs on a mosbius_ntail/mosbius_ptail wired\n"
+        f"  to the pair's shared source, not on either half."
+    )
 
 
 def _check_r2_tail_dropped(device_tails: dict[str, DeviceTail],
@@ -819,33 +974,30 @@ def _check_r2_tail_dropped(device_tails: dict[str, DeviceTail],
 
     Three symbols carry a tail= of their own: mosbius_ota, mosbius_ntail
     and mosbius_ptail (TODO.md was Sec 2, closed 2026-08-22). Everything
-    else that ends up with
-    tail= set means somebody typed the property on the wrong kind of
-    device -- a diff-pair half's tail belongs to the pair as a whole, and
-    is reached by wiring a mosbius_ntail/mosbius_ptail to its shared
-    source, not by writing tail= on either half.
+    else that ends up with tail= set means somebody typed the property on
+    the wrong kind of device -- a diff-pair half's tail belongs to the
+    pair as a whole, and is reached by wiring a mosbius_ntail/mosbius_ptail
+    to its shared source, not by writing tail= on either half.
+
+    Mergeable by requested value only (TODO.md was Sec 3, closed
+    2026-08-22) -- the explanation itself never depends on role, so two
+    devices asking for the same tail= merge even across NMOS/PMOS/mirror/
+    OTA roles; two different requested values do not, rather than
+    inventing a sentence that lists several numbers.
     """
     findings = []
     for name in sorted(device_tails):
         tail = device_tails[name]
         if not tail.dropped:
             continue
-        role = device_roles[name]
-        message = (
-            f"WARNING -- {name}'s tail={tail.requested} was ignored: {role} "
-            f"has no tail current\n\n"
-            f"  The router put {name} on {role}, which has no tail-current bit "
-            f"of its\n  own, so there is nothing here for tail= to set and it "
-            f"was dropped.\n\n"
-            f"  Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail "
-            f"you can\n  write in the schematic. If you meant to change how hard "
-            f"this device\n  drives, that is w= (1, 2, 3 or 4) on a "
-            f"mosbius_nmos/mosbius_pmos, or\n  ratio= on a mosbius_nsink/"
-            f"mosbius_psource. If you meant a differential\n  pair's tail "
-            f"current, that belongs on a mosbius_ntail/mosbius_ptail wired\n"
-            f"  to the pair's shared source, not on either half."
-        )
-        findings.append(Finding(code="R2", severity=WARN, message=message))
+
+        def render(subjects: list[str], _dr=device_roles, _rq=tail.requested) -> str:
+            return _render_r2(subjects, _dr, _rq)
+
+        findings.append(Finding(
+            code="R2", severity=WARN, message=render([name]),
+            subject=name, merge_key=(tail.requested,), render=render,
+        ))
     return findings
 
 

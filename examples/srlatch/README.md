@@ -88,8 +88,8 @@ the devices whose gates need rows 1-3 are the ones that get the halves.
 
 ```
 $ python3 -m mosbius.cli route build/srlatch.spice
-WARNING -- XM5's w=1 was ignored: ndiffpair+ has a fixed width
-WARNING -- XM6's w=1 was ignored: ndiffpair- has a fixed width
+WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
+           have a fixed width
 
 Device roles:
   XM1          -> pmos_a        w=1
@@ -102,13 +102,18 @@ Device roles:
 Bitstream: 0c008000c020008808000000008821000220200800000038
 ```
 
-No errors. The two warnings are the set and reset pull-downs landing on
+No errors. The warning is the set and reset pull-downs landing on
 diff-pair halves, which have no width bits, so their `w=1` cannot be
 programmed and they are built at the fixed `w=4` instead. Benign here, and
 arguably what you want: a pull-down that forces the latch has to overpower
 the inverter's PMOS. But it is the sort of thing that used to be dropped
 in silence, so draw them knowing they are four times the width the
 schematic says.
+
+(This used to be two near-identical 23-line warnings, one per device, 21
+of those lines word-for-word the same -- `merge_findings` (TODO.md was
+§3, closed 2026-08-22) now prints the shared explanation once, naming
+both devices in the headline.)
 
 This example used to also report five W2 warnings on crosspoints touching
 the internal node, "no DC path to a rail or a package pin". Those were

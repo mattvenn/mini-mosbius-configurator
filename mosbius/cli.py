@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from mosbius.check import SafetyReport, check, check_design, check_routing
+from mosbius.check import SafetyReport, check, check_design, check_routing, merge_findings
 from mosbius.decode import decode, format_summary
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig
 from mosbius.netlist import NetlistError, parse_netlist
@@ -31,8 +31,13 @@ def _format_report(report, *, verbose: bool = False) -> str:
     shown = report.errors + report.warnings
     if verbose:
         shown += [f for f in report.findings if f.severity == "INFO"]
+    # merge_findings (TODO.md was Sec 3, closed 2026-08-22) collapses
+    # several near-identical findings -- e.g. two diff-pair halves both
+    # losing their w= -- into one block naming every device instead of
+    # repeating the same 20-line explanation per device.
+    shown = merge_findings(shown)
     if not shown:
-        skipped = len(report.findings) - len(shown)
+        skipped = len(merge_findings(report.findings))  # all INFO here; merged count, not raw
         note = f" ({skipped} info note{'s' if skipped != 1 else ''} hidden, use --verbose)" if skipped else ""
         return f"OK -- no errors or warnings{note}."
     lines = []

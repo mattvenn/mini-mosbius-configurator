@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-from mosbius.check import check, check_design, check_routing
+from mosbius.check import check, check_design, check_routing, merge_findings
 from mosbius.netlist import NetlistError, parse_netlist
 from mosbius.route import RouteError, format_device_roles, route
 
@@ -48,13 +48,17 @@ def _report(netlist_path: Path) -> str:
     design_report = check_design(design)
     if design_report.has_errors:
         lines = [f"{header}   DANGEROUS"]
-        for f in design_report.errors:
+        for f in merge_findings(design_report.errors):
             lines.append("")
             lines.append("\n".join(f"  {line}" for line in f.message.splitlines()))
         return "\n".join(lines)
+    # merge_findings (TODO.md was Sec 3, closed 2026-08-22): several
+    # near-identical findings -- e.g. every diff-pair half losing its w=,
+    # or every unused bus segment -- print as one block naming every
+    # device instead of repeating the same explanation per device.
     design_notes = [
         "\n".join(f"  {line}" for line in f.message.splitlines())
-        for f in design_report.warnings
+        for f in merge_findings(design_report.warnings)
     ]
 
     try:
@@ -70,13 +74,13 @@ def _report(netlist_path: Path) -> str:
     # design rather than the bitstream, so both print in full here.
     design_notes += [
         "\n".join(f"  {line}" for line in f.message.splitlines())
-        for f in check_routing(routed).warnings
+        for f in merge_findings(check_routing(routed).warnings)
     ]
 
     result = check(routed.config)
     if result.has_errors:
         lines = [f"{header}   DANGEROUS"]
-        for f in result.errors:
+        for f in merge_findings(result.errors):
             lines.append("")
             lines.append("\n".join(f"  {line}" for line in f.message.splitlines()))
         return "\n".join(lines)

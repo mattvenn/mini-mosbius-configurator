@@ -4,17 +4,22 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-**Renumbered from 1 on 2026-08-22**, for the third time. The first renumber
+**Renumbered from 1 on 2026-08-22**, for the fourth time. The first renumber
 removed the eight items the symbol/pin-geometry work closed; the second
 removed two more and shrank two, leaving the drain/source-swap hint
 (`check.py`'s `D2`), a working single-OTA route, the OTA's `tail=` reaching
 the bitstream, and an unreachable (pin, row) explaining itself instead of
-raising `KeyError`. This one removes the tail-symbol work order: two new
-symbols (`mosbius_ntail`/`mosbius_ptail`), `netlist.py`/`route.py`/`check.py`
-updated, and `examples/diffamp/` proving it end to end (route table, no
-dropped `tail=`, `ctrl_dpn_tail` reaching the bitstream). What's left
-renumbers down: device allocation by netlist order is now §2, repeated
-findings is now §3.
+raising `KeyError`; the third removed the tail-symbol work order (two new
+symbols, `netlist.py`/`route.py`/`check.py` updated, `examples/diffamp/`
+proving it end to end), which renumbered device allocation down to §2 and
+repeated findings down to §3. This one closes that §3: `check.py`'s
+`Finding` gained `subject`/`merge_key`/`render`, R1/R2/I1 (the checks that
+can actually fire on several near-identical devices) use them, and
+`merge_findings()` collapses a same-key group into one block at the point
+`cli.py`/`watch.py` print a report -- `SafetyReport.findings` itself is
+untouched, still one entry per offending device. §3 was the last item, so
+nothing renumbers this time: §1 and §2 keep their numbers, and §2 is now
+the only thing left.
 
 This file used to keep numbers stable and leave gaps, because other files cite
 items by number. Renumbering instead means those citations move too, and they
@@ -114,46 +119,3 @@ than only when placing a row.
 Note this interacts with sticky routing (SPEC.md §3.2b): a better
 allocator must not silently relocate an existing working design, so it
 belongs behind the same stored-routing reuse as everything else.
-
-## 3. Repeated findings repeat their whole explanation
-
-Raised 2026-08-21 by the user, seeing two near-identical 23-line warnings
-from one `mosbius route`.
-
-Every check emits one `Finding` per offending thing, and `_format_report`
-prints each in full. When a check fires on several devices at once the
-reader gets the same explanation over and over. The SR latch is the
-smallest case: two `R1` warnings, 23 lines each, **21 of those lines
-identical** -- only the device name and the role differ. That is 46 lines
-of a 57-line report saying one thing twice.
-
-`I1` is the same shape and worse in bulk: five "does nothing" notes on the
-SR latch, seven on the ring oscillator, one per bus segment, all of them
-the same sentence with a different segment name. They are hidden without
-`--verbose`, which is a workaround rather than a fix.
-
-Wanted: name every device the finding applies to, then explain once.
-
-```
-WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
-           have a fixed width
-
-  <the explanation, once>
-```
-
-Two things to get right rather than grouping blindly:
-
-- **Group by what the explanation actually depends on, not just by check
-  code.** `R1`'s text quotes the geometry, and that differs by polarity:
-  an NMOS half is `W=40 nf=8` from `diff_n.sch` and a PMOS half is
-  `W=120 nf=16` from `diff_p.sch`. So the ring's two `R1` warnings are
-  *not* mergeable, while the SR latch's two are. The key is roughly
-  (check, device kind, requested width) -- worth deriving from the message
-  inputs rather than guessing.
-
-- **Keep each finding individually addressable.** `check()` returns a
-  `SafetyReport` that `program.py` gates uploads on and the tests assert
-  against per-code. Grouping belongs in the *formatting*, not in the
-  finding list -- so `_format_report` (and `watch.py`, which formats its
-  own) should merge for display while `SafetyReport.findings` stays one
-  entry per offending device.

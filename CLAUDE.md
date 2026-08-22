@@ -14,8 +14,7 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§1), device allocation decided by netlist order (§2), and findings
-repeating their whole explanation once per offending device (§3). It is
+design (§1) and device allocation decided by netlist order (§2). It is
 renumbered from 1 whenever items are removed, and every citation of it in
 this repo is updated in the same commit, so a `TODO.md` §number here is
 always live.
@@ -34,7 +33,12 @@ differential pair's tail current, with `mosbius_ntail`/`mosbius_ptail`
 `tail=2/4/6/8`) reaching `ctrl_dpn_tail`/`ctrl_dpp_tail`; and `ibias` on
 `mosbius_nsink`/`mosbius_psource`/`mosbius_ota` is implicit now (`extra=`),
 matching the body ties, since the router always ignored a drawn connection
-there. See `examples/diffamp/` for the tail feature end to end.
+there. See `examples/diffamp/` for the tail feature end to end. Also: a
+check that fires on several near-identical devices no longer repeats its
+whole explanation per device -- `check.py`'s `merge_findings()` collapses
+them into one block at print time (`cli.py`/`watch.py` both call it);
+`SafetyReport.findings` is untouched, still one entry per offending
+device, so this is display-only.
 
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it
