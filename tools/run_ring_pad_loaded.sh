@@ -209,7 +209,7 @@ text = open(path).read()
 n_subckt = text.count("\n.subckt ")
 n_ends = text.count("\n.ends")
 assert n_subckt == n_ends, f".subckt/.ends mismatch: {n_subckt} vs {n_ends}"
-assert "Xpad_ua1 GND out_pad bus_A[1] pad_model" in text, "pad instance line missing"
+assert "Xpad_ua1 GND out_pad bus_a1_net pad_model" in text, "pad instance line missing"
 assert text.count("\nX1 ") == 1, "expected exactly one X1 mosbius instantiation"
 print(f"OK: {n_subckt} subckt/.ends pairs balanced, pad instance present, single X1 call.")
 PYEOF
