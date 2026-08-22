@@ -82,7 +82,7 @@ DOESN'T FIT -- 'net1' spans both bus sides and no row can join them
 It used to be a bare `KeyError: ('cfgb_dpn_inm', 6)`. What is still open is
 the other half: allocating by constraint rather than by line order, so that
 the devices whose gates need rows 1-3 are the ones that get the halves.
-`TODO.md` §3 covers it.
+`TODO.md` §2 covers it.
 
 ## Routing
 

@@ -139,7 +139,8 @@ def test_watch_reports_the_dropped_width_too(tmp_path, capsys):
 
 # ---------------------------------------------------------------------------
 # R2: the same rule as R1, for the other setting a device can carry --
-# a tail= that no bit in the bitstream can hold (TODO.md Sec 2).
+# a tail= that no bit in the bitstream can hold (TODO.md was Sec 2,
+# closed 2026-08-22).
 # ---------------------------------------------------------------------------
 
 # The SR latch, whose last two NMOS land on the diff-pair halves, with a
@@ -165,13 +166,12 @@ def test_a_tail_on_a_diff_pair_half_is_reported_not_dropped():
     assert r2.message.startswith("WARNING -- XM5's tail=6 was ignored")
 
 
-def test_the_tail_message_names_the_bit_and_what_you_get_instead():
+def test_the_tail_message_points_at_the_tail_symbols():
     r2 = [f for f in check_routing(routed(LATCH_WITH_TAIL)).warnings
           if f.code == "R2"][0].message
-    assert "ctrl_dpn_tail" in r2      # the bit that exists but is unreachable
-    assert "tail=2" in r2             # what an all-zero cycler decodes to
-    assert "mosbius_ota" in r2        # the device that does expose a tail
-    assert "--ibias" in r2            # the knob you do have
+    assert "mosbius_ntail" in r2      # the way to actually reach this bit
+    assert "mosbius_ptail" in r2
+    assert "mosbius_ota" in r2        # the other device that has a tail=
 
 
 def test_a_tail_the_chip_can_carry_is_silent():
@@ -183,7 +183,7 @@ def test_tail_is_reported_for_every_device():
     tails = routed(LATCH_WITH_TAIL).device_tails
     assert set(tails) == {"XM1", "XM2", "XM3", "XM4", "XM5", "XM6"}
     assert tails["XM5"].requested == 6 and not tails["XM5"].programmable
-    assert tails["XM5"].effective == 2       # what the bitstream really says
+    assert tails["XM5"].effective is None    # no bit carries a half's own tail
     assert tails["XM2"].effective is None    # nmos_a has no tail at all
 
 

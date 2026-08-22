@@ -1,0 +1,50 @@
+v {xschem version=3.4.8RC file_version=1.2
+*
+* mini-MOSbius NMOS differential-pair tail current bank (TODO.md Sec 2,
+* closed 2026-08-22). One drawn pin, `d` -- wire it to the shared source
+* node of the two mosbius_nmos halves it biases. Drawing it there IS what
+* declares them a pair: the router claims the two same-polarity FETs
+* sourced on that net as ndiffpair+/ndiffpair- instead of inferring the
+* pairing, and `tail=2/4/6/8` reaches ctrl_dpn_tail, which nothing else
+* can set.
+*
+* Drawing no mosbius_ntail at all keeps today's behaviour exactly: the
+* two mosbius_nmos halves' shared source is tied straight to VGND by
+* ctrl_dpn_source, usable as two standalone FETs (CLAUDE.md Traps #3).
+*
+* Gate and source are NOT drawn, and that is not a style choice: the
+* bank's gate really is `ibias`, the same reference the whole bias chain
+* hangs off, and its source really is VGND -- both hard-wired on
+* silicon, so both are supplied through xschem's `extra` mechanism like
+* every other implicit pin in this library (see mosbius_nsink.sym's
+* header). Override per instance with g=<net>/s=<net> if you ever need
+* to.
+*
+* The pin-box (B) record below is declared in netlist pin order, which
+* is also the .subckt port order -- extra pins are appended, in the
+* order `extra` lists them. mosbius/netlist.py's DEVICE_PINS holds a
+* matching copy -- change both together.
+}
+G {}
+K {type=subcircuit
+format="@spiceprefix@name @pinlist @g @s @symname tail=@tail"
+template="name=X1 tail=2 g=ibias s=VGND spiceprefix=X"
+extra="g s"
+}
+V {}
+S {}
+E {}
+L 4 0 -40 0 -15 {}
+L 4 0 15 0 25 {}
+L 4 -10 25 10 25 {}
+L 4 -6 30 6 30 {}
+L 4 -2 35 2 35 {}
+A 4 0 0 15 270 360 {}
+P 4 7 0 -7.5 0 2.5 2.5 2.5 0 10 -2.5 2.5 0 2.5 0 -7.5 {fill=true}
+B 5 -2.5 -42.5 2.5 -37.5 {name=d dir=inout}
+T {@name} 24 -17 0 0 0.2 0.2 {}
+T {tail=@tail} 24 1 0 0 0.15 0.15 {}
+T {ibias} -30 -17 0 0 0.13 0.13 {}
+T {@g} -30 -3 0 0 0.13 0.13 {layer=1}
+T {@s} 14 26 0 0 0.13 0.13 {layer=1}
+T {@#0:net_name} 6 -52 0 0 0.15 0.15 {layer=15 hide=instance}

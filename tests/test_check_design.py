@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""mosbius/check.py -- check_design(), the netlist-level checks (D1).
+"""mosbius/check.py -- check_design(), the netlist-level checks (D1-D4).
 
 These run before routing, on a MosbiusDesign rather than a SwitchConfig.
 D1 exists because of a real misdiagnosis: shorting the two rails in xschem
@@ -236,3 +236,75 @@ def test_route_prints_the_hint_before_the_doesnt_fit(tmp_path, capsys):
     err = capsys.readouterr().err
     assert rc == 1
     assert err.index("drain and source look swapped") < err.index("DOESN'T FIT")
+
+
+# ---------------------------------------------------------------------------
+# D3/D4: a drawn mosbius_ntail/mosbius_ptail (TODO.md was Sec 2, closed
+# 2026-08-22) whose drain
+# doesn't cleanly declare a pair -- either the wrong number of same-polarity
+# sources share it, or it's wired straight to the rail the bank feeds.
+# ---------------------------------------------------------------------------
+
+# A healthy NMOS tail: exactly two mosbius_nmos share its drain net.
+HEALTHY_TAIL = (
+    "XM1 ua1 ua3 net1 VGND mosbius_nmos w=1",
+    "XM2 ua2 ua4 net1 VGND mosbius_nmos w=1",
+    "XT1 net1 ibias VGND mosbius_ntail tail=6",
+)
+
+
+def test_a_healthy_tail_has_no_findings():
+    assert check_design(design(*HEALTHY_TAIL)).findings == []
+
+
+def test_a_tail_with_no_matching_sources_is_an_error():
+    orphan = ("XT1 net1 ibias VGND mosbius_ntail tail=6",)
+    report = check_design(design(*orphan))
+    assert len(report.errors) == 1
+    assert report.errors[0].code == "D3"
+    assert "nothing else in the design has its source" in report.errors[0].message
+
+
+def test_a_tail_with_one_matching_source_names_it():
+    one_half = ("XM1 ua1 ua3 net1 VGND mosbius_nmos w=1",
+                "XT1 net1 ibias VGND mosbius_ntail tail=6")
+    message = check_design(design(*one_half)).errors[0].message
+    assert "1 mosbius_nmos devices have their source there: XM1" in message
+
+
+def test_a_tail_with_three_matching_sources_is_also_wrong_arity():
+    three = HEALTHY_TAIL + ("XM3 ua5 ua4 net1 VGND mosbius_nmos w=1",)
+    message = check_design(design(*three)).errors[0].message
+    assert "3 mosbius_nmos devices have their source there" in message
+    assert "XM1, XM2, XM3" in message
+
+
+def test_a_tail_wired_straight_to_the_rail_is_a_different_error():
+    rail_tied = ("XT1 VGND ibias VGND mosbius_ntail tail=6",)
+    report = check_design(design(*rail_tied))
+    assert len(report.errors) == 1
+    assert report.errors[0].code == "D4"
+    assert "wired straight to VGND" in report.errors[0].message
+    assert "never both at once" in report.errors[0].message
+
+
+def test_a_pmos_tail_uses_pmos_vocabulary():
+    pmos_tail = (
+        "XM1 ua1 ua3 net1 VAPWR mosbius_pmos w=1",
+        "XM2 ua2 ua4 net1 VAPWR mosbius_pmos w=1",
+        "XT1 net1 ibias_p VAPWR mosbius_ptail tail=4",
+    )
+    assert check_design(design(*pmos_tail)).findings == []
+    orphan = ("XT1 net1 ibias_p VAPWR mosbius_ptail tail=4",)
+    message = check_design(design(*orphan)).errors[0].message
+    assert "mosbius_pmos" in message
+    assert "ctrl_dpp_tail" in message
+
+
+def test_route_refuses_a_malformed_tail_before_routing(tmp_path, capsys):
+    path = tmp_path / "orphan_tail.spice"
+    path.write_text("XT1 net1 ibias VGND mosbius_ntail tail=6\n")
+    rc = main(["route", str(path)])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "D3" in err or "doesn't declare a pair" in err

@@ -22,13 +22,16 @@ there is no "off chip" by construction. Every circuit you draw wires
 together some combination of these nine pins and the transistors/mirrors/
 OTA the chip provides.
 
-You don't draw real transistors directly. You draw from five **generic
+You don't draw real transistors directly. You draw from seven **generic
 devices** in `xschem/mosbius_lib/`: `mosbius_nmos`, `mosbius_pmos`,
 `mosbius_nsink` (an NMOS current mirror leg), `mosbius_psource` (a PMOS
-current mirror leg), and `mosbius_ota` (a full 5-transistor op-transconductance
-amp). The router (step 3 below) maps whatever you draw onto real positions
-in the chip's switch matrix -- you don't pick which physical transistor you
-get, you just say how many you need and how they're connected.
+current mirror leg), `mosbius_ota` (a full 5-transistor op-transconductance
+amp), and `mosbius_ntail`/`mosbius_ptail` (a differential pair's tail
+current bank -- draw one wired to two FETs' shared source to bias them as
+a pair; see `examples/diffamp/` for a worked circuit). The router (step 3
+below) maps whatever you draw onto real positions in the chip's switch
+matrix -- you don't pick which physical transistor you get, you just say
+how many you need and how they're connected.
 
 ## 1. Draw the circuit
 
@@ -119,6 +122,8 @@ your devices got. The names line up with the symbol you drew:
 | `mosbius_nsink` | `nsink_a`, `nsink_b` | a current sink, pulling current down to VGND |
 | `mosbius_psource` | `psource_a`, `psource_b` | a current source, pushing current down from VAPWR |
 | `mosbius_ota` | `ota` | the one 5-transistor amplifier |
+| `mosbius_ntail` | `ntail` | the NMOS pair's tail current bank -- draw it to declare which two FETs are the pair |
+| `mosbius_ptail` | `ptail` | the PMOS pair's tail current bank |
 
 You don't choose -- the router does, and it prefers to spend the scarce
 positions last. Two NMOS that share a source get the differential pair,

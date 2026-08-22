@@ -713,13 +713,26 @@ The library offers **generic parts**, not named hardware devices:
 | `mosbius_nsink` | `ratio` = 1–4 | `nsink_a`, `nsink_b` |
 | `mosbius_psource` | `ratio` = 1–4 | `psource_a`, `psource_b` |
 | `mosbius_ota` | `tail` = 2–8, `mode` | `ota` (one only) |
+| `mosbius_ntail` | `tail` = 2–8 | N5 (NMOS diff-pair tail, one only) |
+| `mosbius_ptail` | `tail` = 2–8 | P5 (PMOS diff-pair tail, one only) |
 
 `w` sets parallel unit count. **Only width is adjustable — the hardware has no
 length control.**
 
-**Allocation rule.** Independent FETs are the flexible resource; differential-pair
-halves are usable only when their sources are common. So the router **spends the
-constrained resource first**:
+**Declaring a pair explicitly.** `mosbius_ntail`/`mosbius_ptail` carry one
+drawn pin -- the drain, wired to the shared source node of the two FETs that
+are to be the pair -- plus their own `tail=`. Drawing one *declares* the
+pairing (TODO.md, closed 2026-08-22: was §2) rather than leaving the router
+to infer it, and is the only way to reach N5/P5's tail current from a
+schematic: those transistors have no matrix terminal (§2.12), so nothing
+about them is visible except through this one drawn net. Drawing neither
+leaves §3.4's allocation rule below to infer the pairing exactly as it
+always has, with the shared source tied to its rail instead of a tail
+current -- unchanged, and still what `examples/srlatch/` depends on.
+
+**Allocation rule** (when no tail is drawn for a pair). Independent FETs are
+the flexible resource; differential-pair halves are usable only when their
+sources are common. So the router **spends the constrained resource first**:
 
 1. Find sets of same-type FETs in the user's circuit that share a source net.
 2. Map those preferentially onto a differential pair (`ndiffpair+`/`dpn−`, `pdiffpair+`/`dpp−`),

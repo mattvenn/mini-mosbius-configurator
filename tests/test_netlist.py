@@ -64,15 +64,15 @@ def test_ignores_comment_and_directive_lines():
 
 def test_mirror_and_ota_pin_orders():
     text = """\
-mtail ibn outn bn mosbius_nsink ratio=2
-mref ibp outp bp mosbius_psource ratio=1
+mtail outn ibn bn mosbius_nsink ratio=2
+mref outp ibp bp mosbius_psource ratio=1
 xota inp inm outp outm ib bn bp mosbius_ota tail=4
 """
     design = parse_netlist(text)
     by_name = {d.name: d for d in design.devices}
-    assert by_name["mtail"].terminals == {"ibias": "ibn", "out": "outn", "b": "bn"}
+    assert by_name["mtail"].terminals == {"out": "outn", "ibias": "ibn", "b": "bn"}
     assert by_name["mtail"].kind == "nsink"
-    assert by_name["mref"].terminals == {"ibias": "ibp", "out": "outp", "b": "bp"}
+    assert by_name["mref"].terminals == {"out": "outp", "ibias": "ibp", "b": "bp"}
     assert by_name["mref"].kind == "psource"
     ota = by_name["xota"]
     assert ota.kind == "ota"
@@ -81,6 +81,17 @@ xota inp inm outp outm ib bn bp mosbius_ota tail=4
         "ibias": "ib", "bn": "bn", "bp": "bp",
     }
     assert ota.properties == {"tail": 4}
+
+
+def test_tail_pin_order():
+    text = "T1 net1 ibias VGND mosbius_ntail tail=6\nT2 net2 ibias_p VAPWR mosbius_ptail tail=8\n"
+    design = parse_netlist(text)
+    by_name = {d.name: d for d in design.devices}
+    assert by_name["T1"].terminals == {"d": "net1", "g": "ibias", "s": "VGND"}
+    assert by_name["T1"].kind == "ntail"
+    assert by_name["T2"].terminals == {"d": "net2", "g": "ibias_p", "s": "VAPWR"}
+    assert by_name["T2"].kind == "ptail"
+    assert by_name["T1"].properties == {"tail": 6}
 
 
 def test_wrong_connection_count_raises():

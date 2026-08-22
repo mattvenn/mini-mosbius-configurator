@@ -1,19 +1,23 @@
 v {xschem version=3.4.8RC file_version=1.2
 *
 * mini-MOSbius 5-transistor OTA. Differential inputs on the left (+ is
-* inp), differential outputs on the right, tail bias current in at the
-* bottom. `tail` sets the tail mirror ratio.
+* inp), differential outputs on the right. `tail` sets the tail mirror
+* ratio.
 *
 * No two pins share a y coordinate, and that is load-bearing:
 * mosbius/schgen.py routes each pin horizontally off the symbol before
 * it turns, so two pins on the same row would be shorted by that stub.
 * Hence outputs at +/-15 rather than the inputs' +/-25.
 *
-* The body terminal is NOT drawn. On silicon it is hard-wired to a rail
-* and you cannot route it, so drawing it would only add a wire you are
-* never allowed to place anywhere else. It is supplied instead by the
-* `extra` mechanism below: the netlist still gets the connection, the
-* schematic does not. Override per instance with bn=<net> / bp=<net> if you ever need to.
+* Neither the body nor `ibias` is drawn. Both are hard-wired on silicon
+* (the bodies to a rail you cannot route; `ibias` to the chip's one bias
+* reference, SPEC.md Sec 2.11) -- drawing either would only add a wire
+* you are never allowed to place anywhere else. Both are supplied
+* instead by the `extra` mechanism below: the netlist still gets the
+* connection, the schematic does not. Override per instance with
+* ibias=<net>/bn=<net>/bp=<net> if you ever need to (TODO.md Sec 2,
+* closed 2026-08-22: verified wiring any of these to a real net routed
+* clean with no warning, since the router ignored them completely).
 *
 * The pin-box (B) records below are declared in netlist pin order, which
 * is also the .subckt port order -- extra pins are appended, in the order
@@ -23,9 +27,9 @@ v {xschem version=3.4.8RC file_version=1.2
 }
 G {}
 K {type=subcircuit
-format="@spiceprefix@name @pinlist @bn @bp @symname tail=@tail"
-template="name=X1 tail=2 bn=VGND bp=VAPWR spiceprefix=X"
-extra="bn bp"
+format="@spiceprefix@name @pinlist @ibias @bn @bp @symname tail=@tail"
+template="name=X1 tail=2 ibias=ibias bn=VGND bp=VAPWR spiceprefix=X"
+extra="ibias bn bp"
 }
 V {}
 S {}
@@ -37,7 +41,6 @@ L 4 -70 -25 -40 -25 {}
 L 4 -70 25 -40 25 {}
 L 4 20 -15 70 -15 {}
 L 4 20 15 70 15 {}
-L 4 -30 40 -30 70 {}
 L 4 -34 -29 -26 -29 {}
 L 4 -30 -33 -30 -25 {}
 L 4 -34 29 -26 29 {}
@@ -45,9 +48,8 @@ B 5 -72.5 -27.5 -67.5 -22.5 {name=inp dir=in}
 B 5 -72.5 22.5 -67.5 27.5 {name=inm dir=in}
 B 5 67.5 -17.5 72.5 -12.5 {name=outp dir=inout}
 B 5 67.5 12.5 72.5 17.5 {name=outm dir=inout}
-B 5 -32.5 67.5 -27.5 72.5 {name=ibias dir=in}
 T {@name} -40 -74 0 0 0.2 0.2 {}
 T {tail=@tail} -40 -58 0 0 0.15 0.15 {}
 T {outp} 30 -32 0 0 0.15 0.15 {}
 T {outm} 30 20 0 0 0.15 0.15 {}
-T {ibias} -25 52 0 0 0.15 0.15 {}
+T {@ibias} -25 52 0 0 0.15 0.15 {layer=1}

@@ -3,9 +3,9 @@
 minimosbius_template.sch into a MosbiusDesign (SPEC.md Sec 3, architecture
 diagram: "xschem -n (netlist) -> MosbiusDesign").
 
-A design instantiates only the five generic devices from xschem/mosbius_lib
-(mosbius_nmos, mosbius_pmos, mosbius_nsink, mosbius_psource, mosbius_ota).
-Each netlists as a flat instance line:
+A design instantiates only the seven generic devices from xschem/mosbius_lib
+(mosbius_nmos, mosbius_pmos, mosbius_nsink, mosbius_psource, mosbius_ota,
+mosbius_ntail, mosbius_ptail). Each netlists as a flat instance line:
 
     <inst> <net> <net> ... <net> mosbius_<kind> <prop>=<value> ...
 
@@ -21,22 +21,40 @@ import re
 from dataclasses import dataclass
 
 # Pin order for each generic device, exactly as declared in its .sym
-# (xschem/mosbius_lib/mosbius_*.sym B{} box order -- confirmed by
-# netlisting each symbol directly, see M2 notes).
+# (xschem/mosbius_lib/mosbius_*.sym B{} box order, then its `extra` order
+# -- confirmed by netlisting each symbol directly, see M2 notes and
+# TODO.md's tail-symbol work order (was Sec 2, closed 2026-08-22).
 DEVICE_PINS: dict[str, tuple[str, ...]] = {
     "nmos": ("g", "d", "s", "b"),
     "pmos": ("g", "d", "s", "b"),
-    "nsink": ("ibias", "out", "b"),
-    "psource": ("ibias", "out", "b"),
+    "nsink": ("out", "ibias", "b"),
+    "psource": ("out", "ibias", "b"),
     "ota": ("inp", "inm", "outp", "outm", "ibias", "bn", "bp"),
+    "ntail": ("d", "g", "s"),
+    "ptail": ("d", "g", "s"),
 }
 
 # Terminals the symbols supply implicitly, via xschem's `extra` attribute
-# (see any mosbius_*.sym header): the body ties. They are hard-wired to a
-# rail on silicon, so they are never drawn on the schematic and the router
-# has nothing to do with them -- but they DO appear on the netlist's
-# instance line, so DEVICE_PINS above still counts them.
-IMPLICIT_PINS = frozenset({"b", "bn", "bp"})
+# (see any mosbius_*.sym header): the body ties, the shared `ibias`
+# reference, and -- for the two tail banks -- the gate and source as
+# well (TODO.md was Sec 2, closed 2026-08-22). All of these are
+# hard-wired on silicon, so none are ever drawn on the schematic and the
+# router has nothing to do with them -- but they DO appear on the
+# netlist's instance line, so DEVICE_PINS above still counts them.
+#
+# Keyed by (kind, terminal) rather than terminal name alone: mosbius_ntail/
+# mosbius_ptail's implicit "g"/"s" are spelled the same as mosbius_nmos/
+# mosbius_pmos's real, drawn "g"/"s" -- a flat set of names would wrongly
+# hide a genuinely-wired FET source from check.py's D1 (mosbius/check.py's
+# `wired_nets`), which is exactly the kind of drift this design avoids.
+IMPLICIT_PINS = frozenset({
+    ("nmos", "b"), ("pmos", "b"),
+    ("nsink", "b"), ("nsink", "ibias"),
+    ("psource", "b"), ("psource", "ibias"),
+    ("ota", "bn"), ("ota", "bp"), ("ota", "ibias"),
+    ("ntail", "g"), ("ntail", "s"),
+    ("ptail", "g"), ("ptail", "s"),
+})
 
 # xschem symbol name -> device kind.
 SYMBOL_KIND = {
@@ -45,6 +63,8 @@ SYMBOL_KIND = {
     "mosbius_nsink": "nsink",
     "mosbius_psource": "psource",
     "mosbius_ota": "ota",
+    "mosbius_ntail": "ntail",
+    "mosbius_ptail": "ptail",
 }
 
 # The design block's fixed port list (SPEC.md Sec 3.1b) -- a net with one
@@ -90,7 +110,8 @@ class MosbiusDesign:
 # (subckt headers, comments, unrelated devices) -- only lines that end in
 # a recognised mosbius_lib symbol name are device requests.
 _INSTANCE_RE = re.compile(
-    r"^\s*(?P<name>\S+)\s+(?P<nets>(?:\S+\s+)+?)mosbius_(?P<kind>nmos|pmos|nsink|psource|ota)"
+    r"^\s*(?P<name>\S+)\s+(?P<nets>(?:\S+\s+)+?)"
+    r"mosbius_(?P<kind>nmos|pmos|nsink|psource|ota|ntail|ptail)"
     r"(?P<props>(?:\s+\w+=\S+)*)\s*$"
 )
 _PROP_RE = re.compile(r"(\w+)=(\S+)")
@@ -125,10 +146,10 @@ def parse_netlist(text: str) -> MosbiusDesign:
 
     if not devices:
         raise NetlistError(
-            "no mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/mosbius_ota "
-            "instances found in this netlist\n"
+            "no mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/mosbius_ota/"
+            "mosbius_ntail/mosbius_ptail instances found in this netlist\n"
             "  Draw your circuit using the generic devices from xschem/mosbius_lib "
             "(SPEC.md Sec 3.4), not raw sky130 transistors -- the router only "
-            "understands those five."
+            "understands those seven."
         )
     return MosbiusDesign(devices=devices)

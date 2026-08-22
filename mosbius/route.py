@@ -149,30 +149,23 @@ DEFAULT_WIDTH = 1  # mosbius_nmos/pmos/nsink/psource's own template default
 # current a schematic can actually set. The cycler takes 2/4/6/8 rather
 # than 1..4 -- step=2 (SPEC.md Sec 2.11).
 #
-# Only the OTA is on this list, because it is the only symbol that carries
-# a tail= property (mosbius_ota.sym, template="name=X1 tail=2 ..."). Until
-# 2026-08-21 the router read only w= and ratio=, so writing tail=4 changed
-# the netlist and changed no bit at all -- masked by the coincidence that
-# an all-zero cycler decodes to step*(1+0) = 2, exactly the symbol's own
-# default, so the one value anybody tries first was accidentally right.
-TAIL_SETTING = {"ota": ("ctrl_otan_tail", 2)}
-DEFAULT_TAIL = 2  # mosbius_ota.sym's own template default
-
-# The roles TAIL_SETTING does *not* cover but that still have a tail, and
-# the value the bitstream leaves it at.
+# The OTA carries its own tail= property (mosbius_ota.sym, template=
+# "name=X1 tail=2 ..."). Until 2026-08-21 the router read only w= and
+# ratio=, so writing tail=4 changed the netlist and changed no bit at all
+# -- masked by the coincidence that an all-zero cycler decodes to
+# step*(1+0) = 2, exactly the symbol's own default, so the one value
+# anybody tries first was accidentally right.
 #
-# ctrl_dpn_tail and ctrl_dpp_tail are real bits, and nothing a user can
-# draw reaches them: a differential pair is two mosbius_nmos/mosbius_pmos
-# symbols that expose only w=, and the tail belongs to the pair rather
-# than to either half, so w='s per-device shape does not fit it. Deciding
-# how a schematic should express it (a tail= on both halves that must
-# agree, or a separate symbol wired to the shared source) is still open --
-# TODO.md Sec 2. Until then the router leaves those bits clear, which is
-# 2 by the same all-zero-decodes-to-2 arithmetic, and R2 in check.py says
-# so out loud rather than dropping a tail= silently.
-UNSETTABLE_TAIL = {
-    "ndiffpair+": 2, "ndiffpair-": 2, "pdiffpair+": 2, "pdiffpair-": 2,
+# "ntail"/"ptail" are the drawn tail-bank roles (TODO.md Sec 2, closed
+# 2026-08-22): a mosbius_ntail/mosbius_ptail instance's own tail=, not
+# either FET half's -- the tail belongs to the pair as a whole, and these
+# are the one device each polarity has that represents it.
+TAIL_SETTING = {
+    "ota": ("ctrl_otan_tail", 2),
+    "ntail": ("ctrl_dpn_tail", 2),
+    "ptail": ("ctrl_dpp_tail", 2),
 }
+DEFAULT_TAIL = 2  # mosbius_ota.sym's own template default
 
 # The roles WIDTH_SETTING does *not* cover, and the width they are fixed
 # at anyway. A diff-pair half has no width bits on the chip -- its
@@ -258,8 +251,9 @@ class DeviceTail:
     property that cannot reach the bitstream has to be said out loud.
 
     `requested` is None when the symbol carries no tail property at all
-    (every symbol except mosbius_ota); `effective` is None when the role
-    has no tail current in the first place (a single FET, a mirror leg).
+    (every symbol except mosbius_ota/mosbius_ntail/mosbius_ptail);
+    `effective` is None when the role has no tail current in the first
+    place (a single FET, a mirror leg).
     """
 
     requested: int | None      # what the netlist said, None if unset
@@ -283,7 +277,7 @@ def device_tail(dev: DeviceRequest, role: str) -> DeviceTail:
     requested = dev.properties.get("tail")
     if role in TAIL_SETTING:
         return DeviceTail(requested, requested or DEFAULT_TAIL, True)
-    return DeviceTail(requested, UNSETTABLE_TAIL.get(role), False)
+    return DeviceTail(requested, None, False)
 
 
 def device_tails(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, DeviceTail]:
@@ -477,11 +471,18 @@ def format_device_roles(routed) -> list[str]:
 
 def _allocate_fets(
     requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
-    pair_rail: str, label: str,
+    pair_rail: str, label: str, tail: DeviceRequest | None = None,
 ) -> dict[str, str]:
     """Assign each FET request to nmos_a/nmos_b/ndiffpair+/ndiffpair- (or the PMOS
-    equivalents). Two cases can use the diff-pair role for free:
+    equivalents). Three cases can use the diff-pair role:
 
+    - A drawn mosbius_ntail/mosbius_ptail (`tail`, TODO.md was Sec 2,
+      closed 2026-08-22): its
+      drain net names the pair directly, so the two FETs sourced on it
+      *are* the pair rather than something pass 1 has to infer. This
+      replaces pass 1 for that net, and it goes first: a user who drew a
+      tail said which two devices are the pair, and that is not a guess
+      to second-guess.
     - Two devices that share a genuine *internal* (non-rail) source net:
       that net can only otherwise be realised by spending a bus row to
       physically tie two independent FETs' sources together, so the diff
@@ -496,17 +497,35 @@ def _allocate_fets(
       halves are in use, any number of such devices (up to 2) can each
       take a half, independently of whether they share a net object.
 
-    Independent slots (nmos_a/nmos_b) are tried first since they place no
-    restriction on the source net at all.
+    Independent slots (nmos_a/nmos_b) are tried first (after any drawn
+    tail's pair is placed) since they place no restriction on the source
+    net at all.
     """
-    by_source: dict[str, list[DeviceRequest]] = {}
-    for d in requests:
-        by_source.setdefault(d.terminals["s"], []).append(d)
-
     roles: dict[str, str] = {}
     remaining_pair = list(pair_roles)
     remaining_indep = list(independent_roles)
     unassigned: list[DeviceRequest] = list(requests)
+
+    # Pass 0: a drawn tail claims its two halves outright. A malformed
+    # tail (drain not shared by exactly two same-polarity sources, or
+    # wired straight to the rail instead of a real internal node) is not
+    # applied here -- mosbius/check.py's check_design (D-series ERRORs)
+    # is what explains that to the user and stops the CLI before routing
+    # is even attempted; this is only a backstop against a caller that
+    # routes without checking first, so it degrades to "ignore the tail
+    # for pairing" rather than raising, and pass 1-3 below decide those
+    # FETs' roles as if no tail had been drawn.
+    if tail is not None and tail.terminals["d"] != pair_rail:
+        halves = [d for d in requests if d.terminals.get("s") == tail.terminals["d"]]
+        if len(halves) == 2:
+            roles[halves[0].name] = remaining_pair.pop(0)
+            roles[halves[1].name] = remaining_pair.pop(0)
+            unassigned.remove(halves[0])
+            unassigned.remove(halves[1])
+
+    by_source: dict[str, list[DeviceRequest]] = {}
+    for d in unassigned:
+        by_source.setdefault(d.terminals["s"], []).append(d)
 
     # Pass 1: exact-2 groups sharing a non-rail source -- the only case
     # that *needs* the pair role rather than merely being allowed to use it.
@@ -570,9 +589,34 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
     nsink = [d for d in design.devices if d.kind == "nsink"]
     psource = [d for d in design.devices if d.kind == "psource"]
     ota = [d for d in design.devices if d.kind == "ota"]
+    ntail = [d for d in design.devices if d.kind == "ntail"]
+    ptail = [d for d in design.devices if d.kind == "ptail"]
 
-    roles.update(_allocate_fets(nmos, NMOS_PAIR_ROLES, NMOS_INDEPENDENT_ROLES, "VGND", "NMOS"))
-    roles.update(_allocate_fets(pmos, PMOS_PAIR_ROLES, PMOS_INDEPENDENT_ROLES, "VAPWR", "PMOS"))
+    if len(ntail) > 1:
+        raise RouteError(
+            f"DOESN'T FIT -- only one NMOS differential-pair tail on this chip\n\n"
+            f"  {len(ntail)} mosbius_ntail devices requested, but there's exactly "
+            f"one NMOS\n  tail bank (role ntail, ctrl_dpn_tail)."
+        )
+    if len(ptail) > 1:
+        raise RouteError(
+            f"DOESN'T FIT -- only one PMOS differential-pair tail on this chip\n\n"
+            f"  {len(ptail)} mosbius_ptail devices requested, but there's exactly "
+            f"one PMOS\n  tail bank (role ptail, ctrl_dpp_tail)."
+        )
+
+    roles.update(_allocate_fets(
+        nmos, NMOS_PAIR_ROLES, NMOS_INDEPENDENT_ROLES, "VGND", "NMOS",
+        tail=ntail[0] if ntail else None,
+    ))
+    roles.update(_allocate_fets(
+        pmos, PMOS_PAIR_ROLES, PMOS_INDEPENDENT_ROLES, "VAPWR", "PMOS",
+        tail=ptail[0] if ptail else None,
+    ))
+    for d in ntail:
+        roles[d.name] = "ntail"
+    for d in ptail:
+        roles[d.name] = "ptail"
 
     if len(nsink) > len(NSINK_ROLES):
         raise RouteError(

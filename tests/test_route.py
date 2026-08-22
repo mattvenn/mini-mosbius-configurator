@@ -226,6 +226,91 @@ def test_a_width_the_cycler_cannot_express_is_explained():
 
 
 # ---------------------------------------------------------------------------
+# Drawn tails declare a pair (TODO.md was Sec 2, closed 2026-08-22): a
+# mosbius_ntail/mosbius_ptail
+# wired to two FETs' shared source claims them as the pair, sets
+# ctrl_dp{n,p}_tail from its own tail=, and -- because their source is a
+# real internal node rather than the rail -- leaves ctrl_dp{n,p}_source
+# clear (the bank and the rail-tie are alternatives on one node).
+# ---------------------------------------------------------------------------
+
+NTAIL_NETLIST = """
+XM1 ua1 ua3 net1 VGND mosbius_nmos w=1
+XM2 ua2 ua4 net1 VGND mosbius_nmos w=1
+XT1 net1 ibias VGND mosbius_ntail tail=6
+"""
+
+PTAIL_NETLIST = """
+XM1 ua1 ua3 net1 VAPWR mosbius_pmos w=1
+XM2 ua2 ua4 net1 VAPWR mosbius_pmos w=1
+XT1 net1 ibias_p VAPWR mosbius_ptail tail=8
+"""
+
+
+def test_a_drawn_tail_claims_its_two_halves():
+    routed = route(parse_netlist(NTAIL_NETLIST))
+    assert {routed.device_roles["XM1"], routed.device_roles["XM2"]} == {
+        "ndiffpair+", "ndiffpair-",
+    }
+    assert routed.device_roles["XT1"] == "ntail"
+
+
+def test_a_drawn_tails_own_tail_reaches_the_bitstream():
+    routed = route(parse_netlist(NTAIL_NETLIST))
+    assert routed.config.device_settings().dpn_tail == 6
+    # The bank and the rail-tie are alternatives on the same node -- using
+    # the bank must leave the free rail-tie bit clear.
+    assert routed.config.device_settings().dpn_source is False
+
+
+def test_a_drawn_pmos_tail_uses_the_pmos_bit():
+    routed = route(parse_netlist(PTAIL_NETLIST))
+    assert {routed.device_roles["XM1"], routed.device_roles["XM2"]} == {
+        "pdiffpair+", "pdiffpair-",
+    }
+    assert routed.config.device_settings().dpp_tail == 8
+    assert routed.config.device_settings().dpp_source is False
+
+
+def test_two_tails_of_the_same_polarity_reports_doesnt_fit():
+    netlist = NTAIL_NETLIST + "XT2 net1 ibias VGND mosbius_ntail tail=2\n"
+    with pytest.raises(RouteError, match="only one NMOS differential-pair tail"):
+        route(parse_netlist(netlist))
+
+
+def test_no_tail_drawn_keeps_the_old_rail_tie_behaviour():
+    # TODO.md's (was Sec 2, closed 2026-08-22) explicit backward-
+    # compatibility case: drawing no
+    # tail at all leaves the pair-inference and the free rail tie exactly
+    # as before -- examples/srlatch/ depends on this.
+    netlist = NTAIL_NETLIST.replace(
+        "XT1 net1 ibias VGND mosbius_ntail tail=6\n", ""
+    )
+    routed = route(parse_netlist(netlist))
+    assert {routed.device_roles["XM1"], routed.device_roles["XM2"]} == {
+        "ndiffpair+", "ndiffpair-",
+    }
+    assert routed.config.device_settings().dpn_tail == 2   # all-zero default
+    assert routed.config.device_settings().dpn_source is False  # net1 isn't VGND
+
+
+def test_a_malformed_tail_does_not_crash_route_it_falls_back():
+    # check_design's D3 is what actually explains this to a user (an
+    # ERROR that stops the CLI before routing runs at all) -- this is
+    # only the backstop for a caller that routes without checking first,
+    # so route() must degrade gracefully rather than raising a confusing
+    # error or crashing outright.
+    netlist = """
+    XM1 ua1 ua3 net1 VGND mosbius_nmos w=1
+    XT1 net1 ibias VGND mosbius_ntail tail=6
+    """
+    routed = route(parse_netlist(netlist))
+    assert routed.device_roles["XM1"] == "nmos_a"   # ordinary pass 2, tail ignored
+    assert routed.device_roles["XT1"] == "ntail"     # still gets its own role
+    assert routed.config.device_settings().dpn_tail == 6  # the bit is still real
+
+
+# ---------------------------------------------------------------------------
 # Rows a terminal cannot reach: diff-pair and OTA inputs have switches to
 # bus rows 1-3 only.
 # ---------------------------------------------------------------------------

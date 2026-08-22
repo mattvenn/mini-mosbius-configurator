@@ -14,10 +14,8 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§1), no way for a schematic to set a differential pair's tail
-current (§2 -- decided and written up as a work order, not started),
-device allocation decided by netlist order (§3), and findings
-repeating their whole explanation once per offending device (§4). It is
+design (§1), device allocation decided by netlist order (§2), and findings
+repeating their whole explanation once per offending device (§3). It is
 renumbered from 1 whenever items are removed, and every citation of it in
 this repo is updated in the same commit, so a `TODO.md` §number here is
 always live.
@@ -29,6 +27,14 @@ device on both bus sides at once); `tail=` on a `mosbius_ota` reaches
 `ctrl_otan_tail`; and a terminal asked for a bus row it has no switch to
 raises a `RouteError` naming the device, the net and the rows it can
 reach, instead of a `KeyError`.
+
+Closed on 2026-08-22, so don't re-report them: a schematic can now draw a
+differential pair's tail current, with `mosbius_ntail`/`mosbius_ptail`
+(one drawn pin -- the drain, wired to the pair's shared source -- plus
+`tail=2/4/6/8`) reaching `ctrl_dpn_tail`/`ctrl_dpp_tail`; and `ibias` on
+`mosbius_nsink`/`mosbius_psource`/`mosbius_ota` is implicit now (`extra=`),
+matching the body ties, since the router always ignored a drawn connection
+there. See `examples/diffamp/` for the tail feature end to end.
 
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it
@@ -167,16 +173,20 @@ These were all got wrong once. The sources that look authoritative are not.
 
 ## Useful facts
 
-- **The generic-device symbols have no body pin.** It is hard-wired to a rail
-  on silicon, so `mosbius_*.sym` supplies it through xschem's `extra`
-  attribute (`extra="b"`, `template="... b=VGND"`), which appends the net to
-  both the instance line and the `.subckt` port list. So the netlist still
-  carries 4 connections for a FET and `DEVICE_PINS` still counts them, but
-  there is nothing to draw. Inside the device schematics the bulk is likewise
-  not a wire: they instantiate sky130's **3-terminal** `nfet3_*`/`pfet3_*`
-  symbols and pass it as the `@body` parameter. Wiring it instead makes
-  xschem's GUI netlist report `undriven node: b`, because `extra` ports are
-  invisible to its connectivity check.
+- **The generic-device symbols have no body or bias pin.** Both are
+  hard-wired on silicon, so `mosbius_*.sym` supplies them through xschem's
+  `extra` attribute (`extra="b"`, `template="... b=VGND"` for the FETs;
+  `mosbius_nsink`/`mosbius_psource`/`mosbius_ota` do the same for `ibias`,
+  and `mosbius_ntail`/`mosbius_ptail` for both gate and source), which
+  appends the net to both the instance line and the `.subckt` port list.
+  So the netlist still carries every connection and `DEVICE_PINS` still
+  counts them, but there is nothing to draw. Inside the device schematics
+  the bulk is likewise not a wire: they instantiate sky130's **3-terminal**
+  `nfet3_*`/`pfet3_*` symbols and pass it as the `@body` parameter. Wiring
+  it instead makes xschem's GUI netlist report `undriven node: b`, because
+  `extra` ports are invisible to its connectivity check -- the same is true
+  of a drawn `ibias`, verified 2026-08-22: it routed clean with no warning
+  either way, which is exactly why TODO.md made it implicit.
 - 192-bit shift chain. Transmit **MSB first** (bit 191 first). 48 hex chars.
 - `enable` (ui[1]) gates all switch outputs combinationally — **must be low
   throughout the shift**, or the chip walks through 192 arbitrary configurations.

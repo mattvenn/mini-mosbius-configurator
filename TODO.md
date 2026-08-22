@@ -4,13 +4,17 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-**Renumbered from 1 on 2026-08-21**, for the second time that day. The first
-renumber removed the eight items the symbol/pin-geometry work closed. This
-one removes two more and shrinks two: the drain/source-swap hint now exists
-(`check.py`'s `D2`), a single OTA no longer crashes the router, the OTA's
-`tail=` now reaches the bitstream, and an unreachable (pin, row) is now a
-`RouteError` that explains itself rather than a `KeyError`. What is left of
-those last two items is in §2 and §3 below.
+**Renumbered from 1 on 2026-08-22**, for the third time. The first renumber
+removed the eight items the symbol/pin-geometry work closed; the second
+removed two more and shrank two, leaving the drain/source-swap hint
+(`check.py`'s `D2`), a working single-OTA route, the OTA's `tail=` reaching
+the bitstream, and an unreachable (pin, row) explaining itself instead of
+raising `KeyError`. This one removes the tail-symbol work order: two new
+symbols (`mosbius_ntail`/`mosbius_ptail`), `netlist.py`/`route.py`/`check.py`
+updated, and `examples/diffamp/` proving it end to end (route table, no
+dropped `tail=`, `ctrl_dpn_tail` reaching the bitstream). What's left
+renumbers down: device allocation by netlist order is now §2, repeated
+findings is now §3.
 
 This file used to keep numbers stable and leave gaps, because other files cite
 items by number. Renumbering instead means those citations move too, and they
@@ -57,109 +61,7 @@ explicitly. Get it wrong and the failure is silent: devices are replaced by
 `*  x1 -  tt_asw_3v3  IS MISSING !!!!` and ngspice runs the empty deck.
 
 
-## 2. Draw the tail: two new symbols, and `ibias` made implicit
-
-Decided 2026-08-22, not started. The decision is the part that was missing;
-what follows is a work order, not an open question.
-
-**What is wrong today.** `ctrl_dpn_tail` (bits 180/181) and `ctrl_dpp_tail`
-(bits 162/163) are real and programmable, and nothing a user can draw
-reaches them. A differential pair is not a symbol: you draw two
-`mosbius_nmos` sharing a source and `_allocate_fets` pass 1 infers the pair
-*afterwards*, so the tail belongs to no object on the schematic. The OTA is
-fine -- it is a symbol, it has `tail=`, and that reaches `ctrl_otan_tail`.
-
-**The decision: draw the tail as the transistor it is.** Two new symbols,
-`mosbius_ntail` and `mosbius_ptail`, each with **one drawn pin** -- the
-drain, wired to the pair's shared source node -- and a `tail=2/4/6/8`
-property. Drawing one *declares* the pair (the two FETs sourced on that node
-are its halves) instead of leaving the router to infer it. Drawing none
-keeps today's behaviour exactly: shared source tied to its rail by
-`ctrl_dp{n,p}_source`, halves usable as two standalone FETs, which is what
-`examples/srlatch/` depends on.
-
-**Gate and source are implicit** (`extra=`, as the body ties already are).
-Not a style choice: the NMOS tail's gate really is on `ibias`, but the PMOS
-tail's is on `ibias_p`, which `mirror_n`'s `iout_fixed` leg generates
-*inside* the chip. `ibias_p` is not a port of `minimosbius_template.sch` and
-cannot become one without exposing chip internals as pins, so there is no
-honest net to draw a PMOS tail's gate to. Symmetry between the two symbols
-matters more than matching the mirrors.
-
-**Same change to the mirrors and the OTA, for the same reason.**
-`mosbius_nsink`, `mosbius_psource` and `mosbius_ota` each carry a *drawn*
-`ibias` pin whose connection the router ignores completely -- wire a
-`mosbius_nsink`'s `ibias` to `ua3` today and it routes clean, no warning
-(verified 2026-08-22). All four bias connections are hardwired in silicon,
-so all four should be implicit. Nothing in the repo instantiates those three
-symbols yet, so no schematic needs editing -- this is as cheap as it will
-ever be.
-
-### Hardware facts, verified 2026-08-22 -- do not re-derive
-
-Read out of the read-only submodule, `ttsky-mini-mosbius/xschem/`:
-
-- **The tail is a bank, not one FET.** `diff_n.sch`: `M8` (`W=20 nf=4`,
-  `L=1`) always in circuit; `M6` (same geometry) behind switch `x4`, gated
-  by `ctrl_tail[0]`; `M10` (`W=40 nf=8`) behind `x5`, gated by
-  `ctrl_tail[1]`. A 1x + 1x + 2x bank, all gates on `vbias`, all sources on
-  GND. `diff_p.sch` mirrors it. So the setting is a **parallel unit count**,
-  never a length -- same as the widths (SPEC.md §2.12).
-- **2/4/6/8 rather than 1/2/3/4** because a pair splits its tail between two
-  matched halves: `n = 2 * (1 + b_lsb + 2*b_msb)`, and `n/2` is the number
-  of unit slices.
-- **The tail and the source tie are alternatives on one node.** `diff_n.sch`
-  switch `x1`, gated by `ctrl_source`, shorts `itail` straight to GND,
-  bypassing the bank. One or the other, never both -- which is exactly the
-  "tail drawn / not drawn" distinction above.
-- **Bias chain.** `ua[0]` -> `ibias` -> `mirror_n` reference, the `dpn` tail
-  and the OTA tail. `mirror_n`'s `iout_fixed` -> `ibias_p` -> `mirror_p` and
-  the `dpp` tail. Two nets, chained; the PMOS side is two mirror hops from
-  the pin.
-- **Drawing a tail as a `mosbius_nmos` does not work today**, which is why
-  this needs a symbol rather than a convention: gate on `ibias`, drain on
-  the shared node, `w=4` -> the router allocates it as `nmos_a`, burning one
-  of the two independent NMOS and writing `ctrl_nfeta_width`. Verified.
-
-### The work, in order
-
-1. **`mosbius_ntail.sym` / `mosbius_ptail.sym`.** One drawn pin `d`;
-   `tail=2` in the template; gate and source via `extra=`, templated to
-   `ibias`/`VGND` and `ibias_p`/`VAPWR`. Note `ibias_p` will netlist as a
-   net nothing else touches -- harmless, but check `check.py`'s design
-   checks and `W2`/`W3` do not flag it.
-2. **`netlist.py`.** `SYMBOL_KIND` and `DEVICE_PINS` for the two kinds;
-   add `ibias` (and the tails' `g`/`s`) to `IMPLICIT_PINS`. Extra pins
-   append in `extra=` order, so `DEVICE_PINS` ordering must be re-derived
-   by netlisting each symbol, not guessed.
-3. **The three existing symbols.** Move `ibias` from a drawn `B` box into
-   `extra=` on `mosbius_nsink`, `mosbius_psource`, `mosbius_ota`; update
-   their `DEVICE_PINS` rows to match.
-4. **`route.py`.** Roles `ntail`/`ptail`, at most one of each. A drawn tail
-   claims the two same-polarity FETs sourced on its drain as the pair
-   halves -- this *replaces* pass 1's inference for that pair. Emit
-   `ctrl_dp{n,p}_tail` from `tail=` via the existing `TAIL_SETTING` table,
-   and suppress `ctrl_dp{n,p}_source` whenever a tail is drawn.
-5. **`check.py`.** Delete `_check_r2_tail_dropped` and `route.py`'s
-   `UNSETTABLE_TAIL` -- they exist only to say the value went nowhere. Add,
-   in their place: a tail whose drain is not exactly two same-polarity
-   sources, and a tail drawn on a pair whose halves are also asking for a
-   rail-tied source.
-6. **Tests and an example.** No committed design uses a diff pair as a pair
-   yet; a small differential amplifier would be the honest way to prove
-   this end to end.
-7. **Docs.** SPEC.md §2.12/§3.4's symbol list, `TUTORIAL.md`, `README.md`,
-   and CLAUDE.md's "no body pin" note, which becomes "no body or bias pin".
-
-### One-time cost, and why both halves land together
-
-Changing what a symbol emits changes every netlist line, so
-`design_topology_hash()` changes and every stored `.mosbius.json` re-routes
-once. That is fine now -- three example designs, none of them using the
-affected symbols -- and annoying later. Do the mirrors' `ibias` and the tail
-symbols in the same commit so the cost is paid once.
-
-## 3. Device allocation is decided by netlist order
+## 2. Device allocation is decided by netlist order
 
 Raised 2026-08-21, found routing a hand-drawn SR latch. The diagnostic half
 of this is done -- the failure below now raises a `RouteError` that names
@@ -194,9 +96,10 @@ In the latch that net is `net1`, the cross-coupling node, which gates
 `XM3`/`XM4`. Moving Q from `ua3` to `ua4` does not help -- checked. The
 constraint is about the internal net, not the package pin.
 
-Note §2 does part of this for free: a drawn tail declares which two FETs
-are the pair, so the allocator stops having to infer it for any pair that
-has one. What is left here is the case with no tail drawn.
+Note the tail-symbol work (closed 2026-08-22) does part of this for free: a
+drawn `mosbius_ntail`/`mosbius_ptail` declares which two FETs are the pair,
+so the allocator stops having to infer it for any pair that has one. What
+is left here is the case with no tail drawn.
 
 The fix: **allocate by constraint rather than by line order.** Give the
 independent slots to the devices whose gates sit on nets a diff-pair input
@@ -212,7 +115,7 @@ Note this interacts with sticky routing (SPEC.md §3.2b): a better
 allocator must not silently relocate an existing working design, so it
 belongs behind the same stored-routing reuse as everything else.
 
-## 4. Repeated findings repeat their whole explanation
+## 3. Repeated findings repeat their whole explanation
 
 Raised 2026-08-21 by the user, seeing two near-identical 23-line warnings
 from one `mosbius route`.

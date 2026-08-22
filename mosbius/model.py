@@ -61,6 +61,14 @@ DEVICE_TERMINALS: dict[str, dict[str, str]] = {
         "inp": "xpt_otan_inp", "outp": "xpt_otan_outp",
         "inm": "xpt_otan_inm", "outm": "xpt_otan_outm",
     },
+    # The tail banks (TODO.md was Sec 2, closed 2026-08-22) have no
+    # matrix terminal of their own
+    # -- the shared node they sit on is never reachable from the bus
+    # (SPEC.md Sec 2.12) -- so they have no crosspoints to declare here.
+    # They still need an entry: mosbius/route.py's _collect_touches()
+    # indexes this dict by every allocated role.
+    "ntail": {},
+    "ptail": {},
 }
 
 # The 4 devices with an independently-routable source, for W1 (SPEC.md

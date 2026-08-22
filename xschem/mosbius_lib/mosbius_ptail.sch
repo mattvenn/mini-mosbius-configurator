@@ -5,27 +5,27 @@ V {}
 S {}
 E {}
 N 60 -80 60 -140 {
-lab=ibias}
+lab=g}
 N 100 -50 140 -50 {
-lab=ibias}
+lab=g}
 N 140 -50 140 -140 {
-lab=ibias}
+lab=g}
 N 280 -80 280 -140 {
-lab=ibias}
+lab=g}
 N -20 -140 280 -140 {
-lab=ibias}
+lab=g}
 N 100 -110 100 -160 {
-lab=b}
+lab=s}
 N 320 -110 320 -160 {
-lab=b}
+lab=s}
 N 100 -160 320 -160 {
-lab=b}
+lab=s}
 N 320 -50 320 -20 {
-lab=out}
+lab=d}
 C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 80 -80 0 0 {name=M1
 L=1
-W=30
-nf=4
+W=60
+nf=8
 mult=1
 ad="'int((nf+1)/2) * W/nf * 0.29'"
 pd="'2*int((nf+1)/2) * (W/nf + 0.29)'"
@@ -34,13 +34,13 @@ ps="'2*int((nf+2)/2) * (W/nf + 0.29)'"
 nrd="'0.29 / W'" nrs="'0.29 / W'"
 sa=0 sb=0 sd=0
 model=pfet_g5v0d10v5
-body=b
+body=s
 spiceprefix=X
 }
 C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 300 -80 0 0 {name=M2
 L=1
-W="30*ratio"
-nf="4*ratio"
+W="60*(tail/2)"
+nf="8*(tail/2)"
 mult=1
 ad="'int((nf+1)/2) * W/nf * 0.29'"
 pd="'2*int((nf+1)/2) * (W/nf + 0.29)'"
@@ -49,9 +49,9 @@ ps="'2*int((nf+2)/2) * (W/nf + 0.29)'"
 nrd="'0.29 / W'" nrs="'0.29 / W'"
 sa=0 sb=0 sd=0
 model=pfet_g5v0d10v5
-body=b
+body=s
 spiceprefix=X
 }
-C {devices/lab_pin.sym} -20 -140 0 1 {name=p1 lab=ibias}
-C {devices/lab_pin.sym} 200 -160 0 1 {name=p2 lab=b}
-C {devices/iopin.sym} 320 -20 0 1 {name=p3 lab=out}
+C {devices/lab_pin.sym} -20 -140 0 1 {name=p1 lab=g}
+C {devices/lab_pin.sym} 200 -160 0 1 {name=p2 lab=s}
+C {devices/iopin.sym} 320 -20 0 1 {name=p3 lab=d}

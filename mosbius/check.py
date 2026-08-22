@@ -32,7 +32,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from mosbius.netlist import IMPLICIT_PINS, PORT_NAMES, MosbiusDesign
-from mosbius.route import FIXED_GEOMETRY, UNSETTABLE_TAIL, DeviceTail, DeviceWidth
+from mosbius.route import FIXED_GEOMETRY, DeviceTail, DeviceWidth
 from mosbius.model import (
     DEVICE_DC_PATHS,
     DEVICE_TERMINALS,
@@ -481,7 +481,7 @@ def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
         net
         for d in design.devices
         for terminal, net in d.terminals.items()
-        if terminal not in IMPLICIT_PINS
+        if (d.kind, terminal) not in IMPLICIT_PINS
     }
 
     findings = []
@@ -651,6 +651,114 @@ def _check_d2_drain_and_source_swapped(design: MosbiusDesign) -> list[Finding]:
     return findings
 
 
+# Per-kind vocabulary for D3/D4's messages (TODO.md was Sec 2, closed
+# 2026-08-22): the FET kind a
+# drawn tail's halves must be, the rail its drain must *not* be wired to,
+# the bitstream field its tail= actually reaches, and its own symbol name.
+_TAIL_FET_KIND = {"ntail": "nmos", "ptail": "pmos"}
+_TAIL_RAIL = {"ntail": "VGND", "ptail": "VAPWR"}
+_TAIL_BIT = {"ntail": "ctrl_dpn_tail", "ptail": "ctrl_dpp_tail"}
+_TAIL_SYMBOL = {"ntail": "mosbius_ntail", "ptail": "mosbius_ptail"}
+
+
+def _check_d3_tail_wrong_arity(design: MosbiusDesign) -> list[Finding]:
+    """A drawn tail bank whose drain net isn't shared by exactly two
+    same-polarity FET sources.
+
+    Drawing a mosbius_ntail/mosbius_ptail declares a pair: the router
+    claims the two FETs sourced on its drain net as the pair's two
+    halves instead of inferring the pairing (TODO.md was Sec 2, closed
+    2026-08-22). Anything
+    other than exactly two leaves that declaration unable to mean
+    anything -- zero or one means there is no pair to bias, three or
+    more means the router cannot tell which two you meant.
+
+    Skips a tail wired straight to its own rail -- D4 covers that with a
+    more specific message, and it would otherwise also read as "wrong
+    arity" here purely by coincidence of what else happens to share that
+    rail.
+    """
+    findings = []
+    for kind, fet_kind in _TAIL_FET_KIND.items():
+        for tail in design.devices:
+            if tail.kind != kind:
+                continue
+            node = tail.terminals["d"]
+            if node == _TAIL_RAIL[kind]:
+                continue
+            halves = [
+                d for d in design.devices
+                if d.kind == fet_kind and d.terminals.get("s") == node
+            ]
+            if len(halves) == 2:
+                continue
+
+            symbol = _TAIL_SYMBOL[kind]
+            fet_symbol = "mosbius_nmos" if fet_kind == "nmos" else "mosbius_pmos"
+            if not halves:
+                found = f"nothing else in the design has its source on '{node}'"
+            else:
+                found = (
+                    f"{len(halves)} {fet_symbol} devices have their source there: "
+                    f"{_name_list(halves)}"
+                )
+            message = (
+                f"ERROR -- {tail.name}'s drain doesn't declare a pair\n\n"
+                f"  {tail.name} is a {symbol}, and its drain is wired to "
+                f"'{node}'.\n  Drawing a {symbol} declares that net's two "
+                f"{fet_symbol} devices as a\n  differential pair -- but {found}.\n\n"
+                f"  A {symbol} needs exactly two {fet_symbol} devices sharing its\n"
+                f"  drain net as their source: those become the pair, and "
+                f"{tail.name}'s\n  tail= reaches their shared tail current "
+                f"({_TAIL_BIT[kind]}).\n\n"
+                f"  To fix: wire {tail.name}'s drain to the shared source of "
+                f"exactly two\n  {fet_symbol} devices, or remove {tail.name} if "
+                f"you didn't mean to\n  draw a pair here."
+            )
+            findings.append(Finding(code="D3", severity=ERROR, message=message))
+    return findings
+
+
+def _check_d4_tail_on_rail(design: MosbiusDesign) -> list[Finding]:
+    """A drawn tail bank whose drain is wired straight to its own rail.
+
+    The tail bank's output is a genuine internal node -- the diff pair's
+    shared source, which has no matrix terminal of its own (SPEC.md Sec
+    2.12) -- never the rail itself. The rail-tie bit (ctrl_dp{n,p}_source)
+    and the tail bank (ctrl_dp{n,p}_tail) are two different ways to bias
+    that *same* node, and drawing a tail already picked the bank -- wiring
+    its drain to the rail asks for both at once, which the hardware
+    cannot do (TODO.md was Sec 2, closed 2026-08-22: "one or the other,
+    never both").
+    """
+    findings = []
+    for kind, rail in _TAIL_RAIL.items():
+        offenders = [d for d in design.devices if d.kind == kind and d.terminals["d"] == rail]
+        if not offenders:
+            continue
+        symbol = _TAIL_SYMBOL[kind]
+        for tail in offenders:
+            message = (
+                f"ERROR -- {tail.name}'s drain is wired straight to {rail}\n\n"
+                f"  {tail.name} is a {symbol}, and its drain -- the node its "
+                f"tail bank\n  feeds -- is wired directly to {rail} instead of "
+                f"to a genuine internal\n  net.\n\n"
+                f"  That node is never the rail itself: it is the diff pair's "
+                f"shared\n  source, which has no matrix terminal of its own "
+                f"(SPEC.md Sec 2.12).\n  {_TAIL_BIT[kind]} (what {tail.name}'s "
+                f"tail= sets) and the rail-tie bit\n  are two different ways to "
+                f"bias that one node, and they are\n  alternatives, never both "
+                f"at once.\n\n"
+                f"  To fix: wire {tail.name}'s drain to the pair halves' actual\n"
+                f"  shared source net, not to {rail}. If you meant the halves "
+                f"tied\n  straight to {rail} instead (CLAUDE.md Traps #3), "
+                f"remove {tail.name}\n  and wire their sources to {rail} "
+                f"directly."
+            )
+            findings.append(Finding(code="D4", severity=ERROR, message=message))
+    return findings
+
+
 def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
                             device_roles: dict[str, str]) -> list[Finding]:
     """A width the schematic asked for that the assigned role cannot carry
@@ -709,12 +817,13 @@ def _check_r2_tail_dropped(device_tails: dict[str, DeviceTail],
     no bit for -- the same rule R1 enforces for widths, applied to the
     other setting a device can carry.
 
-    Two different situations end up here, and they need different answers:
-    a diff-pair half, whose tail is real but unreachable from a schematic
-    (TODO.md Sec 2), and everything else, which simply has no tail current
-    to set. Only mosbius_ota carries a tail= of its own, so both of these
-    mean somebody typed the property by hand -- but a message that guessed
-    the wrong one of the two would send them looking in the wrong place.
+    Three symbols carry a tail= of their own: mosbius_ota, mosbius_ntail
+    and mosbius_ptail (TODO.md was Sec 2, closed 2026-08-22). Everything
+    else that ends up with
+    tail= set means somebody typed the property on the wrong kind of
+    device -- a diff-pair half's tail belongs to the pair as a whole, and
+    is reached by wiring a mosbius_ntail/mosbius_ptail to its shared
+    source, not by writing tail= on either half.
     """
     findings = []
     for name in sorted(device_tails):
@@ -722,47 +831,19 @@ def _check_r2_tail_dropped(device_tails: dict[str, DeviceTail],
         if not tail.dropped:
             continue
         role = device_roles[name]
-
-        if role not in UNSETTABLE_TAIL:
-            message = (
-                f"WARNING -- {name}'s tail={tail.requested} was ignored: {role} "
-                f"has no tail current\n\n"
-                f"  The router put {name} on {role}, which is a single transistor "
-                f"(or a\n  single current-mirror leg), not a differential pair. A "
-                f"tail current is\n  the shared current a pair is biased with, so "
-                f"there is nothing here for\n  tail= to set and it was dropped.\n\n"
-                f"  Only mosbius_ota has a tail you can write in the schematic. If "
-                f"you\n  meant to change how hard this device drives, that is "
-                f"w= (1, 2, 3 or 4)\n  on a mosbius_nmos/mosbius_pmos, or ratio= on "
-                f"a mosbius_nsink/\n  mosbius_psource."
-            )
-            findings.append(Finding(code="R2", severity=WARN, message=message))
-            continue
-
-        nmos = role.startswith("n")
-        pair = "NMOS" if nmos else "PMOS"
-        bit = "ctrl_dpn_tail" if nmos else "ctrl_dpp_tail"
-        symbol = "mosbius_nmos" if nmos else "mosbius_pmos"
         message = (
-            f"WARNING -- {name}'s tail={tail.requested} was ignored: nothing in "
-            f"the schematic can\n           set {role}'s tail current\n\n"
-            f"  The router put {name} on {role}, one of the two halves of the\n"
-            f"  {pair} differential pair. That pair does have a programmable tail\n"
-            f"  current on the chip -- {bit}, which takes 2, 4, 6 or 8 --\n"
-            f"  but the tail belongs to the pair as a whole, not to either half,\n"
-            f"  and a half is drawn as an ordinary {symbol} symbol that has no\n"
-            f"  way to say so. So there is nowhere in your schematic for this "
-            f"value\n  to come from, and it was dropped.\n\n"
-            f"  What you get instead is tail={tail.effective}: the router leaves "
-            f"{bit}\n  clear, and an all-zero 2-bit cycler decodes to "
-            f"2 * (1 + 0) = 2\n  (SPEC.md Sec 2.11).\n\n"
-            f"  What you can still change: every tail and every mirror on the chip\n"
-            f"  scales with the bias current fed into the ibias pin, which\n"
-            f"  `mosbius program --ibias` sets when it uploads (SPEC.md Sec 3.4b).\n"
-            f"  That moves this pair's operating point even though its own tail\n"
-            f"  setting is out of reach -- it moves everything else with it too.\n"
-            f"  If you need a tail you can set on its own, mosbius_ota is the one\n"
-            f"  device that exposes one (tail=2/4/6/8, wired to ctrl_otan_tail)."
+            f"WARNING -- {name}'s tail={tail.requested} was ignored: {role} "
+            f"has no tail current\n\n"
+            f"  The router put {name} on {role}, which has no tail-current bit "
+            f"of its\n  own, so there is nothing here for tail= to set and it "
+            f"was dropped.\n\n"
+            f"  Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail "
+            f"you can\n  write in the schematic. If you meant to change how hard "
+            f"this device\n  drives, that is w= (1, 2, 3 or 4) on a "
+            f"mosbius_nmos/mosbius_pmos, or\n  ratio= on a mosbius_nsink/"
+            f"mosbius_psource. If you meant a differential\n  pair's tail "
+            f"current, that belongs on a mosbius_ntail/mosbius_ptail wired\n"
+            f"  to the pair's shared source, not on either half."
         )
         findings.append(Finding(code="R2", severity=WARN, message=message))
     return findings
@@ -786,6 +867,8 @@ def check_design(design: MosbiusDesign) -> SafetyReport:
     return SafetyReport(
         findings=_check_d1_source_on_wrong_rail(design)
         + _check_d2_drain_and_source_swapped(design)
+        + _check_d3_tail_wrong_arity(design)
+        + _check_d4_tail_on_rail(design)
     )
 
 
