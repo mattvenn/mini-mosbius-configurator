@@ -15,7 +15,8 @@ the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
 design (§1), no way for a schematic to set a differential pair's tail
-current (§2), device allocation decided by netlist order (§3), and findings
+current (§2 -- decided and written up as a work order, not started),
+device allocation decided by netlist order (§3), and findings
 repeating their whole explanation once per offending device (§4). It is
 renumbered from 1 whenever items are removed, and every citation of it in
 this repo is updated in the same commit, so a `TODO.md` §number here is
