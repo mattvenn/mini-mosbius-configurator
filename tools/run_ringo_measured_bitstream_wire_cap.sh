@@ -279,15 +279,30 @@ Xpad_ua4 GND ua4_pad {UA4_ALIAS} pad_model
 * simulation before this script -- every prior result treated each bus
 * row as a zero-length ideal net. Real extracted values (not estimated):
 * bus_A[1]=885.88fF, bus_A[2]=874.86fF, bus_A[3]=864.71fF,
-* bus_B[2]=1819.36fF, bus_B[3]=908.76fF -- all roughly 20-40x bigger than
+* bus_B[2]=922.84fF, bus_B[3]=908.76fF -- all roughly 20-40x bigger than
 * an earlier, unverified hand-estimate (~30-50fF) that had been used to
 * justify not bothering with this. Added to all 5 real bus rows this
 * bitstream uses, including the two shorted-to rows (bus_A[2]/bus_B[3])
 * that have no pad or measurement but are still real physical wires.
+*
+* CORRECTED 2026-08-22 (after this script's original 37.62MHz run): the
+* bus_B[2] value above was originally measured through the special
+* asw_col_short column at 1819.36fF, assuming its index-to-row order
+* matched the regular hardware-validated columns. That assumption was
+* proven wrong -- asw_col_short's supposed row-2 node isn't even the same
+* electrical net as the real bus_B[2]. The corrected value (922.84fF,
+* roughly half the original) now matches mosbius/spice.py's
+* BUS_WIRE_CAPACITANCE_F, the authoritative source going forward (see
+* render_bus_wire_caps() there for all 12 rows, not just these 5) -- this
+* script still hand-copies its 5 values rather than calling that function,
+* since it predates it; keep them in sync by hand if either changes again,
+* or migrate this script to call render_bus_wire_caps() directly next time
+* it's touched. Less capacitance on this row means this corrected run
+* should land somewhat *faster* than the original 37.62MHz, not slower.
 Cwire_ua1net {UA1_ALIAS} GND 885.88f
 Cwire_busA2 bus_A[2] GND 874.86f
 Cwire_ua2net {UA2_ALIAS} GND 864.71f
-Cwire_ua4net {UA4_ALIAS} GND 1819.36f
+Cwire_ua4net {UA4_ALIAS} GND 922.84f
 Cwire_busB3 bus_B[3] GND 908.76f
 
 .nodeset v({UA1_ALIAS})=0
@@ -336,7 +351,7 @@ for pad in ("Xpad_ua1 GND ua1_pad ua1_net pad_model",
 for wire_cap in ("Cwire_ua1net ua1_net GND 885.88f",
                  "Cwire_busA2 bus_A[2] GND 874.86f",
                  "Cwire_ua2net ua2_net GND 864.71f",
-                 "Cwire_ua4net ua4_net GND 1819.36f",
+                 "Cwire_ua4net ua4_net GND 922.84f",
                  "Cwire_busB3 bus_B[3] GND 908.76f"):
     assert wire_cap in text, f"wire-cap line missing: {wire_cap}"
 
