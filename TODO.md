@@ -199,10 +199,14 @@ table above -- it doesn't reduce simulation cost, but it does remove the
 design.
 
 **What's still untested, roughly in order of likely payoff:**
-1. Re-run the exact-measured-bitstream result with the corrected
-   `bus_B[2]` value (via `render_bus_wire_caps()` now, not hand-copied
-   constants) for a trustworthy final number -- needs the higher-RAM
-   machine.
+1. Re-run `tools/run_ringo_measured_bitstream_wire_cap.sh` for a
+   trustworthy final number -- its hand-copied `bus_B[2]` constant is now
+   corrected (922.84fF, verified by regenerating the netlist and re-running
+   its own sanity check here), so this is now just "run it," no further
+   diagnosis needed. Still needs the higher-RAM machine for the actual
+   ngspice step. Migrating the script to call `render_bus_wire_caps()`
+   directly instead of hand-copied constants remains a nice-to-have, not
+   done yet, but isn't blocking a correct re-run.
 2. Isolating how much of the 93.5->37.62MHz(ish) drop is the exact-bitstream
    (3 real pads, different topology) switch versus the row-coupling cap
    versus the bus-wire cap specifically -- each was added cumulatively,
