@@ -315,9 +315,23 @@ def test_a_malformed_tail_does_not_crash_route_it_falls_back():
 # bus rows 1-3 only.
 # ---------------------------------------------------------------------------
 
-# The SR latch's six devices, relisted. Allocation still follows netlist
-# order, so XM4 takes a diff-pair half here -- and XM4's gate is on net1,
-# which spans both bus sides. That used to be KeyError: ('cfgb_dpn_inm', 6).
+# examples/srlatch/srlatch.sch's own six devices, in their real order --
+# README.md documents this exact netlist and its resulting bitstream.
+CANONICAL_SR_LATCH = """
+XM1 ua3  net1 VAPWR VAPWR mosbius_pmos w=1
+XM2 ua3  net1 VGND  VGND  mosbius_nmos w=1
+XM3 net1 ua3  VAPWR VAPWR mosbius_pmos w=1
+XM4 net1 ua3  VGND  VGND  mosbius_nmos w=1
+XM5 ua1  net1 VGND  VGND  mosbius_nmos w=1
+XM6 ua2  ua3  VGND  VGND  mosbius_nmos w=1
+"""
+CANONICAL_SR_LATCH_BITSTREAM = "0c008000c020008808000000008821000220200800000038"
+
+# The same six devices, relisted. Before TODO.md Sec 2 (closed
+# 2026-08-22), allocation followed netlist order regardless of where a
+# device's gate needed to land, so XM4 took a diff-pair half here -- and
+# XM4's gate is on net1, which spans both bus sides. That used to fail:
+# first a bare KeyError, then (2026-08-21) a RouteError explaining why.
 REORDERED_SR_LATCH = """
 XM5 ua1  net1 VGND  VGND  mosbius_nmos w=1
 XM6 ua2  ua3  VGND  VGND  mosbius_nmos w=1
@@ -328,15 +342,82 @@ XM4 net1 ua3  VGND  VGND  mosbius_nmos w=1
 """
 
 
-def test_diff_pair_input_on_a_two_sided_net_is_explained_not_a_keyerror():
+def test_canonical_sr_latch_matches_the_documented_bitstream():
+    routed = route(parse_netlist(CANONICAL_SR_LATCH))
+    assert routed.config.to_bitstream() == CANONICAL_SR_LATCH_BITSTREAM
+
+
+# The polarity-swapped SR latch: same shape, but now it's the four PMOS
+# that need reallocating (two of them forced onto diff-pair halves) while
+# two NMOS sit on the independent slots. Confirms the search isn't an
+# NMOS-only fix -- allocate_devices() calls the identical machinery for
+# both polarities.
+REORDERED_SR_LATCH_PMOS_SIDE = """
+XM5 ua1  net1 VAPWR VAPWR mosbius_pmos w=1
+XM6 ua2  ua3  VAPWR VAPWR mosbius_pmos w=1
+XM1 ua3  net1 VGND  VGND  mosbius_nmos w=1
+XM2 ua3  net1 VAPWR VAPWR mosbius_pmos w=1
+XM3 net1 ua3  VGND  VGND  mosbius_nmos w=1
+XM4 net1 ua3  VAPWR VAPWR mosbius_pmos w=1
+"""
+
+
+def test_reordering_fixes_the_pmos_side_too():
+    routed = route(parse_netlist(REORDERED_SR_LATCH_PMOS_SIDE))
+    # XM4's gate is on the two-sided net1, exactly as XM4 was in the
+    # NMOS-side version -- it must land on an independent slot.
+    assert routed.device_roles["XM4"] in ("pmos_a", "pmos_b")
+
+
+def test_reordered_sr_latch_now_routes_regardless_of_order():
+    # TODO.md was Sec 2, closed 2026-08-22: allocate_devices() now
+    # searches orderings rather than trusting netlist order, so relisting
+    # the same six devices no longer changes whether -- or how -- this
+    # circuit routes: same bitstream as the canonical order above.
+    routed = route(parse_netlist(REORDERED_SR_LATCH))
+    assert routed.config.to_bitstream() == CANONICAL_SR_LATCH_BITSTREAM
+    # XM4's gate on the two-sided net1 is exactly why XM4 must NOT be the
+    # one holding a diff-pair role here -- it lands on an independent slot.
+    assert routed.device_roles["XM4"] in ("nmos_a", "nmos_b")
+
+
+def test_reordering_never_relocates_a_working_designs_bitstream():
+    # A design that already routes cleanly (SR_LATCH_NETLIST's own order)
+    # must not be *disturbed* by a smarter allocator -- itertools.
+    # permutations tries the input order first, so a conflict-free design
+    # gets today's exact assignment back on the very first attempt.
+    before = route(parse_netlist(SR_LATCH_NETLIST))
+    after = route(parse_netlist(SR_LATCH_NETLIST))
+    assert after.device_roles == before.device_roles
+    assert after.config.to_bitstream() == before.config.to_bitstream()
+
+
+# A net that's forced onto both bus sides no matter how the four NMOS
+# requests are assigned: XM1/XM2/XM3 all share `shared_gate` as their
+# gate, and only two of the four NMOS roles ever live on one side (SPEC.md
+# Sec 2.12), so at most two of those three can ever share a side -- the
+# third is unavoidably on the other one. No allocation search can fix a
+# circuit shaped like this; it needs a different circuit.
+GENUINELY_UNROUTABLE = """
+XM1 shared_gate d1 VGND VGND mosbius_nmos w=1
+XM2 shared_gate d2 VGND VGND mosbius_nmos w=1
+XM3 shared_gate d3 VGND VGND mosbius_nmos w=1
+XM4 ua1         d4 VGND VGND mosbius_nmos w=1
+"""
+
+
+def test_a_genuinely_unroutable_design_still_explains_itself():
+    # allocate_devices()'s search (TODO.md was Sec 2, closed 2026-08-22)
+    # only ever looks for a placement that already fits every existing
+    # rule -- it can't manufacture a side a net doesn't have. When no
+    # ordering avoids the conflict, the RouteError this raises is exactly
+    # the one that existed before the search did.
     with pytest.raises(RouteError) as excinfo:
-        route(parse_netlist(REORDERED_SR_LATCH))
+        route(parse_netlist(GENUINELY_UNROUTABLE))
     message = str(excinfo.value)
-    assert "'net1' spans both bus sides" in message
-    assert "XM4's gate (ndiffpair-.g)" in message   # which device, in its own words
-    assert "only bus rows 1, 2 and 3" in message    # what it can reach
-    assert "row 6" in message                       # what a two-sided net needs
-    assert "SPEC.md Sec 2.12" in message            # why the hardware is like that
+    assert "'shared_gate' spans both bus sides" in message
+    assert "row 6" in message
+    assert "SPEC.md Sec 2.12" in message
 
 
 def test_the_row_free_on_both_sides_is_derived_not_assumed():
@@ -369,11 +450,16 @@ def test_an_unreachable_row_is_a_route_error_wherever_it_is_asked_for():
         _matrix_bit(touch, 6, "net1")
 
 
-def test_a_diff_pair_gate_on_an_out_of_range_pin_names_the_pins_that_work():
-    # ua3 is bonded to bus_A[5], which a diff-pair input has no switch to.
-    # The row is a bond wire, so the only fix is a different pin -- and the
-    # message works out which ones those are rather than leaving it to the
-    # reader (examples/srlatch/README.md documents the same three).
+def test_a_diff_pair_gate_on_an_out_of_range_pin_no_longer_gets_stuck_there():
+    # ua3 is bonded to bus_A[5], which a diff-pair input has no switch to
+    # -- so XM5, whose gate is ua3, must never be the one left holding a
+    # diff-pair role. Before TODO.md Sec 2 (closed 2026-08-22) this
+    # design failed to route for exactly that reason; the allocator now
+    # searches orderings and finds one where XM5 gets an independent
+    # slot instead, which has no gate restriction at all. The message
+    # this used to produce is still exercised directly, independent of
+    # allocation, by test_an_unreachable_row_is_a_route_error_wherever_
+    # it_is_asked_for above.
     netlist = """
     XM1 ua1  net1 VAPWR VAPWR mosbius_pmos w=1
     XM2 ua1  net1 VGND  VGND  mosbius_nmos w=1
@@ -382,12 +468,8 @@ def test_a_diff_pair_gate_on_an_out_of_range_pin_names_the_pins_that_work():
     XM5 ua3  net1 VGND  VGND  mosbius_nmos w=1
     XM6 ua2  ua1  VGND  VGND  mosbius_nmos w=1
     """
-    with pytest.raises(RouteError) as excinfo:
-        route(parse_netlist(netlist))
-    message = str(excinfo.value)
-    assert "XM5's gate (ndiffpair+.g) cannot reach bus_A[5]" in message
-    assert "ua3 is always bus_A[5]" in message
-    assert "(ua1, ua2 or ua4)" in message
+    routed = route(parse_netlist(netlist))
+    assert routed.device_roles["XM5"] in ("nmos_a", "nmos_b")
 
 
 def test_no_random_design_escapes_with_a_bare_traceback():

@@ -60,15 +60,15 @@ an internal net touching devices on both sides is forced onto row 6, and a
 diff-pair input can never reach it. `net1` here is exactly such a net, and
 it gates `XM3`/`XM4`.
 
-This circuit routes because the allocator hands out the independent slots
-in netlist order, so `XM2` and `XM4` take them and the halves fall to
-`XM5`/`XM6`, whose gates are on `ua1` and `ua2`. That is luck, not design:
-relist the same six devices in a different order and `XM4` takes a half,
-its gate on `net1` needs row 6, and the design does not route.
-
-It does at least say so. Since 2026-08-21 that failure is a `RouteError`
-naming the device, the terminal, the rows it can reach and the rows a
-two-sided net has available:
+This circuit routes with `XM2` and `XM4` on the independent slots and the
+halves falling to `XM5`/`XM6`, whose gates are on `ua1` and `ua2`. Until
+2026-08-22 that was luck, not design: relisting the same six devices in a
+different order handed `XM4` a half instead, its gate on `net1` needing
+row 6 -- and the design would not route, even though nothing about the
+circuit itself had changed. Since 2026-08-21 that failure was at least a
+`RouteError` naming the device, the terminal, the rows it can reach and
+the rows a two-sided net has available (it used to be a bare
+`KeyError: ('cfgb_dpn_inm', 6)`):
 
 ```
 DOESN'T FIT -- 'net1' spans both bus sides and no row can join them
@@ -79,10 +79,12 @@ DOESN'T FIT -- 'net1' spans both bus sides and no row can join them
     ...
 ```
 
-It used to be a bare `KeyError: ('cfgb_dpn_inm', 6)`. What is still open is
-the other half: allocating by constraint rather than by line order, so that
-the devices whose gates need rows 1-3 are the ones that get the halves.
-`TODO.md` §2 covers it.
+`TODO.md`'s device-allocation item (closed 2026-08-22) fixed the cause
+rather than just the message: `allocate_devices()` now searches orderings
+and keeps one where no diff-pair gate lands on a net it can't reach, so
+relisting these same six devices in *any* order now produces this exact
+same routing. `tests/test_route.py`'s `REORDERED_SR_LATCH` is that
+relisted order, asserted to match.
 
 ## Routing
 

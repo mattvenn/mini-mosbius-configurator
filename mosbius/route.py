@@ -25,6 +25,7 @@ can't silently drift out of sync with the router.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -469,6 +470,125 @@ def format_device_roles(routed) -> list[str]:
 # Step 1: device allocation.
 # ---------------------------------------------------------------------------
 
+# The rows a diff-pair gate reaches, derived rather than assumed -- all
+# four diff-pair roles share this reach (CLAUDE.md trap 6), so any one of
+# them stands in for the other three. Used by _allocate_fets_by_constraint
+# below (TODO.md was Sec 2, closed 2026-08-22).
+_DIFFPAIR_GATE_REACH = rows_reachable(TERMINAL_PIN[("ndiffpair+", "g")])
+
+
+def _net_sides(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, set[str]]:
+    """Which bus side(s) each net touches, given a role assignment.
+
+    `roles` need not cover every device -- callers use this mid-search,
+    before every request has a role -- an unassigned device simply
+    contributes nothing yet. Deliberately the same terminal-filtering
+    DEVICE_TERMINALS does everywhere else (a diff-pair half's own "s" pin
+    has no crosspoint and never contributes a side, matching
+    _collect_touches), so a net's side set here is exactly what
+    _collect_touches would find once every device has its final role.
+    """
+    sides: dict[str, set[str]] = {}
+    for d in design.devices:
+        role = roles.get(d.name)
+        if role is None:
+            continue
+        for terminal, net in d.terminals.items():
+            if terminal not in DEVICE_TERMINALS.get(role, {}):
+                continue
+            sides.setdefault(net, set()).add(TERMINAL_SIDE[(role, terminal)])
+    return sides
+
+
+def _diffpair_gate_violations(
+    gate_nets: dict[str, str], candidate_roles: dict[str, str],
+    pair_roles: tuple[str, str], net_sides: dict[str, set[str]],
+) -> int:
+    """How many of `candidate_roles`' diff-pair-role devices have a gate
+    that provably cannot reach its net -- SPEC.md Sec 2.12's two known
+    shapes (srlatch/README.md's own two bullets): a package pin bonded to
+    a row outside 1-3, or an internal net that -- given every other
+    device's role, baked into `net_sides` -- touches both bus sides.
+    `ROWS_FREE_ON_BOTH_SIDES` and `_DIFFPAIR_GATE_REACH` are disjoint
+    (row 6 is never in 1-3), so a two-sided net is *always* a violation
+    for a diff-pair gate, not something worth re-deriving per call.
+    """
+    violations = 0
+    for name, role in candidate_roles.items():
+        if role not in pair_roles:
+            continue
+        net = gate_nets[name]
+        if net in PORT_ROW:
+            _, row = PORT_ROW[net]
+            if row not in _DIFFPAIR_GATE_REACH:
+                violations += 1
+            continue
+        if len(net_sides.get(net, ())) > 1:
+            violations += 1
+    return violations
+
+
+def _allocate_fets_by_constraint(
+    requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
+    pair_rail: str, label: str, tail: DeviceRequest | None,
+    fixed_roles: dict[str, str], design: MosbiusDesign,
+) -> dict[str, str]:
+    """`_allocate_fets`, but choosing *which* ordering to run it with
+    (TODO.md was Sec 2, closed 2026-08-22) instead of always the
+    netlist's own order.
+
+    Today's allocation -- independent slots to whoever asks first, diff-
+    pair halves to whatever's left -- is one point in a small space of
+    equally valid assignments: which specific device gets nmos_a vs
+    nmos_b, or which half of a pair is + vs -, never changes whether the
+    *set* of requests fits, only which bus side each one ends up on. But
+    side is exactly what decides whether a diff-pair gate's net is
+    reachable (srlatch/README.md: "a diff-pair half's gate can never sit
+    on an internal net that spans both bus sides"), so the wrong point in
+    that space can turn a fine circuit into a RouteError -- purely
+    because of the order xschem happened to list instances in.
+
+    Brute force over orderings of `requests` rather than re-deriving
+    _allocate_fets's own eligibility rules (forced pairs, rail-tied
+    standalones) a second time to search them directly: at most 4 FETs of
+    one polarity ever exist (only 4 roles: two independent, two diff-
+    pair), so there are at most 4! = 24 orderings, and _allocate_fets
+    already decides a valid assignment for whichever order it's given.
+    itertools.permutations always yields the input order first, so a
+    design with no conflict at all gets today's exact assignment back,
+    unchanged, on the first try.
+
+    `fixed_roles` is every other device's role -- the other polarity
+    (its own netlist-order allocation when this is the first polarity
+    decided, or its own by-constraint result when this runs second) plus
+    the mirrors/OTA/tails, all of which have no allocation freedom of
+    their own but can still share a gate's net. This only ever searches
+    for a placement that was *already* valid by every existing rule; it
+    cannot make an oversized or malformed request fit that didn't before.
+    """
+    if len(requests) > len(pair_roles) + len(independent_roles):
+        # Guaranteed DOESN'T FIT regardless of order -- let it raise once,
+        # rather than trying 5!+ orderings to learn the same thing.
+        return _allocate_fets(requests, pair_roles, independent_roles, pair_rail, label, tail=tail)
+
+    gate_nets = {d.name: d.terminals["g"] for d in requests}
+    for order in itertools.permutations(requests):
+        try:
+            candidate = _allocate_fets(list(order), pair_roles, independent_roles, pair_rail, label, tail=tail)
+        except RouteError:
+            continue
+        net_sides = _net_sides(design, {**fixed_roles, **candidate})
+        if _diffpair_gate_violations(gate_nets, candidate, pair_roles, net_sides) == 0:
+            return candidate
+
+    # No ordering avoids every violation: the circuit is unroutable
+    # regardless of allocation choice. Fall back to the netlist's own
+    # order so the DOESN'T FIT that follows -- either from _allocate_fets
+    # itself or later, when net allocation hits the same wall -- explains
+    # itself exactly as it did before this search existed.
+    return _allocate_fets(requests, pair_roles, independent_roles, pair_rail, label, tail=tail)
+
+
 def _allocate_fets(
     requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
     pair_rail: str, label: str, tail: DeviceRequest | None = None,
@@ -605,19 +725,10 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
             f"one PMOS\n  tail bank (role ptail, ctrl_dpp_tail)."
         )
 
-    roles.update(_allocate_fets(
-        nmos, NMOS_PAIR_ROLES, NMOS_INDEPENDENT_ROLES, "VGND", "NMOS",
-        tail=ntail[0] if ntail else None,
-    ))
-    roles.update(_allocate_fets(
-        pmos, PMOS_PAIR_ROLES, PMOS_INDEPENDENT_ROLES, "VAPWR", "PMOS",
-        tail=ptail[0] if ptail else None,
-    ))
-    for d in ntail:
-        roles[d.name] = "ntail"
-    for d in ptail:
-        roles[d.name] = "ptail"
-
+    # Mirrors/OTA/tails have no allocation freedom -- each request maps
+    # 1:1 onto its role, in netlist order -- so decide them first. They
+    # still get fed to the FET search below as fixed context: a diff-pair
+    # gate can share a net with any of these too.
     if len(nsink) > len(NSINK_ROLES):
         raise RouteError(
             f"DOESN'T FIT -- too many current sinks\n\n"
@@ -644,6 +755,34 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
         )
     for d in ota:
         roles[d.name] = "ota"
+    for d in ntail:
+        roles[d.name] = "ntail"
+    for d in ptail:
+        roles[d.name] = "ptail"
+
+    # FETs: allocate by constraint, not by netlist order (TODO.md was
+    # Sec 2, closed 2026-08-22). Decide NMOS first, against PMOS's own
+    # netlist-order allocation as fixed context (a shared gate net can
+    # touch either polarity); then decide PMOS against the NMOS result
+    # that's actually being used, so the two stay mutually consistent.
+    # Deciding both together, searching every combination of both
+    # polarities' orderings at once, would cover a few more exotic joint
+    # cases -- but 24x24 tries instead of 24+24 for a problem this search
+    # already fully solves in every case raised so far isn't worth it.
+    naive_pmos = _allocate_fets(
+        pmos, PMOS_PAIR_ROLES, PMOS_INDEPENDENT_ROLES, "VAPWR", "PMOS",
+        tail=ptail[0] if ptail else None,
+    )
+    nmos_roles = _allocate_fets_by_constraint(
+        nmos, NMOS_PAIR_ROLES, NMOS_INDEPENDENT_ROLES, "VGND", "NMOS",
+        ntail[0] if ntail else None, {**roles, **naive_pmos}, design,
+    )
+    roles.update(nmos_roles)
+    pmos_roles = _allocate_fets_by_constraint(
+        pmos, PMOS_PAIR_ROLES, PMOS_INDEPENDENT_ROLES, "VAPWR", "PMOS",
+        ptail[0] if ptail else None, roles, design,
+    )
+    roles.update(pmos_roles)
 
     return roles
 

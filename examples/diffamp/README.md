@@ -112,9 +112,10 @@ Every other example in this directory ships a Level-1 simulation plot
 (SPEC.md §3.1b: real device sizing, no switch-matrix parasitics). This one
 doesn't -- simulating a design that actually draws current through
 `ibias` (rather than the standalone-FET examples, which never touch it) is
-TODO.md §1's still-open work, not §2's, and this example is scoped to
-proving the *drawing and routing* half of the tail feature. Worth knowing
-for whoever picks up §1 next: this is the first committed design where
+TODO.md §1's still-open work, not the (since closed) tail-symbol item's,
+and this example is scoped to proving the *drawing and routing* half of
+the tail feature. Worth knowing for whoever picks up §1 next: this is the
+first committed design where
 `ibias` needs a real forced current in the testbench for the mirror and
 the tail bank to do anything meaningful, which none of `inverter`/`srlatch`
 /`ringosc` needed.

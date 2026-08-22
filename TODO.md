@@ -4,22 +4,28 @@ Raised during the first outside-user run through `TUTORIAL.md` (2026-08-20),
 drawing an inverter and heading for a 3-stage ring oscillator. Each item has
 the context needed to act on it without re-deriving anything.
 
-**Renumbered from 1 on 2026-08-22**, for the fourth time. The first renumber
-removed the eight items the symbol/pin-geometry work closed; the second
-removed two more and shrank two, leaving the drain/source-swap hint
-(`check.py`'s `D2`), a working single-OTA route, the OTA's `tail=` reaching
-the bitstream, and an unreachable (pin, row) explaining itself instead of
-raising `KeyError`; the third removed the tail-symbol work order (two new
-symbols, `netlist.py`/`route.py`/`check.py` updated, `examples/diffamp/`
-proving it end to end), which renumbered device allocation down to §2 and
-repeated findings down to §3. This one closes that §3: `check.py`'s
-`Finding` gained `subject`/`merge_key`/`render`, R1/R2/I1 (the checks that
-can actually fire on several near-identical devices) use them, and
-`merge_findings()` collapses a same-key group into one block at the point
-`cli.py`/`watch.py` print a report -- `SafetyReport.findings` itself is
-untouched, still one entry per offending device. §3 was the last item, so
-nothing renumbers this time: §1 and §2 keep their numbers, and §2 is now
-the only thing left.
+**Renumbered from 1 on 2026-08-22**, for the fifth time. The first
+renumber removed the eight items the symbol/pin-geometry work closed; the
+second removed two more and shrank two, leaving the drain/source-swap
+hint (`check.py`'s `D2`), a working single-OTA route, the OTA's `tail=`
+reaching the bitstream, and an unreachable (pin, row) explaining itself
+instead of raising `KeyError`; the third removed the tail-symbol work
+order, which renumbered device allocation down to §2 and repeated
+findings down to §3; the fourth closed that §3 (`check.py`'s
+`merge_findings()`), leaving device allocation alone at §2. This one
+closes §2 too: `allocate_devices()` no longer trusts netlist order.
+`_allocate_fets_by_constraint()` tries every ordering of a polarity's FET
+requests (at most 4! = 24, since only 4 roles exist per polarity) against
+the *other* polarity's own allocation, and keeps the first one where no
+diff-pair-role gate is forced onto a two-sided net or an out-of-range
+package pin -- `itertools.permutations` yields the netlist's own order
+first, so a design with no conflict keeps its exact existing assignment.
+Sticky routing (SPEC.md §3.2b, an unchanged design reusing its stored
+routing byte-for-byte) is untouched by this and still means a *changed*
+design gets a full fresh `route()`, same as before -- explicitly out of
+scope for this pass, since this is still a development phase and nothing
+depends on a stored routing surviving yet. §2 was the last item, so
+nothing renumbers this time: what's left is §1 alone.
 
 This file used to keep numbers stable and leave gaps, because other files cite
 items by number. Renumbering instead means those citations move too, and they
@@ -64,58 +70,3 @@ directory to the repo `xschemrc`'s `XSCHEM_LIBRARY_PATH` and check the bare
 names still resolve, or accept the second working directory and pass `-o`
 explicitly. Get it wrong and the failure is silent: devices are replaced by
 `*  x1 -  tt_asw_3v3  IS MISSING !!!!` and ngspice runs the empty deck.
-
-
-## 2. Device allocation is decided by netlist order
-
-Raised 2026-08-21, found routing a hand-drawn SR latch. The diagnostic half
-of this is done -- the failure below now raises a `RouteError` that names
-the device, the net, the rows each terminal can reach and the rule it ran
-into, instead of `KeyError: ('cfgb_dpn_inm', 6)`. The allocation itself is
-unchanged, so the same designs still fail; they just fail legibly.
-
-`_allocate_fets` pass 2 hands the two independent slots (`nmos_a`/`nmos_b`)
-to whichever requests come first in the netlist, then pass 3 gives the
-diff-pair halves to whatever is left. Nothing consults where those devices'
-*gates* have to land -- so whether a design routes can depend on the order
-xschem happened to list its instances in.
-
-The SR latch in `examples/srlatch/` is the worked case. Six devices, four
-NMOS all sourced on `VGND`, so two of them necessarily take diff-pair
-halves. As listed it routes: `XM2`/`XM4` take the independent slots and the
-halves fall to `XM5`/`XM6`, whose gates are on `ua1` and `ua2`. Relist the
-same six devices in a different order and `XM4` takes a half instead, with
-its gate on `net1` -- and that is the combination the next paragraph rules
-out.
-
-**Why row 6 specifically, and why no pin choice avoids it.** The free rows
-are `A{2,4,6}` and `B{1,3,5,6}`, so the only row free on *both* sides is 6
-(`route.py`'s `ROWS_FREE_ON_BOTH_SIDES` derives this rather than asserting
-it). An internal net touching devices on both sides is therefore forced
-onto row 6. Diff-pair inputs reach only rows 1-3 (CLAUDE.md trap 6). So:
-
-> a diff-pair half's gate can never sit on an internal net that spans both
-> bus sides.
-
-In the latch that net is `net1`, the cross-coupling node, which gates
-`XM3`/`XM4`. Moving Q from `ua3` to `ua4` does not help -- checked. The
-constraint is about the internal net, not the package pin.
-
-Note the tail-symbol work (closed 2026-08-22) does part of this for free: a
-drawn `mosbius_ntail`/`mosbius_ptail` declares which two FETs are the pair,
-so the allocator stops having to infer it for any pair that has one. What
-is left here is the case with no tail drawn.
-
-The fix: **allocate by constraint rather than by line order.** Give the
-independent slots to the devices whose gates sit on nets a diff-pair input
-cannot reach, and spend the halves on the ones that fit. That is a genuine
-ordering rule (SPEC.md §3.4's "spend the constrained resource first"), not
-a heuristic: a two-sided internal net on a gate is a hard exclusion,
-knowable before any row is picked. `route.py` already computes the reach
-half of it -- `rows_reachable()` and `_shared_reach()`, both derived from
-the bit map -- so what is missing is using that during allocation rather
-than only when placing a row.
-
-Note this interacts with sticky routing (SPEC.md §3.2b): a better
-allocator must not silently relocate an existing working design, so it
-belongs behind the same stored-routing reuse as everything else.

@@ -14,10 +14,9 @@ Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
 `TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§1) and device allocation decided by netlist order (§2). It is
-renumbered from 1 whenever items are removed, and every citation of it in
-this repo is updated in the same commit, so a `TODO.md` §number here is
-always live.
+design (§1). It is renumbered from 1 whenever items are removed, and every
+citation of it in this repo is updated in the same commit, so a `TODO.md`
+§number here is always live.
 
 Closed on 2026-08-21, so don't re-report them: a reversed drain/source is
 now a `D2` hint that fires before the "DOESN'T FIT" it explains; a single
@@ -38,7 +37,13 @@ check that fires on several near-identical devices no longer repeats its
 whole explanation per device -- `check.py`'s `merge_findings()` collapses
 them into one block at print time (`cli.py`/`watch.py` both call it);
 `SafetyReport.findings` is untouched, still one entry per offending
-device, so this is display-only.
+device, so this is display-only. And: which hardware slot a FET request
+becomes no longer depends on the order xschem happened to list instances
+in -- `route.py`'s `allocate_devices()` searches orderings
+(`_allocate_fets_by_constraint()`) and keeps one where no diff-pair
+gate is forced onto a two-sided net or an out-of-range package pin,
+instead of just trying the netlist's own order and letting a badly-
+ordered-but-electrically-fine circuit fail to route.
 
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it
