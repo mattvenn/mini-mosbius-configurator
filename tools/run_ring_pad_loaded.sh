@@ -172,8 +172,9 @@ Xpad_ua1 GND out_pad bus_A[1] pad_model
    save all
    set temp = 27
    tran 100p 500n UIC
+   let bus_a1_alias = v(bus_A[1])
    wrdata ring_pad_loaded_out_pad.txt v(out_pad)
-   wrdata ring_pad_loaded_bus_a1.txt v(bus_A[1])
+   wrdata ring_pad_loaded_bus_a1.txt bus_a1_alias
 .endc
 
 """
