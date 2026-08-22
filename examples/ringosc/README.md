@@ -54,7 +54,7 @@ writes:
 
 ```
 $ python3 -m mosbius.cli route build/ring.spice
-OK -- no errors or warnings (2 info notes hidden, use --verbose).
+OK -- no errors or warnings (1 info note hidden, use --verbose).
 
 Device roles:
   XM1          -> nmos_a        w=4
@@ -68,9 +68,9 @@ Bitstream: 3f008803f004001801000020100804000060040100000021
 ```
 
 (Seven unused-bus-segment notes, one per segment, used to hide behind that
-count -- `merge_findings` (TODO.md was §3, closed 2026-08-22) now groups
-them by how many connections each segment has, so `--verbose` shows two
-blocks instead of seven near-identical ones.)
+count -- `merge_findings` (TODO.md was §3, closed 2026-08-22) collapses
+them, so `--verbose` shows a single block naming all seven and giving the
+reason once, instead of seven near-identical ones.)
 
 Every device is drawn at `w=4` for the reason given above: `ndiffpair+` and
 `pdiffpair+` cannot be anything else, so the other two stages have to be

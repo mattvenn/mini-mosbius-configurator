@@ -41,11 +41,13 @@ def test_check_verbose_shows_info(capsys):
     rc = main(["check", INVERTER_BITSTREAM, "--verbose"])
     out = capsys.readouterr().out
     assert rc == 0
-    # merge_findings (TODO.md was Sec 3) collapses same-degree segments
-    # into one "do nothing" block rather than repeating "does nothing"
+    # merge_findings (TODO.md was Sec 3) collapses every sparse segment
+    # into one "do nothing" block rather than repeating the explanation
     # per segment -- assert on the shared explanation, not the headline
     # verb, so this doesn't depend on how many segments happen to merge.
-    assert "this switch setting isn't wiring anything together" in out
+    # Normalised: the body is wrapped, so phrases span line breaks.
+    flat = " ".join(out.split())
+    assert "none of these segments is wiring anything together" in flat
 
 
 def test_check_nonzero_exit_on_errors(capsys):

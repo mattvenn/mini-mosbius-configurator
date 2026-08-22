@@ -114,11 +114,15 @@ def test_same_kind_same_width_r1_warnings_merge_into_one():
     assert len(report.warnings) == 2          # SafetyReport.findings: unmerged, still one per device
     merged = merge_findings(report.warnings)
     assert len(merged) == 1                   # display: collapsed to one block
-    headline = merged[0].message.splitlines()[0]
-    assert headline == "WARNING -- M3 and M4 had their w=1 ignored: ndiffpair+ and ndiffpair-"
-    assert "have a fixed width" in merged[0].message.splitlines()[1]
+    # Assert the headline's text, not where its line break lands: `_wrap`
+    # places breaks now, and which word ends a line depends on how long the
+    # device and role names happen to be.
+    flat = " ".join(merged[0].message.split())
+    headline = " ".join(merged[0].message.split("\n\n")[0].split())
+    assert headline == ("WARNING -- M3 and M4 had their w=1 ignored: "
+                        "ndiffpair+ and ndiffpair- have a fixed width")
     # The shared explanation appears exactly once.
-    assert merged[0].message.count("Those halves have no width bits") == 1
+    assert flat.count("Those halves have no width bits") == 1
 
 
 def test_merging_does_not_shrink_the_underlying_report():

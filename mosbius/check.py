@@ -28,6 +28,7 @@ beginner nothing.
 
 from __future__ import annotations
 
+import textwrap
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable
@@ -98,6 +99,26 @@ def _join_and(items: list[str]) -> str:
     if len(items) == 1:
         return items[0]
     return ", ".join(items[:-1]) + f" and {items[-1]}"
+
+
+# Message bodies are wrapped here rather than by hand. A merged finding's
+# first sentence names every subject, so its length depends on how many
+# devices or segments merged -- hand-placed newlines were chosen for the
+# one-subject case and left that first line running to 127 characters in
+# an empty config's I1 block, against a body wrapped at 68.
+_WIDTH = 74
+
+
+def _wrap(prefix: str, headline: str, *paragraphs: str) -> str:
+    """`prefix` is the severity tag ("INFO -- "); continuation lines of the
+    headline hang under the text, not the tag. Body paragraphs are indented
+    two spaces and separated by a blank line."""
+    out = [textwrap.fill(prefix + headline, width=_WIDTH,
+                         subsequent_indent=" " * len(prefix))]
+    out += [textwrap.fill(par, width=_WIDTH,
+                          initial_indent="  ", subsequent_indent="  ")
+            for par in paragraphs]
+    return "\n\n".join(out)
 
 
 def merge_findings(findings: list[Finding]) -> list[Finding]:
@@ -450,46 +471,87 @@ def _check_w3_unconnected_terminal(graph: Graph) -> list[Finding]:
     return findings
 
 
-def _render_i1(subjects: list[str], degree: int) -> str:
-    """The I1 explanation for one or several bus segments at once
-    (TODO.md was Sec 3, closed 2026-08-22) -- the worse-in-bulk case: an
-    empty config fires this on all 12 segments, one identical sentence
-    each, every one of them at the same degree (0).
+def _render_i1(subjects: list[str], detail: dict[str, tuple[str, str | None]]) -> str:
+    """The I1 explanation for one or several bus segments at once.
+
+    Every subject is a segment with fewer than the two connections it
+    needs, so this renders a single block however those connections are
+    mixed, and gives the reason once. Grouping by raw connection count
+    (the first cut at TODO.md was Sec 3, closed 2026-08-22) printed the
+    same explanation twice over, differing only in "with zero" versus
+    "with only one".
+
+    A segment's one connection is spelled out rather than counted,
+    because the usual reason a segment sits at one is its package-pin
+    bond wire -- permanent silicon the schematic never drew. Reporting
+    that as "has only one connection" reads as a plain error to someone
+    who connected nothing to it: they are right that their circuit put
+    nothing there, and the message has to say where the connection came
+    from, not just how many there are.
     """
-    count = "zero" if degree == 0 else "only one"
-    plural = "s" if degree != 1 else ""
-    if len(subjects) == 1:
-        seg = subjects[0]
-        headline = f"INFO -- {seg} does nothing"
-        intro = f"  {seg} has {degree} connection{plural}."
-    else:
-        segs = _join_and(subjects)
-        headline = f"INFO -- {segs} do nothing"
-        intro = f"  {segs} each have {degree} connection{plural}."
-    return (
-        f"{headline}\n\n"
-        f"{intro} A bus segment needs at least\n"
-        f"  two (to actually join two things) to have any effect -- with "
-        f"{count},\n"
-        f"  this switch setting isn't wiring anything together."
+    empty = [seg for seg in subjects if detail[seg][0] == "none"]
+    bonded = [seg for seg in subjects if detail[seg][0] == "bond"]
+    wired = [seg for seg in subjects if detail[seg][0] == "switch"]
+
+    sentences = []
+    if empty:
+        verb = "has" if len(empty) == 1 else "have"
+        sentences.append(f"{_join_and(empty)} {verb} nothing connected to "
+                         f"{'it' if len(empty) == 1 else 'them'} at all.")
+    if bonded:
+        pins = _join_and([detail[seg][1] for seg in bonded])
+        if len(bonded) == 1:
+            sentences.append(
+                f"{bonded[0]} is connected only to its package pin ({pins}) -- "
+                f"that bond wire is part of the chip rather than something "
+                f"the schematic added, so it joins the segment to nothing else.")
+        else:
+            sentences.append(
+                f"{_join_and(bonded)} are connected only to their package pins "
+                f"({pins}) -- those bond wires are part of the chip rather "
+                f"than something the schematic added, so each joins its "
+                f"segment to nothing else.")
+    if wired:
+        verb = "has" if len(wired) == 1 else "have"
+        each = "" if len(wired) == 1 else " each"
+        sentences.append(f"{_join_and(wired)} {verb} just one connection{each}.")
+
+    plural = len(subjects) > 1
+    headline = f"{_join_and(subjects)} {'do' if plural else 'does'} nothing"
+    consequence = ("none of these segments is" if plural else "this segment isn't")
+    return _wrap(
+        "INFO -- ", headline,
+        " ".join(sentences),
+        "A bus segment needs at least two connections (to actually join two "
+        f"things) to have any effect, so {consequence} wiring anything "
+        f"together.",
     )
 
 
 def _check_i1_sparse_bus(graph: Graph) -> list[Finding]:
-    findings = []
-    for seg in BUS_SEGMENTS:
-        degree = len(graph.get(seg, []))
-        if degree >= 2:
-            continue
+    def classify(seg: str) -> tuple[str, str | None]:
+        """What the segment's single connection actually is -- a package-pin
+        bond wire is silicon, and saying so is the difference between a
+        useful note and one that looks wrong to whoever drew the circuit."""
+        edges = graph.get(seg, [])
+        if not edges:
+            return ("none", None)
+        if len(edges) == 1 and edges[0].label.endswith("(bond wire)"):
+            return ("bond", edges[0].neighbor)
+        return ("switch", None)
 
-        def render(subjects: list[str], _d=degree) -> str:
-            return _render_i1(subjects, _d)
+    detail = {seg: classify(seg) for seg in BUS_SEGMENTS}
+    sparse = [seg for seg in BUS_SEGMENTS if len(graph.get(seg, [])) < 2]
 
-        findings.append(Finding(
-            code="I1", severity=INFO, message=render([seg]),
-            subject=seg, merge_key=(degree,), render=render,
-        ))
-    return findings
+    def render(subjects: list[str]) -> str:
+        return _render_i1(subjects, detail)
+
+    # One merge group for every sparse segment, whatever it is connected
+    # to: _render_i1 describes each kind separately and explains once.
+    return [Finding(
+        code="I1", severity=INFO, message=render([seg]),
+        subject=seg, merge_key=(), render=render,
+    ) for seg in sparse]
 
 
 # ---------------------------------------------------------------------------
@@ -850,47 +912,46 @@ def _render_r1(subjects: list[str], device_roles: dict[str, str], prop: str,
                 requested: int, effective: int, kind: str, geometry: str, prog: str) -> str:
     """The R1 explanation for one or several devices at once (TODO.md was
     Sec 3, closed 2026-08-22). Only the headline and the intro's first
-    line ever name a device/role -- everything from "Those halves..."
+    clause ever name a device/role -- everything from "Those halves..."
     onward is already subject-independent, so it appears once regardless
     of how many devices triggered this.
+
+    Paragraphs are written unwrapped and `_wrap` breaks them, because the
+    intro's length depends on how many devices merged: hand-placed
+    newlines sized for one device left that line at 80 characters in the
+    SR latch's two-device warning, against a body wrapped at 68.
     """
     roles = [device_roles[s] for s in subjects]
     if len(subjects) == 1:
         name, role = subjects[0], roles[0]
-        headline = f"WARNING -- {name}'s {prop}={requested} was ignored: {role} has a fixed width"
-        intro = f"  The router put {name} on {role}, one of the two halves of the"
+        headline = f"{name}'s {prop}={requested} was ignored: {role} has a fixed width"
+        intro = f"The router put {name} on {role}, one of the two halves of the"
     else:
         names, role_list = _join_and(subjects), _join_and(roles)
-        headline = (
-            f"WARNING -- {names} had their {prop}={requested} ignored: {role_list}\n"
-            f"           have a fixed width"
-        )
-        intro = f"  The router put {names} on {role_list}, the two halves of the"
-    return (
-        f"{headline}\n\n"
-        f"{intro}\n"
-        f"  {kind} differential pair. Those halves have no width bits on the\n"
-        f"  chip -- their geometry is built in silicon -- so there is nothing\n"
-        f"  in the bitstream that could carry {prop}={requested}, "
-        f"and it was dropped.\n\n"
-        f"  What you get instead is {prop}={effective}. A half is "
-        f"{geometry},\n"
-        f"  which is exactly the geometry of a programmable FET at its maximum\n"
-        f"  {prop}={effective} ({prog}'s 1x always-on slice plus its "
-        f"switchable 1x\n  and 2x slices).\n\n"
-        f"  Why this matters: it is built at {prop}={effective} "
-        f"where your schematic says\n"
-        f"  {prop}={requested}. In a circuit that looks symmetric "
-        f"-- the three stages of a\n"
-        f"  ring oscillator, say -- the stages that land on the programmable\n"
-        f"  FETs come out at the width you asked for and this one does not, and\n"
-        f"  the mismatch exists only on silicon, not in the drawing.\n\n"
-        f"  To fix: set the other devices of the same kind to "
-        f"{prop}={effective} as well, so\n"
-        f"  every stage matches deliberately -- examples/ringosc/README.md does\n"
-        f"  exactly that. They match in W/L, though not in parasitics: the\n"
-        f"  programmable FET's 1x and 2x slices sit behind drain switches and\n"
-        f"  the diff-pair half does not."
+        headline = (f"{names} had their {prop}={requested} ignored: "
+                    f"{role_list} have a fixed width")
+        intro = f"The router put {names} on {role_list}, the two halves of the"
+    return _wrap(
+        "WARNING -- ", headline,
+        f"{intro} {kind} differential pair. Those halves have no width bits "
+        f"on the chip -- their geometry is built in silicon -- so there is "
+        f"nothing in the bitstream that could carry {prop}={requested}, and "
+        f"it was dropped.",
+        f"What you get instead is {prop}={effective}. A half is {geometry}, "
+        f"which is exactly the geometry of a programmable FET at its maximum "
+        f"{prop}={effective} ({prog}'s 1x always-on slice plus its switchable "
+        f"1x and 2x slices).",
+        f"Why this matters: it is built at {prop}={effective} where your "
+        f"schematic says {prop}={requested}. In a circuit that looks "
+        f"symmetric -- the three stages of a ring oscillator, say -- the "
+        f"stages that land on the programmable FETs come out at the width "
+        f"you asked for and this one does not, and the mismatch exists only "
+        f"on silicon, not in the drawing.",
+        f"To fix: set the other devices of the same kind to {prop}="
+        f"{effective} as well, so every stage matches deliberately -- "
+        f"examples/ringosc/README.md does exactly that. They match in W/L, "
+        f"though not in parasitics: the programmable FET's 1x and 2x slices "
+        f"sit behind drain switches and the diff-pair half does not.",
     )
 
 
@@ -936,33 +997,33 @@ def _check_r1_width_dropped(device_widths: dict[str, DeviceWidth],
 
 
 def _render_r2(subjects: list[str], device_roles: dict[str, str], requested: int) -> str:
-    """The R2 explanation for one or several devices at once (TODO.md was
-    Sec 3, closed 2026-08-22) -- same shape as `_render_r1`: only the
-    headline and the intro's first line ever name a device/role.
+    """The R2 explanation for one or several devices at once -- same shape
+    as `_render_r1`, including letting `_wrap` place the line breaks: only
+    the headline and the intro's first clause ever name a device/role.
     """
     roles = [device_roles[s] for s in subjects]
     if len(subjects) == 1:
         name, role = subjects[0], roles[0]
-        headline = f"WARNING -- {name}'s tail={requested} was ignored: {role} has no tail current"
-        intro = f"  The router put {name} on {role}, which has no tail-current bit of its"
+        headline = f"{name}'s tail={requested} was ignored: {role} has no tail current"
+        intro = (f"The router put {name} on {role}, which has no tail-current "
+                 f"bit of its own")
     else:
         names, role_list = _join_and(subjects), _join_and(roles)
-        headline = (
-            f"WARNING -- {names} had their tail={requested} ignored: {role_list}\n"
-            f"           have no tail current"
-        )
-        intro = f"  The router put {names} on {role_list}, which have no tail-current bit of their"
-    return (
-        f"{headline}\n\n"
-        f"{intro}\n  own, so there is nothing here for tail= to set and it "
-        f"was dropped.\n\n"
-        f"  Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail "
-        f"you can\n  write in the schematic. If you meant to change how hard "
-        f"this device\n  drives, that is w= (1, 2, 3 or 4) on a "
-        f"mosbius_nmos/mosbius_pmos, or\n  ratio= on a mosbius_nsink/"
-        f"mosbius_psource. If you meant a differential\n  pair's tail "
-        f"current, that belongs on a mosbius_ntail/mosbius_ptail wired\n"
-        f"  to the pair's shared source, not on either half."
+        headline = (f"{names} had their tail={requested} ignored: "
+                    f"{role_list} have no tail current")
+        intro = (f"The router put {names} on {role_list}, which have no "
+                 f"tail-current bit of their own")
+    return _wrap(
+        "WARNING -- ", headline,
+        f"{intro}, so there is nothing here for tail= to set and it was "
+        f"dropped.",
+        "Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail you "
+        "can write in the schematic. If you meant to change how hard this "
+        "device drives, that is w= (1, 2, 3 or 4) on a "
+        "mosbius_nmos/mosbius_pmos, or ratio= on a "
+        "mosbius_nsink/mosbius_psource. If you meant a differential pair's "
+        "tail current, that belongs on a mosbius_ntail/mosbius_ptail wired "
+        "to the pair's shared source, not on either half.",
     )
 
 

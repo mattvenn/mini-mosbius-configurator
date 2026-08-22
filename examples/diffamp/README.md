@@ -10,10 +10,10 @@ current actually reach the bitstream.
 
 ```
 XM1 ua1  net2 net1 VGND  mosbius_nmos  w=4
-XM2 ua2  out  net1 VGND  mosbius_nmos  w=4
+XM2 ua2  ua4  net1 VGND  mosbius_nmos  w=4
 XT1 net1 ibias VGND      mosbius_ntail tail=4
 XM3 net2 net2 VAPWR VAPWR mosbius_pmos w=1
-XM4 net2 out  VAPWR VAPWR mosbius_pmos w=1
+XM4 net2 ua4  VAPWR VAPWR mosbius_pmos w=1
 ```
 
 `XM1`/`XM2` are the pair: gates on `ua1`/`ua2` (the two differential
@@ -27,7 +27,7 @@ supplied the same implicit way every other body/bias pin in this library
 is (`mosbius_lib`'s `extra=` mechanism).
 
 `XM3` is diode-connected (gate tied to its own drain, on `net2`) and sets
-the mirror's reference current; `XM4` mirrors it onto `out`, `XM2`'s drain.
+the mirror's reference current; `XM4` mirrors it onto `ua4`, `XM2`'s drain.
 That is the standard 5-transistor OTA topology, built here from the four
 primitive symbols plus the new tail symbol rather than from the single
 `mosbius_ota` block -- which is a perfectly good way to get a diff amp
@@ -41,11 +41,34 @@ in silicon at exactly `w=4`'s equivalent (SPEC.md §2.12) -- so any other
 value gets silently corrected and reported (`R1`). Writing `w=4` up front
 says what the hardware actually builds, with nothing to fix.
 
+## Why the output is named `ua4`
+
+The amplifier's output net is called `ua4` for one reason: that name is
+what makes it measurable on the real chip. The router treats a net as a
+package pin only if it is *named* one of `ua1`..`ua5` (`netlist.py`'s
+`PORT_NAMES`) -- `ua4` reaches the outside world through `bus_B[2]`, per
+the pin map in SPEC.md Sec 2.10.
+
+Any other name, `out` included, is an ordinary internal net. It still
+routes, still simulates, and still gives you the right waveform in
+ngspice, where every node is probeable -- but on silicon it terminates on
+a bus row with no bond wire, and there is no way to observe the gain this
+example measures. Drawing a `devices/iopin.sym` on it does not change
+that: the iopin only names the net and adds it to the `.subckt` port
+list, so a schematic can look like it has an output port and still have
+nothing you can put a scope on.
+
+The two inputs are on `ua1`/`ua2` for the same reason, with one extra
+constraint behind them: a diff-pair gate reaches only bus rows 1-3
+(SPEC.md Sec 2.12), and `ua1`/`ua2` land on `bus_A[1]`/`bus_A[3]`. The
+output is a pair of drains, which reach all six rows, so it is free to
+take `bus_B[2]`.
+
 ## Routing
 
 ```
 $ python3 -m mosbius.cli route build/diffamp.spice
-OK -- no errors or warnings (6 info notes hidden, use --verbose).
+OK -- no errors or warnings (1 info note hidden, use --verbose).
 
 Device roles:
   XM1          -> ndiffpair+    w=4 (fixed)
@@ -54,7 +77,7 @@ Device roles:
   XM4          -> pmos_b        w=1
   XT1          -> ntail         tail=4
 
-Bitstream: 00100000c020001820000000001821000000000000000030
+Bitstream: 00100000c020004820000000004821000000000000000030
 ```
 
 Clean: no width was dropped (both halves already ask for the fixed `w=4`),
@@ -64,19 +87,26 @@ had no honest way to draw a tail at all;
 `XT1`'s `tail=4` reaching the bitstream with nothing reported as ignored is
 the proof.
 
-The six hidden `INFO` notes are ordinary unused-bus-row bookkeeping (this
+The hidden `INFO` note is ordinary unused-bus-row bookkeeping (this
 circuit only needs three of the twelve rows), the same kind every other
 example produces -- see `--verbose`.
 
 ## Decoding it back
 
 ```
-$ python3 -m mosbius.cli decode 00100000c020001820000000001821000000000000000030
+$ python3 -m mosbius.cli decode 00100000c020004820000000004821000000000000000030
 Devices in use
   pmos_a      d=net3  g=net3  s=VAPWR  width=1  source_tied_to_VAPWR=True
-  pmos_b      d=net4  g=net3  s=VAPWR  width=1  source_tied_to_VAPWR=True
+  pmos_b      d=ua[4]  g=net3  s=VAPWR  width=1  source_tied_to_VAPWR=True
   ndiffpair+  g=ua[1]  d=net3  tail=4  shared_source_tied_to_VGND=False
-  ndiffpair-  g=ua[2]  d=net4  tail=4  shared_source_tied_to_VGND=False
+  ndiffpair-  g=ua[2]  d=ua[4]  tail=4  shared_source_tied_to_VGND=False
+
+Nets
+  VAPWR    pmos_a.s  pmos_b.s
+  ua[1]    ua[1] (bus_A[1])  ndiffpair+.g
+  ua[2]    ua[2] (bus_A[3])  ndiffpair-.g
+  net3     pmos_a.d  pmos_a.g  pmos_b.g  ndiffpair+.d
+  ua[4]    ua[4] (bus_B[2])  pmos_b.d  ndiffpair-.d
 
 ibias = 100.0 uA
 ```
@@ -92,8 +122,10 @@ example still depends on.
 
 The mirror comes back recognisably too: `pmos_a`'s drain and gate are both
 `net3` (diode-connected), `pmos_b`'s gate is also `net3` (mirrored), and
-`pmos_b`'s drain is `net4` -- the same net `ndiffpair-`'s drain lands on,
-i.e. the amplifier's single-ended output.
+`pmos_b`'s drain is `ua[4]` -- the same net `ndiffpair-`'s drain lands on,
+i.e. the amplifier's single-ended output. The `Nets` block spells out why
+that name matters: `ua[4]` is bonded to `bus_B[2]`, so the output is
+readable on a package pin rather than stranded on an internal bus row.
 
 ## Reproducing this
 
@@ -112,17 +144,17 @@ python3 -m mosbius.cli route build/diffamp.spice
 hardware blocks it stands in for, just without the switch-matrix overhead
 in between (SPEC.md §3.1b's Level-1 "ideal" simulation).
 
-![Diff amp Level-1 waveform: out steps up and down in decreasing increments as +-2/5/10/20/40mV differential steps are applied to ua1 against ua2 held at 1.5V, visibly compressing at the largest steps](diffamp.png)
+![Diff amp Level-1 waveform: ua4 steps up and down in decreasing increments as +-2/5/10/20/40mV differential steps are applied to ua1 against ua2 held at 1.5V, visibly compressing at the largest steps](diffamp.png)
 
 `ua2` (inm) is held at a fixed 1.5V common-mode bias; `ua1` (inp) steps
 through a differential offset of 2, 5, 10, 20 and 40mV, then the same five
-values negative, each held for 50ns. `out` starts at **2.0998V** with both
+values negative, each held for 50ns. `ua4` starts at **2.0998V** with both
 inputs equal -- not railed to either supply, confirming the mirror and
 tail bank are both biased into their normal operating region, not cut off
 or saturated by the (arbitrarily chosen) 1.5V common-mode point.
 
 The response is genuine differential gain, not a digital switch: each
-step moves `out` by roughly 21x itself near the origin, and that ratio
+step moves `ua4` by roughly 21x itself near the origin, and that ratio
 holds essentially flat out to about ±10mV before visibly compressing
 towards the rails at the largest steps -- exactly the large-signal
 transfer characteristic a single differential pair is supposed to have.
@@ -165,14 +197,14 @@ Vinm   ua2 0 1.5
 .tran 500p 649n
 .control
 run
-wrdata diffamp_sweep.txt v(ua1) v(ua2) v(out)
+wrdata diffamp_sweep.txt v(ua1) v(ua2) v(ua4)
 .endc
 ```
 
 ```bash
 python3 tools/plot_tb.py build/diffamp_sweep.txt examples/diffamp/diffamp.png \
   "Diff amp (Level-1): +-2/5/10/20/40mV steps on ua1, ua2 fixed 1.5V" \
-  "ua1 (inp):0" "ua2 (inm):1" "out:2"
+  "ua1 (inp):0" "ua2 (inm):1" "ua4 (out):2"
 ```
 
 `plot_tb.py`/`ngspice` need `numpy`/`matplotlib`, which live in the

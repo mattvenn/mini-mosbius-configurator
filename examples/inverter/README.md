@@ -40,7 +40,7 @@ the check.
 
 ```
 $ python3 -m mosbius.cli route build/inverter.spice
-OK -- no errors or warnings (10 info notes hidden, use --verbose).
+OK -- no errors or warnings (1 info note hidden, use --verbose).
 
 Device roles:
   XM1          -> nmos_a        w=1

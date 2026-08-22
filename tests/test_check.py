@@ -11,7 +11,7 @@ user to reach for --force.
 
 from __future__ import annotations
 
-from mosbius.check import check, merge_findings
+from mosbius.check import BUS_SEGMENTS, check, merge_findings
 from mosbius.model import SwitchConfig
 
 from .conftest import bit_for, setting_bit
@@ -241,24 +241,34 @@ def test_i1_not_flagged_for_fully_wired_segment(inverter_config):
     assert "bus_A[3]" not in i1_segments  # ua[2] bond + nmos_a.d + pmos_a.d
 
 
-def test_i1_findings_stay_one_per_segment_but_merge_for_display():
+def test_i1_findings_stay_one_per_segment_but_merge_into_one_block():
     # An empty config: all 12 bus segments are unused, but not identically
     # -- the 5 bonded to a ua[] pin sit at degree 1 (the bond itself, no
-    # switch needed) and the other 7 at degree 0. merge_key is the degree,
-    # so these are two groups, not twelve findings or one: exactly TODO.md
-    # (was Sec 3, closed 2026-08-22)'s "group by what the explanation
-    # actually depends on, not just by check code".
+    # switch needed) and the other 7 at degree 0. They still collapse to a
+    # SINGLE block. Grouping by degree instead (the first cut at TODO.md
+    # was Sec 3, closed 2026-08-22) printed the same three-line explanation
+    # twice over, differing only in "with zero" versus "with only one" --
+    # the duplication that work order existed to remove, in a milder form.
     report = check(SwitchConfig(bits=frozenset()))
     i1 = [f for f in report.findings if f.code == "I1"]
     assert len(i1) == 12                      # SafetyReport.findings: unchanged, one per segment
     merged = merge_findings(i1)
-    assert len(merged) == 2                   # display: one block per degree
-    zero_degree = next(m for m in merged if "with zero" in m.message)
-    one_degree = next(m for m in merged if "with only one" in m.message)
-    assert "bus_A[6]" in zero_degree.message and "do nothing" in zero_degree.message
-    assert "bus_A[1]" in one_degree.message and "does nothing" not in one_degree.message
-    assert zero_degree.message.count("A bus segment needs at least") == 1
-    assert one_degree.message.count("A bus segment needs at least") == 1
+    assert len(merged) == 1                   # display: one block, whatever the counts
+    text = " ".join(merged[0].message.split())  # body is wrapped; phrases span lines
+
+    # Neither kind of segment is lost to the merge: both are described, once.
+    assert text.count("have nothing connected to them at all") == 1
+    # ...and a segment sitting at one connection says that connection is its
+    # package-pin bond wire, not just that it has one. Reported as a bare
+    # count it reads as a plain error to whoever wired nothing to it.
+    assert text.count("are connected only to their package pins") == 1
+    for pin in ("ua[1]", "ua[2]", "ua[3]", "ua[4]", "ua[5]"):
+        assert pin in text, pin
+    # Every segment appears exactly twice: the headline, and its count clause.
+    for seg in BUS_SEGMENTS:
+        assert text.count(seg) == 2, seg
+    # ...and the explanation itself exactly once, which is the whole point.
+    assert text.count("A bus segment needs at least two") == 1
 
 
 def test_w2_names_the_tail_tie_bit_when_that_is_the_cause():
