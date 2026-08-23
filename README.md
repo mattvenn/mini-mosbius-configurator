@@ -112,3 +112,7 @@ python3 -m pytest tests/ -q
 See `CLAUDE.md` for the full list of verified corrections ("traps") this
 project's bit map and architecture depend on -- several look authoritative
 from upstream sources but are wrong in ways that were expensive to find.
+
+## Testing
+
+* Thread on TT discord: https://discord.com/channels/1009193568256135208/1502244680111362069
