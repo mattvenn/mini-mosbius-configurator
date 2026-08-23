@@ -103,3 +103,69 @@ the device models in `xschem/mosbius_lib/`. Confirming the *routed* config
 (Level-2, with real switch parasitics) behaves the same way on *this
 project's own* hardware bring-up is still open -- SPEC.md Sec 8.4's
 `--verify` exit criterion.
+
+## Level-1 vs Level-2, side by side: `tb_inverter.sch`
+
+Everything above was Level-1 only, produced by netlisting `inverter.sch`
+directly and hand-patching stimulus into the resulting SPICE text -- not a
+real xschem testbench. `tb_inverter.sch` replaces that with the workflow
+`mosbius simulate` (SPEC.md Sec 3.7, TODO.md Sec 1) is actually meant for:
+a real top-level testbench with two instances of the same design, `x1`
+(ideal, ordinary hierarchy) and `x2` (a duplicate, its `spice_sym_def`
+instance property pointing at a real, silicon-accurate netlist), sharing
+one stimulus and one set of rails, so the *only* difference between
+`out_l1` (x1's output) and `out_l2` (x2's output) is Level-1 vs Level-2
+fidelity. This is the same `spice_sym_def` swap-in mechanism used in
+[github.com/mattvenn/tt08-analog-ring-osc's `tb_ring.sch`](https://github.com/mattvenn/tt08-analog-ring-osc/blob/main/xschem/tb_ring.sch)
+to compare an ideal schematic against a post-layout extraction -- here the
+"extraction" is `mosbius simulate`'s output instead of a magic PEX run.
+
+`examples/inverter/inverter.sym` is a plain symbol for `inverter.sch`
+(matching `xschem/mosbius_lib/minimosbius_template.sym`'s port list
+exactly), needed because `inverter.sch` had never actually been
+*instantiated* as a hierarchical block before -- every existing example in
+this project is netlisted standalone at the top level, not referenced from
+a separate testbench.
+
+### Regenerating `build/inverter_mosbius.spice`
+
+`x2`'s `spice_sym_def` points at `build/inverter_mosbius.spice`, which is
+gitignored (like every other `build/` artifact) and has to be regenerated:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+  --skip bash -lc 'export PDK=sky130A PDK_ROOT=/foss/pdks; xschem -n -q examples/inverter/inverter.sch'
+python3 -m mosbius.cli route build/inverter.spice --out build/inverter.mosbius.json
+python3 -m mosbius.cli simulate build/inverter.mosbius.json --out build/inverter_mosbius.spice
+```
+
+The routed bitstream should still read
+`080000004010000001000000000000000040000400000000`, matching the
+"Routing" section above -- if it doesn't, something about the drawn
+circuit has changed. Then netlist the testbench itself, **exporting
+`PDK=sky130A` for this step too, not just the ngspice run** -- without it
+the container defaults to a different PDK and `sky130_fd_pr/corner.sym`
+bakes a wrong, nonexistent `.lib` path into the output (a real trap hit
+building this example, distinct from the already-documented "netlist from
+the wrong directory" one):
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+  --skip bash -lc 'export PDK=sky130A PDK_ROOT=/foss/pdks; xschem -n -q examples/inverter/tb_inverter.sch'
+```
+
+`build/tb_inverter.spice` is then a complete, self-contained deck --
+`.control` already has a real `tran`, two `.meas` rise-time measurements
+(`trise_l1`, `trise_l2`), and `wrdata` output for `ua1`/`out_l1`/`out_l2`.
+
+### What running it shows
+
+**Needs the higher-RAM machine, not this project's usual dev host.**
+`x2`'s included netlist carries the full real switch matrix (every
+`tt_asw_3v3`, open or closed, per TODO.md Sec 1's own investigation) --
+the same ~1.9GB-ceiling OOM every other full-matrix run in this project
+hits, confirmed here too (memory climbed to the host's ceiling with no
+ngspice output produced, same pattern as `tools/run_ringo_full_sim.sh`
+and friends before they were moved to a bigger machine). `x1` alone (the
+Level-1 branch) is cheap and will run fine anywhere; it's specifically
+running *both* branches together in one `.tran` that needs the extra RAM.
