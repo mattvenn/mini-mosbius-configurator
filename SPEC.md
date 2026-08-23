@@ -867,10 +867,38 @@ A cheaper alternative was tried and rejected: dropping every *open* switch
 from the netlist entirely (keeping real transistor models only for closed
 switches, on the theory that the bus-wire capacitance already captures an
 open switch's aggregate contribution) gave a materially worse result
-(~63MHz, not ~37.62MHz) -- a real transistor's off-state electrical
-behaviour and a wire's layout capacitance are additive, different physical
-effects, not redundant. Keeping every switch in the matrix as a real
-transistor, open or closed, is load-bearing for Level-2 accuracy.
+(~63MHz, not the ~38MHz this approach actually reaches) -- a real
+transistor's off-state electrical behaviour and a wire's layout
+capacitance are additive, different physical effects, not redundant.
+Keeping every switch in the matrix as a real transistor, open or closed,
+is load-bearing for Level-2 accuracy.
+
+**Shipped as `mosbius simulate` (TODO.md Sec 1, closed 2026-08-23).**
+Everything above -- the real switch matrix, the real row-coupling
+capacitance found alongside it (a switch's own bus stub coupling to its
+column's shared device-terminal net, ~43fF, independent of the bus-wire
+effect above and additive with it), the bus-wire capacitance, and real
+pad models on whichever package pins a design's routing actually uses --
+is packaged as one command: `mosbius simulate <routed.mosbius.json>`
+writes a single self-contained `<name>_mosbius.spice` file, a
+`.subckt <name>_mosbius ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`
+matching the exact 9-pin port list every hand-drawn design in this
+project already exposes via `devices/iopin.sym`. Drop it into an existing
+testbench in place of the ideal `mosbius_*`-symbol schematic block (e.g.
+via xschem's `spice_sym_def` instance property) and the testbench's own
+stimulus, analysis, and probes carry over unchanged -- the tool never
+assumes what kind of simulation (`.op`/`.tran`/`.ac`) a design needs,
+because that's the one thing it deliberately doesn't own.
+
+The real switch matrix, row-coupling capacitance, and bus-wire
+capacitance are fixed properties of the chip, not of any specific design
+-- they're baked into `mosbius/data/mosbius_device_library.spice` once
+(`tools/rebuild_mosbius_device_library.sh`), not regenerated per
+simulation, so a normal `mosbius simulate` run needs no docker/xschem/
+magic step at all, only Python. On the exact measured ring-oscillator
+bitstream, this full combination reaches **38.33MHz simulated vs. ~30MHz
+on real silicon (~1.28x too fast)** -- see project memory
+`ring_oscillator_l2_sim` for the full investigation this shipped from.
 
 ---
 

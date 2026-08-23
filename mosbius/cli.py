@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """The `mosbius` command line (SPEC.md's `mosbius decode`/`mosbius watch`
 examples): thin argument-parsing wrappers around the already-tested library
-functions in decode.py/check.py/route.py/watch.py/program.py. No new logic
-lives here -- each subcommand's job is turning argv into a function call and
-its result into text on stdout, per CLAUDE.md's beginner-facing diagnostics
-rule.
+functions in decode.py/check.py/route.py/simulate.py/watch.py/program.py. No
+new logic lives here -- each subcommand's job is turning argv into a function
+call and its result into text on stdout, per CLAUDE.md's beginner-facing
+diagnostics rule.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from mosbius.route import (
     route as route_fresh,
     route_sticky,
 )
+from mosbius.simulate import simulate_from_routed_json
 from mosbius.watch import watch
 
 
@@ -104,6 +105,14 @@ def cmd_route(args: argparse.Namespace) -> int:
     return 1 if report.has_errors else 0
 
 
+def cmd_simulate(args: argparse.Namespace) -> int:
+    name, spice_text = simulate_from_routed_json(args.routed)
+    out = args.out or args.routed.with_name(f"{name}_mosbius.spice")
+    out.write_text(spice_text)
+    print(f"OK -- wrote {out} ({name}_mosbius, real switch matrix + pads + coupling/wire caps)")
+    return 0
+
+
 def cmd_watch(args: argparse.Namespace) -> int:
     watch(args.netlist, once=args.once)
     return 0
@@ -151,6 +160,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="re-route even if --out's stored routing is still valid")
     p.add_argument("--verbose", "-v", action="store_true", help="also show INFO notes (e.g. unused bus rows)")
     p.set_defaults(func=cmd_route)
+
+    p = sub.add_parser("simulate", help="routed design -> a real, silicon-accurate SPICE subcircuit (TODO.md Sec 1)")
+    p.add_argument("routed", type=Path, help="a routed design JSON, from `mosbius route --out`")
+    p.add_argument("--out", type=Path, help="output .spice path (default: <name>_mosbius.spice next to the input)")
+    p.set_defaults(func=cmd_simulate)
 
     p = sub.add_parser("watch", help="re-run route+check every time the netlist file changes")
     p.add_argument("netlist", type=Path)

@@ -13,10 +13,11 @@ anything. Do not re-derive facts that are already marked VERIFIED there.
 Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
-`TODO.md` holds deferred work. Still open: Level-2 simulation of the routed
-design (§1). It is renumbered from 1 whenever items are removed, and every
-citation of it in this repo is updated in the same commit, so a `TODO.md`
-§number here is always live.
+`TODO.md` holds deferred work. Nothing is open right now -- its last item
+(§1, Level-2 simulation of the routed design) closed 2026-08-23, shipped
+as `mosbius simulate` (SPEC.md §3.7). The file is renumbered from 1
+whenever items are removed, and every citation of it in this repo is
+updated in the same commit, so a `TODO.md` §number here is always live.
 
 Closed on 2026-08-21, so don't re-report them: a reversed drain/source is
 now a `D2` hint that fires before the "DOESN'T FIT" it explains; a single
@@ -44,6 +45,27 @@ in -- `route.py`'s `allocate_devices()` searches orderings
 gate is forced onto a two-sided net or an out-of-range package pin,
 instead of just trying the netlist's own order and letting a badly-
 ordered-but-electrically-fine circuit fail to route.
+
+Closed on 2026-08-23, so don't re-report or re-investigate: a routed
+design can now get a real, silicon-accurate Level-2 SPICE simulation with
+one command, `mosbius simulate <routed.mosbius.json>`. It writes a
+self-contained `<name>_mosbius.spice` subcircuit -- the real switch
+matrix, real row-coupling capacitance, real bus-wire capacitance, and
+real pad models on whichever package pins the design actually uses --
+with the same 9-pin port list (`ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR
+VGND`) every hand-drawn design already exposes, so it drops straight into
+an existing testbench (e.g. via xschem's `spice_sym_def` instance
+property) in place of an ideal `mosbius_*`-symbol block, and the
+testbench's own stimulus/analysis/probes carry over unchanged -- the tool
+never assumes what kind of simulation a design needs. The switch matrix
+and its parasitics are baked into `mosbius/data/mosbius_device_library.spice`
+once (`tools/rebuild_mosbius_device_library.sh` regenerates it if the
+chip design or PDK models ever change), so ordinary use needs no
+docker/xschem/magic step, only Python. See SPEC.md §3.7 and TODO.md's own
+closing note for the full investigation this shipped from -- reaches
+~1.28x of real silicon's measured frequency on the exact measured
+ring-oscillator bitstream, down from 82x before that investigation
+started.
 
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it

@@ -1,0 +1,690 @@
+* expanding   symbol:  mosbius.sym # of pins=54
+** sym_path: /work/ttsky-mini-mosbius/xschem/mosbius.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/mosbius.sch
+.subckt mosbius cfg_bus_pwr[6] cfg_bus_pwr[5] cfg_bus_pwr[4] cfg_bus_pwr[3] cfg_bus_pwr[2] cfg_bus_pwr[1] VAPWR VDPWR VGND
++ bus_A[6] bus_A[5] bus_A[4] bus_A[3] bus_A[2] bus_A[1] cfga_otan_inp[3] cfga_otan_inp[2] cfga_otan_inp[1] cfgb_otan_inm[3] cfgb_otan_inm[2]
++ cfgb_otan_inm[1] cfga_otan_outp[6] cfga_otan_outp[5] cfga_otan_outp[4] cfga_otan_outp[3] cfga_otan_outp[2] cfga_otan_outp[1] cfga_mirn_a[6]
++ cfga_mirn_a[5] cfga_mirn_a[4] cfga_mirn_a[3] cfga_mirn_a[2] cfga_mirn_a[1] cfgb_mirn_b[6] cfgb_mirn_b[5] cfgb_mirn_b[4] cfgb_mirn_b[3]
++ cfgb_mirn_b[2] cfgb_mirn_b[1] ctrl_otan_tail[1] ctrl_otan_tail[0] ctrl_otan_mode[1] ctrl_otan_mode[0] cfga_mirp_a[6] cfga_mirp_a[5]
++ cfga_mirp_a[4] cfga_mirp_a[3] cfga_mirp_a[2] cfga_mirp_a[1] cfgb_mirp_b[6] cfgb_mirp_b[5] cfgb_mirp_b[4] cfgb_mirp_b[3] cfgb_mirp_b[2]
++ cfgb_mirp_b[1] cfga_dpn_inp[3] cfga_dpn_inp[2] cfga_dpn_inp[1] cfgb_dpn_inm[3] cfgb_dpn_inm[2] cfgb_dpn_inm[1] cfga_dpn_outp[6] cfga_dpn_outp[5]
++ cfga_dpn_outp[4] cfga_dpn_outp[3] cfga_dpn_outp[2] cfga_dpn_outp[1] ibias cfgb_dpn_outm[6] cfgb_dpn_outm[5] cfgb_dpn_outm[4] cfgb_dpn_outm[3]
++ cfgb_dpn_outm[2] cfgb_dpn_outm[1] ctrl_mirp_a[1] ctrl_mirp_a[0] ctrl_mirn_a[1] ctrl_mirn_a[0] ctrl_mirp_b[1] ctrl_mirp_b[0] ctrl_mirn_b[1]
++ ctrl_mirn_b[0] cfga_dpp_inp[3] cfga_dpp_inp[2] cfga_dpp_inp[1] cfgb_dpp_inm[3] cfgb_dpp_inm[2] cfgb_dpp_inm[1] cfga_dpp_outp[6] cfga_dpp_outp[5]
++ cfga_dpp_outp[4] cfga_dpp_outp[3] cfga_dpp_outp[2] cfga_dpp_outp[1] cfgb_dpp_outm[6] cfgb_dpp_outm[5] cfgb_dpp_outm[4] cfgb_dpp_outm[3]
++ cfgb_dpp_outm[2] cfgb_dpp_outm[1] cfga_nfeta_d[6] cfga_nfeta_d[5] cfga_nfeta_d[4] cfga_nfeta_d[3] cfga_nfeta_d[2] cfga_nfeta_d[1] cfgb_nfetb_d[6]
++ cfgb_nfetb_d[5] cfgb_nfetb_d[4] cfgb_nfetb_d[3] cfgb_nfetb_d[2] cfgb_nfetb_d[1] cfga_nfeta_g[6] cfga_nfeta_g[5] cfga_nfeta_g[4] cfga_nfeta_g[3]
++ cfga_nfeta_g[2] cfga_nfeta_g[1] ctrl_dpp_tail[1] ctrl_dpp_tail[0] ctrl_dpn_tail[1] ctrl_dpn_tail[0] cfgb_nfetb_g[6] cfgb_nfetb_g[5]
++ cfgb_nfetb_g[4] cfgb_nfetb_g[3] cfgb_nfetb_g[2] cfgb_nfetb_g[1] ctrl_dpp_source ctrl_dpn_source cfga_nfeta_s[6] cfga_nfeta_s[5] cfga_nfeta_s[4]
++ cfga_nfeta_s[3] cfga_nfeta_s[2] cfga_nfeta_s[1] cfgb_nfetb_s[6] cfgb_nfetb_s[5] cfgb_nfetb_s[4] cfgb_nfetb_s[3] cfgb_nfetb_s[2] cfgb_nfetb_s[1]
++ cfga_pfeta_d[6] cfga_pfeta_d[5] cfga_pfeta_d[4] cfga_pfeta_d[3] cfga_pfeta_d[2] cfga_pfeta_d[1] cfgb_pfetb_d[6] cfgb_pfetb_d[5] cfgb_pfetb_d[4]
++ cfgb_pfetb_d[3] cfgb_pfetb_d[2] cfgb_pfetb_d[1] cfga_pfeta_g[6] cfga_pfeta_g[5] cfga_pfeta_g[4] cfga_pfeta_g[3] cfga_pfeta_g[2] cfga_pfeta_g[1]
++ ctrl_pfeta_source ctrl_nfeta_source cfgb_pfetb_g[6] cfgb_pfetb_g[5] cfgb_pfetb_g[4] cfgb_pfetb_g[3] cfgb_pfetb_g[2] cfgb_pfetb_g[1]
++ ctrl_pfeta_width[1] ctrl_pfeta_width[0] ctrl_nfeta_width[1] ctrl_nfeta_width[0] cfga_pfeta_s[6] cfga_pfeta_s[5] cfga_pfeta_s[4] cfga_pfeta_s[3]
++ cfga_pfeta_s[2] cfga_pfeta_s[1] cfgb_pfetb_s[6] cfgb_pfetb_s[5] cfgb_pfetb_s[4] cfgb_pfetb_s[3] cfgb_pfetb_s[2] cfgb_pfetb_s[1] ctrl_pfetb_source
++ ctrl_nfetb_source ctrl_pfetb_width[1] ctrl_pfetb_width[0] ctrl_nfetb_width[1] ctrl_nfetb_width[0] cfg_bus_short[6] cfg_bus_short[5]
++ cfg_bus_short[4] cfg_bus_short[3] cfg_bus_short[2] cfg_bus_short[1] cfgb_otan_outm[6] cfgb_otan_outm[5] cfgb_otan_outm[4] cfgb_otan_outm[3]
++ cfgb_otan_outm[2] cfgb_otan_outm[1] bus_B[6] bus_B[5] bus_B[4] bus_B[3] bus_B[2] bus_B[1]
+* Row-coupling caps (mosbius/data build recipe -- see tools/rebuild_mosbius_device_library.sh)
+Ccpl_x12_3_ xpt_otan_inp bus_A[3] 43.19f
+Ccpl_x12_2_ xpt_otan_inp bus_A[2] 43.19f
+Ccpl_x12_1_ xpt_otan_inp bus_A[1] 43.19f
+Ccpl_x13_6_ xpt_otan_outp bus_A[6] 43.19f
+Ccpl_x13_5_ xpt_otan_outp bus_A[5] 43.19f
+Ccpl_x13_4_ xpt_otan_outp bus_A[4] 43.19f
+Ccpl_x13_3_ xpt_otan_outp bus_A[3] 43.19f
+Ccpl_x13_2_ xpt_otan_outp bus_A[2] 43.19f
+Ccpl_x13_1_ xpt_otan_outp bus_A[1] 43.19f
+Ccpl_x14_6_ xpt_mirn_a bus_A[6] 43.19f
+Ccpl_x14_5_ xpt_mirn_a bus_A[5] 43.19f
+Ccpl_x14_4_ xpt_mirn_a bus_A[4] 43.19f
+Ccpl_x14_3_ xpt_mirn_a bus_A[3] 43.19f
+Ccpl_x14_2_ xpt_mirn_a bus_A[2] 43.19f
+Ccpl_x14_1_ xpt_mirn_a bus_A[1] 43.19f
+Ccpl_x15_6_ xpt_mirp_a bus_A[6] 43.19f
+Ccpl_x15_5_ xpt_mirp_a bus_A[5] 43.19f
+Ccpl_x15_4_ xpt_mirp_a bus_A[4] 43.19f
+Ccpl_x15_3_ xpt_mirp_a bus_A[3] 43.19f
+Ccpl_x15_2_ xpt_mirp_a bus_A[2] 43.19f
+Ccpl_x15_1_ xpt_mirp_a bus_A[1] 43.19f
+Ccpl_x16_3_ xpt_dpn_inp bus_A[3] 43.19f
+Ccpl_x16_2_ xpt_dpn_inp bus_A[2] 43.19f
+Ccpl_x16_1_ xpt_dpn_inp bus_A[1] 43.19f
+Ccpl_x17_6_ xpt_dpn_outp bus_A[6] 43.19f
+Ccpl_x17_5_ xpt_dpn_outp bus_A[5] 43.19f
+Ccpl_x17_4_ xpt_dpn_outp bus_A[4] 43.19f
+Ccpl_x17_3_ xpt_dpn_outp bus_A[3] 43.19f
+Ccpl_x17_2_ xpt_dpn_outp bus_A[2] 43.19f
+Ccpl_x17_1_ xpt_dpn_outp bus_A[1] 43.19f
+Ccpl_x18_3_ xpt_dpp_inp bus_A[3] 43.19f
+Ccpl_x18_2_ xpt_dpp_inp bus_A[2] 43.19f
+Ccpl_x18_1_ xpt_dpp_inp bus_A[1] 43.19f
+Ccpl_x19_6_ xpt_dpp_outp bus_A[6] 43.19f
+Ccpl_x19_5_ xpt_dpp_outp bus_A[5] 43.19f
+Ccpl_x19_4_ xpt_dpp_outp bus_A[4] 43.19f
+Ccpl_x19_3_ xpt_dpp_outp bus_A[3] 43.19f
+Ccpl_x19_2_ xpt_dpp_outp bus_A[2] 43.19f
+Ccpl_x19_1_ xpt_dpp_outp bus_A[1] 43.19f
+Ccpl_x20_6_ xpt_nfeta_d bus_A[6] 43.19f
+Ccpl_x20_5_ xpt_nfeta_d bus_A[5] 43.19f
+Ccpl_x20_4_ xpt_nfeta_d bus_A[4] 43.19f
+Ccpl_x20_3_ xpt_nfeta_d bus_A[3] 43.19f
+Ccpl_x20_2_ xpt_nfeta_d bus_A[2] 43.19f
+Ccpl_x20_1_ xpt_nfeta_d bus_A[1] 43.19f
+Ccpl_x21_6_ xpt_nfeta_g bus_A[6] 43.19f
+Ccpl_x21_5_ xpt_nfeta_g bus_A[5] 43.19f
+Ccpl_x21_4_ xpt_nfeta_g bus_A[4] 43.19f
+Ccpl_x21_3_ xpt_nfeta_g bus_A[3] 43.19f
+Ccpl_x21_2_ xpt_nfeta_g bus_A[2] 43.19f
+Ccpl_x21_1_ xpt_nfeta_g bus_A[1] 43.19f
+Ccpl_x22_6_ xpt_nfeta_s bus_A[6] 43.19f
+Ccpl_x22_5_ xpt_nfeta_s bus_A[5] 43.19f
+Ccpl_x22_4_ xpt_nfeta_s bus_A[4] 43.19f
+Ccpl_x22_3_ xpt_nfeta_s bus_A[3] 43.19f
+Ccpl_x22_2_ xpt_nfeta_s bus_A[2] 43.19f
+Ccpl_x22_1_ xpt_nfeta_s bus_A[1] 43.19f
+Ccpl_x23_6_ xpt_pfeta_d bus_A[6] 43.19f
+Ccpl_x23_5_ xpt_pfeta_d bus_A[5] 43.19f
+Ccpl_x23_4_ xpt_pfeta_d bus_A[4] 43.19f
+Ccpl_x23_3_ xpt_pfeta_d bus_A[3] 43.19f
+Ccpl_x23_2_ xpt_pfeta_d bus_A[2] 43.19f
+Ccpl_x23_1_ xpt_pfeta_d bus_A[1] 43.19f
+Ccpl_x24_6_ xpt_pfeta_g bus_A[6] 43.19f
+Ccpl_x24_5_ xpt_pfeta_g bus_A[5] 43.19f
+Ccpl_x24_4_ xpt_pfeta_g bus_A[4] 43.19f
+Ccpl_x24_3_ xpt_pfeta_g bus_A[3] 43.19f
+Ccpl_x24_2_ xpt_pfeta_g bus_A[2] 43.19f
+Ccpl_x24_1_ xpt_pfeta_g bus_A[1] 43.19f
+Ccpl_x25_6_ xpt_pfeta_s bus_A[6] 43.19f
+Ccpl_x25_5_ xpt_pfeta_s bus_A[5] 43.19f
+Ccpl_x25_4_ xpt_pfeta_s bus_A[4] 43.19f
+Ccpl_x25_3_ xpt_pfeta_s bus_A[3] 43.19f
+Ccpl_x25_2_ xpt_pfeta_s bus_A[2] 43.19f
+Ccpl_x25_1_ xpt_pfeta_s bus_A[1] 43.19f
+Ccpl_x28_3_ xpt_otan_inm bus_B[3] 43.19f
+Ccpl_x28_2_ xpt_otan_inm bus_B[2] 43.19f
+Ccpl_x28_1_ xpt_otan_inm bus_B[1] 43.19f
+Ccpl_x30_6_ xpt_mirn_b bus_B[6] 43.19f
+Ccpl_x30_5_ xpt_mirn_b bus_B[5] 43.19f
+Ccpl_x30_4_ xpt_mirn_b bus_B[4] 43.19f
+Ccpl_x30_3_ xpt_mirn_b bus_B[3] 43.19f
+Ccpl_x30_2_ xpt_mirn_b bus_B[2] 43.19f
+Ccpl_x30_1_ xpt_mirn_b bus_B[1] 43.19f
+Ccpl_x31_6_ xpt_mirp_b bus_B[6] 43.19f
+Ccpl_x31_5_ xpt_mirp_b bus_B[5] 43.19f
+Ccpl_x31_4_ xpt_mirp_b bus_B[4] 43.19f
+Ccpl_x31_3_ xpt_mirp_b bus_B[3] 43.19f
+Ccpl_x31_2_ xpt_mirp_b bus_B[2] 43.19f
+Ccpl_x31_1_ xpt_mirp_b bus_B[1] 43.19f
+Ccpl_x32_3_ xpt_dpn_inm bus_B[3] 43.19f
+Ccpl_x32_2_ xpt_dpn_inm bus_B[2] 43.19f
+Ccpl_x32_1_ xpt_dpn_inm bus_B[1] 43.19f
+Ccpl_x33_6_ xpt_dpn_outm bus_B[6] 43.19f
+Ccpl_x33_5_ xpt_dpn_outm bus_B[5] 43.19f
+Ccpl_x33_4_ xpt_dpn_outm bus_B[4] 43.19f
+Ccpl_x33_3_ xpt_dpn_outm bus_B[3] 43.19f
+Ccpl_x33_2_ xpt_dpn_outm bus_B[2] 43.19f
+Ccpl_x33_1_ xpt_dpn_outm bus_B[1] 43.19f
+Ccpl_x34_3_ xpt_dpp_inm bus_B[3] 43.19f
+Ccpl_x34_2_ xpt_dpp_inm bus_B[2] 43.19f
+Ccpl_x34_1_ xpt_dpp_inm bus_B[1] 43.19f
+Ccpl_x35_6_ xpt_dpp_outm bus_B[6] 43.19f
+Ccpl_x35_5_ xpt_dpp_outm bus_B[5] 43.19f
+Ccpl_x35_4_ xpt_dpp_outm bus_B[4] 43.19f
+Ccpl_x35_3_ xpt_dpp_outm bus_B[3] 43.19f
+Ccpl_x35_2_ xpt_dpp_outm bus_B[2] 43.19f
+Ccpl_x35_1_ xpt_dpp_outm bus_B[1] 43.19f
+Ccpl_x36_6_ xpt_nfetb_d bus_B[6] 43.19f
+Ccpl_x36_5_ xpt_nfetb_d bus_B[5] 43.19f
+Ccpl_x36_4_ xpt_nfetb_d bus_B[4] 43.19f
+Ccpl_x36_3_ xpt_nfetb_d bus_B[3] 43.19f
+Ccpl_x36_2_ xpt_nfetb_d bus_B[2] 43.19f
+Ccpl_x36_1_ xpt_nfetb_d bus_B[1] 43.19f
+Ccpl_x37_6_ xpt_nfetb_g bus_B[6] 43.19f
+Ccpl_x37_5_ xpt_nfetb_g bus_B[5] 43.19f
+Ccpl_x37_4_ xpt_nfetb_g bus_B[4] 43.19f
+Ccpl_x37_3_ xpt_nfetb_g bus_B[3] 43.19f
+Ccpl_x37_2_ xpt_nfetb_g bus_B[2] 43.19f
+Ccpl_x37_1_ xpt_nfetb_g bus_B[1] 43.19f
+Ccpl_x38_6_ xpt_nfetb_s bus_B[6] 43.19f
+Ccpl_x38_5_ xpt_nfetb_s bus_B[5] 43.19f
+Ccpl_x38_4_ xpt_nfetb_s bus_B[4] 43.19f
+Ccpl_x38_3_ xpt_nfetb_s bus_B[3] 43.19f
+Ccpl_x38_2_ xpt_nfetb_s bus_B[2] 43.19f
+Ccpl_x38_1_ xpt_nfetb_s bus_B[1] 43.19f
+Ccpl_x39_6_ xpt_pfetb_d bus_B[6] 43.19f
+Ccpl_x39_5_ xpt_pfetb_d bus_B[5] 43.19f
+Ccpl_x39_4_ xpt_pfetb_d bus_B[4] 43.19f
+Ccpl_x39_3_ xpt_pfetb_d bus_B[3] 43.19f
+Ccpl_x39_2_ xpt_pfetb_d bus_B[2] 43.19f
+Ccpl_x39_1_ xpt_pfetb_d bus_B[1] 43.19f
+Ccpl_x40_6_ xpt_pfetb_g bus_B[6] 43.19f
+Ccpl_x40_5_ xpt_pfetb_g bus_B[5] 43.19f
+Ccpl_x40_4_ xpt_pfetb_g bus_B[4] 43.19f
+Ccpl_x40_3_ xpt_pfetb_g bus_B[3] 43.19f
+Ccpl_x40_2_ xpt_pfetb_g bus_B[2] 43.19f
+Ccpl_x40_1_ xpt_pfetb_g bus_B[1] 43.19f
+Ccpl_x41_6_ xpt_pfetb_s bus_B[6] 43.19f
+Ccpl_x41_5_ xpt_pfetb_s bus_B[5] 43.19f
+Ccpl_x41_4_ xpt_pfetb_s bus_B[4] 43.19f
+Ccpl_x41_3_ xpt_pfetb_s bus_B[3] 43.19f
+Ccpl_x41_2_ xpt_pfetb_s bus_B[2] 43.19f
+Ccpl_x41_1_ xpt_pfetb_s bus_B[1] 43.19f
+Ccpl_x1_6_ xpt_otan_outm bus_B[6] 43.19f
+Ccpl_x1_5_ xpt_otan_outm bus_B[5] 43.19f
+Ccpl_x1_4_ xpt_otan_outm bus_B[4] 43.19f
+Ccpl_x1_3_ xpt_otan_outm bus_B[3] 43.19f
+Ccpl_x1_2_ xpt_otan_outm bus_B[2] 43.19f
+Ccpl_x1_1_ xpt_otan_outm bus_B[1] 43.19f
+
+*.ipin cfga_otan_inp[3],cfga_otan_inp[2],cfga_otan_inp[1]
+*.ipin cfga_otan_outp[6],cfga_otan_outp[5],cfga_otan_outp[4],cfga_otan_outp[3],cfga_otan_outp[2],cfga_otan_outp[1]
+*.ipin cfga_mirn_a[6],cfga_mirn_a[5],cfga_mirn_a[4],cfga_mirn_a[3],cfga_mirn_a[2],cfga_mirn_a[1]
+*.ipin cfga_mirp_a[6],cfga_mirp_a[5],cfga_mirp_a[4],cfga_mirp_a[3],cfga_mirp_a[2],cfga_mirp_a[1]
+*.ipin cfga_dpn_inp[3],cfga_dpn_inp[2],cfga_dpn_inp[1]
+*.ipin cfga_dpn_outp[6],cfga_dpn_outp[5],cfga_dpn_outp[4],cfga_dpn_outp[3],cfga_dpn_outp[2],cfga_dpn_outp[1]
+*.ipin cfga_dpp_inp[3],cfga_dpp_inp[2],cfga_dpp_inp[1]
+*.ipin cfga_dpp_outp[6],cfga_dpp_outp[5],cfga_dpp_outp[4],cfga_dpp_outp[3],cfga_dpp_outp[2],cfga_dpp_outp[1]
+*.ipin cfga_nfeta_d[6],cfga_nfeta_d[5],cfga_nfeta_d[4],cfga_nfeta_d[3],cfga_nfeta_d[2],cfga_nfeta_d[1]
+*.ipin cfga_nfeta_g[6],cfga_nfeta_g[5],cfga_nfeta_g[4],cfga_nfeta_g[3],cfga_nfeta_g[2],cfga_nfeta_g[1]
+*.ipin cfga_nfeta_s[6],cfga_nfeta_s[5],cfga_nfeta_s[4],cfga_nfeta_s[3],cfga_nfeta_s[2],cfga_nfeta_s[1]
+*.ipin cfga_pfeta_d[6],cfga_pfeta_d[5],cfga_pfeta_d[4],cfga_pfeta_d[3],cfga_pfeta_d[2],cfga_pfeta_d[1]
+*.ipin cfga_pfeta_g[6],cfga_pfeta_g[5],cfga_pfeta_g[4],cfga_pfeta_g[3],cfga_pfeta_g[2],cfga_pfeta_g[1]
+*.ipin cfga_pfeta_s[6],cfga_pfeta_s[5],cfga_pfeta_s[4],cfga_pfeta_s[3],cfga_pfeta_s[2],cfga_pfeta_s[1]
+*.ipin cfgb_otan_inm[3],cfgb_otan_inm[2],cfgb_otan_inm[1]
+*.ipin cfgb_mirn_b[6],cfgb_mirn_b[5],cfgb_mirn_b[4],cfgb_mirn_b[3],cfgb_mirn_b[2],cfgb_mirn_b[1]
+*.ipin cfgb_mirp_b[6],cfgb_mirp_b[5],cfgb_mirp_b[4],cfgb_mirp_b[3],cfgb_mirp_b[2],cfgb_mirp_b[1]
+*.ipin cfgb_dpn_inm[3],cfgb_dpn_inm[2],cfgb_dpn_inm[1]
+*.ipin cfgb_dpn_outm[6],cfgb_dpn_outm[5],cfgb_dpn_outm[4],cfgb_dpn_outm[3],cfgb_dpn_outm[2],cfgb_dpn_outm[1]
+*.ipin cfgb_dpp_inm[3],cfgb_dpp_inm[2],cfgb_dpp_inm[1]
+*.ipin cfgb_dpp_outm[6],cfgb_dpp_outm[5],cfgb_dpp_outm[4],cfgb_dpp_outm[3],cfgb_dpp_outm[2],cfgb_dpp_outm[1]
+*.ipin cfgb_nfetb_d[6],cfgb_nfetb_d[5],cfgb_nfetb_d[4],cfgb_nfetb_d[3],cfgb_nfetb_d[2],cfgb_nfetb_d[1]
+*.ipin cfgb_nfetb_g[6],cfgb_nfetb_g[5],cfgb_nfetb_g[4],cfgb_nfetb_g[3],cfgb_nfetb_g[2],cfgb_nfetb_g[1]
+*.ipin cfgb_nfetb_s[6],cfgb_nfetb_s[5],cfgb_nfetb_s[4],cfgb_nfetb_s[3],cfgb_nfetb_s[2],cfgb_nfetb_s[1]
+*.ipin cfgb_pfetb_d[6],cfgb_pfetb_d[5],cfgb_pfetb_d[4],cfgb_pfetb_d[3],cfgb_pfetb_d[2],cfgb_pfetb_d[1]
+*.ipin cfgb_pfetb_g[6],cfgb_pfetb_g[5],cfgb_pfetb_g[4],cfgb_pfetb_g[3],cfgb_pfetb_g[2],cfgb_pfetb_g[1]
+*.ipin cfgb_pfetb_s[6],cfgb_pfetb_s[5],cfgb_pfetb_s[4],cfgb_pfetb_s[3],cfgb_pfetb_s[2],cfgb_pfetb_s[1]
+*.ipin ibias
+*.ipin cfg_bus_short[6],cfg_bus_short[5],cfg_bus_short[4],cfg_bus_short[3],cfg_bus_short[2],cfg_bus_short[1]
+*.ipin ctrl_otan_tail[1],ctrl_otan_tail[0]
+*.ipin ctrl_otan_mode[1],ctrl_otan_mode[0]
+*.ipin ctrl_mirn_a[1],ctrl_mirn_a[0]
+*.ipin ctrl_mirn_b[1],ctrl_mirn_b[0]
+*.ipin ctrl_mirp_a[1],ctrl_mirp_a[0]
+*.ipin ctrl_mirp_b[1],ctrl_mirp_b[0]
+*.ipin ctrl_dpn_tail[1],ctrl_dpn_tail[0]
+*.ipin ctrl_dpn_source
+*.ipin ctrl_dpp_tail[1],ctrl_dpp_tail[0]
+*.ipin ctrl_dpp_source
+*.ipin ctrl_nfeta_width[1],ctrl_nfeta_width[0]
+*.ipin ctrl_nfeta_source
+*.ipin ctrl_nfetb_width[1],ctrl_nfetb_width[0]
+*.ipin ctrl_nfetb_source
+*.ipin ctrl_pfeta_width[1],ctrl_pfeta_width[0]
+*.ipin ctrl_pfeta_source
+*.ipin ctrl_pfetb_width[1],ctrl_pfetb_width[0]
+*.ipin ctrl_pfetb_source
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin VGND
+*.iopin bus_A[6],bus_A[5],bus_A[4],bus_A[3],bus_A[2],bus_A[1]
+*.ipin cfgb_otan_outm[6],cfgb_otan_outm[5],cfgb_otan_outm[4],cfgb_otan_outm[3],cfgb_otan_outm[2],cfgb_otan_outm[1]
+*.ipin cfg_bus_pwr[6],cfg_bus_pwr[5],cfg_bus_pwr[4],cfg_bus_pwr[3],cfg_bus_pwr[2],cfg_bus_pwr[1]
+*.iopin bus_B[6],bus_B[5],bus_B[4],bus_B[3],bus_B[2],bus_B[1]
+x2 VAPWR VDPWR ibias ibias_p xpt_mirn_a xpt_mirn_b ctrl_mirn_a[1] ctrl_mirn_a[0] ctrl_mirn_b[1] ctrl_mirn_b[0] VGND mirror_n
+x12[3] VGND VDPWR VAPWR cfga_otan_inp[3] xpt_otan_inp bus_A[3] tt_asw_3v3
+x12[2] VGND VDPWR VAPWR cfga_otan_inp[2] xpt_otan_inp bus_A[2] tt_asw_3v3
+x12[1] VGND VDPWR VAPWR cfga_otan_inp[1] xpt_otan_inp bus_A[1] tt_asw_3v3
+x13[6] VGND VDPWR VAPWR cfga_otan_outp[6] xpt_otan_outp bus_A[6] tt_asw_3v3
+x13[5] VGND VDPWR VAPWR cfga_otan_outp[5] xpt_otan_outp bus_A[5] tt_asw_3v3
+x13[4] VGND VDPWR VAPWR cfga_otan_outp[4] xpt_otan_outp bus_A[4] tt_asw_3v3
+x13[3] VGND VDPWR VAPWR cfga_otan_outp[3] xpt_otan_outp bus_A[3] tt_asw_3v3
+x13[2] VGND VDPWR VAPWR cfga_otan_outp[2] xpt_otan_outp bus_A[2] tt_asw_3v3
+x13[1] VGND VDPWR VAPWR cfga_otan_outp[1] xpt_otan_outp bus_A[1] tt_asw_3v3
+x14[6] VGND VDPWR VAPWR cfga_mirn_a[6] xpt_mirn_a bus_A[6] tt_asw_3v3
+x14[5] VGND VDPWR VAPWR cfga_mirn_a[5] xpt_mirn_a bus_A[5] tt_asw_3v3
+x14[4] VGND VDPWR VAPWR cfga_mirn_a[4] xpt_mirn_a bus_A[4] tt_asw_3v3
+x14[3] VGND VDPWR VAPWR cfga_mirn_a[3] xpt_mirn_a bus_A[3] tt_asw_3v3
+x14[2] VGND VDPWR VAPWR cfga_mirn_a[2] xpt_mirn_a bus_A[2] tt_asw_3v3
+x14[1] VGND VDPWR VAPWR cfga_mirn_a[1] xpt_mirn_a bus_A[1] tt_asw_3v3
+x15[6] VGND VDPWR VAPWR cfga_mirp_a[6] xpt_mirp_a bus_A[6] tt_asw_3v3
+x15[5] VGND VDPWR VAPWR cfga_mirp_a[5] xpt_mirp_a bus_A[5] tt_asw_3v3
+x15[4] VGND VDPWR VAPWR cfga_mirp_a[4] xpt_mirp_a bus_A[4] tt_asw_3v3
+x15[3] VGND VDPWR VAPWR cfga_mirp_a[3] xpt_mirp_a bus_A[3] tt_asw_3v3
+x15[2] VGND VDPWR VAPWR cfga_mirp_a[2] xpt_mirp_a bus_A[2] tt_asw_3v3
+x15[1] VGND VDPWR VAPWR cfga_mirp_a[1] xpt_mirp_a bus_A[1] tt_asw_3v3
+x16[3] VGND VDPWR VAPWR cfga_dpn_inp[3] xpt_dpn_inp bus_A[3] tt_asw_3v3
+x16[2] VGND VDPWR VAPWR cfga_dpn_inp[2] xpt_dpn_inp bus_A[2] tt_asw_3v3
+x16[1] VGND VDPWR VAPWR cfga_dpn_inp[1] xpt_dpn_inp bus_A[1] tt_asw_3v3
+x17[6] VGND VDPWR VAPWR cfga_dpn_outp[6] xpt_dpn_outp bus_A[6] tt_asw_3v3
+x17[5] VGND VDPWR VAPWR cfga_dpn_outp[5] xpt_dpn_outp bus_A[5] tt_asw_3v3
+x17[4] VGND VDPWR VAPWR cfga_dpn_outp[4] xpt_dpn_outp bus_A[4] tt_asw_3v3
+x17[3] VGND VDPWR VAPWR cfga_dpn_outp[3] xpt_dpn_outp bus_A[3] tt_asw_3v3
+x17[2] VGND VDPWR VAPWR cfga_dpn_outp[2] xpt_dpn_outp bus_A[2] tt_asw_3v3
+x17[1] VGND VDPWR VAPWR cfga_dpn_outp[1] xpt_dpn_outp bus_A[1] tt_asw_3v3
+x18[3] VGND VDPWR VAPWR cfga_dpp_inp[3] xpt_dpp_inp bus_A[3] tt_asw_3v3
+x18[2] VGND VDPWR VAPWR cfga_dpp_inp[2] xpt_dpp_inp bus_A[2] tt_asw_3v3
+x18[1] VGND VDPWR VAPWR cfga_dpp_inp[1] xpt_dpp_inp bus_A[1] tt_asw_3v3
+x19[6] VGND VDPWR VAPWR cfga_dpp_outp[6] xpt_dpp_outp bus_A[6] tt_asw_3v3
+x19[5] VGND VDPWR VAPWR cfga_dpp_outp[5] xpt_dpp_outp bus_A[5] tt_asw_3v3
+x19[4] VGND VDPWR VAPWR cfga_dpp_outp[4] xpt_dpp_outp bus_A[4] tt_asw_3v3
+x19[3] VGND VDPWR VAPWR cfga_dpp_outp[3] xpt_dpp_outp bus_A[3] tt_asw_3v3
+x19[2] VGND VDPWR VAPWR cfga_dpp_outp[2] xpt_dpp_outp bus_A[2] tt_asw_3v3
+x19[1] VGND VDPWR VAPWR cfga_dpp_outp[1] xpt_dpp_outp bus_A[1] tt_asw_3v3
+x20[6] VGND VDPWR VAPWR cfga_nfeta_d[6] xpt_nfeta_d bus_A[6] tt_asw_3v3
+x20[5] VGND VDPWR VAPWR cfga_nfeta_d[5] xpt_nfeta_d bus_A[5] tt_asw_3v3
+x20[4] VGND VDPWR VAPWR cfga_nfeta_d[4] xpt_nfeta_d bus_A[4] tt_asw_3v3
+x20[3] VGND VDPWR VAPWR cfga_nfeta_d[3] xpt_nfeta_d bus_A[3] tt_asw_3v3
+x20[2] VGND VDPWR VAPWR cfga_nfeta_d[2] xpt_nfeta_d bus_A[2] tt_asw_3v3
+x20[1] VGND VDPWR VAPWR cfga_nfeta_d[1] xpt_nfeta_d bus_A[1] tt_asw_3v3
+x21[6] VGND VDPWR VAPWR cfga_nfeta_g[6] xpt_nfeta_g bus_A[6] tt_asw_3v3
+x21[5] VGND VDPWR VAPWR cfga_nfeta_g[5] xpt_nfeta_g bus_A[5] tt_asw_3v3
+x21[4] VGND VDPWR VAPWR cfga_nfeta_g[4] xpt_nfeta_g bus_A[4] tt_asw_3v3
+x21[3] VGND VDPWR VAPWR cfga_nfeta_g[3] xpt_nfeta_g bus_A[3] tt_asw_3v3
+x21[2] VGND VDPWR VAPWR cfga_nfeta_g[2] xpt_nfeta_g bus_A[2] tt_asw_3v3
+x21[1] VGND VDPWR VAPWR cfga_nfeta_g[1] xpt_nfeta_g bus_A[1] tt_asw_3v3
+x22[6] VGND VDPWR VAPWR cfga_nfeta_s[6] xpt_nfeta_s bus_A[6] tt_asw_3v3
+x22[5] VGND VDPWR VAPWR cfga_nfeta_s[5] xpt_nfeta_s bus_A[5] tt_asw_3v3
+x22[4] VGND VDPWR VAPWR cfga_nfeta_s[4] xpt_nfeta_s bus_A[4] tt_asw_3v3
+x22[3] VGND VDPWR VAPWR cfga_nfeta_s[3] xpt_nfeta_s bus_A[3] tt_asw_3v3
+x22[2] VGND VDPWR VAPWR cfga_nfeta_s[2] xpt_nfeta_s bus_A[2] tt_asw_3v3
+x22[1] VGND VDPWR VAPWR cfga_nfeta_s[1] xpt_nfeta_s bus_A[1] tt_asw_3v3
+x23[6] VGND VDPWR VAPWR cfga_pfeta_d[6] xpt_pfeta_d bus_A[6] tt_asw_3v3
+x23[5] VGND VDPWR VAPWR cfga_pfeta_d[5] xpt_pfeta_d bus_A[5] tt_asw_3v3
+x23[4] VGND VDPWR VAPWR cfga_pfeta_d[4] xpt_pfeta_d bus_A[4] tt_asw_3v3
+x23[3] VGND VDPWR VAPWR cfga_pfeta_d[3] xpt_pfeta_d bus_A[3] tt_asw_3v3
+x23[2] VGND VDPWR VAPWR cfga_pfeta_d[2] xpt_pfeta_d bus_A[2] tt_asw_3v3
+x23[1] VGND VDPWR VAPWR cfga_pfeta_d[1] xpt_pfeta_d bus_A[1] tt_asw_3v3
+x24[6] VGND VDPWR VAPWR cfga_pfeta_g[6] xpt_pfeta_g bus_A[6] tt_asw_3v3
+x24[5] VGND VDPWR VAPWR cfga_pfeta_g[5] xpt_pfeta_g bus_A[5] tt_asw_3v3
+x24[4] VGND VDPWR VAPWR cfga_pfeta_g[4] xpt_pfeta_g bus_A[4] tt_asw_3v3
+x24[3] VGND VDPWR VAPWR cfga_pfeta_g[3] xpt_pfeta_g bus_A[3] tt_asw_3v3
+x24[2] VGND VDPWR VAPWR cfga_pfeta_g[2] xpt_pfeta_g bus_A[2] tt_asw_3v3
+x24[1] VGND VDPWR VAPWR cfga_pfeta_g[1] xpt_pfeta_g bus_A[1] tt_asw_3v3
+x25[6] VGND VDPWR VAPWR cfga_pfeta_s[6] xpt_pfeta_s bus_A[6] tt_asw_3v3
+x25[5] VGND VDPWR VAPWR cfga_pfeta_s[5] xpt_pfeta_s bus_A[5] tt_asw_3v3
+x25[4] VGND VDPWR VAPWR cfga_pfeta_s[4] xpt_pfeta_s bus_A[4] tt_asw_3v3
+x25[3] VGND VDPWR VAPWR cfga_pfeta_s[3] xpt_pfeta_s bus_A[3] tt_asw_3v3
+x25[2] VGND VDPWR VAPWR cfga_pfeta_s[2] xpt_pfeta_s bus_A[2] tt_asw_3v3
+x25[1] VGND VDPWR VAPWR cfga_pfeta_s[1] xpt_pfeta_s bus_A[1] tt_asw_3v3
+x28[3] VGND VDPWR VAPWR cfgb_otan_inm[3] xpt_otan_inm bus_B[3] tt_asw_3v3
+x28[2] VGND VDPWR VAPWR cfgb_otan_inm[2] xpt_otan_inm bus_B[2] tt_asw_3v3
+x28[1] VGND VDPWR VAPWR cfgb_otan_inm[1] xpt_otan_inm bus_B[1] tt_asw_3v3
+x30[6] VGND VDPWR VAPWR cfgb_mirn_b[6] xpt_mirn_b bus_B[6] tt_asw_3v3
+x30[5] VGND VDPWR VAPWR cfgb_mirn_b[5] xpt_mirn_b bus_B[5] tt_asw_3v3
+x30[4] VGND VDPWR VAPWR cfgb_mirn_b[4] xpt_mirn_b bus_B[4] tt_asw_3v3
+x30[3] VGND VDPWR VAPWR cfgb_mirn_b[3] xpt_mirn_b bus_B[3] tt_asw_3v3
+x30[2] VGND VDPWR VAPWR cfgb_mirn_b[2] xpt_mirn_b bus_B[2] tt_asw_3v3
+x30[1] VGND VDPWR VAPWR cfgb_mirn_b[1] xpt_mirn_b bus_B[1] tt_asw_3v3
+x31[6] VGND VDPWR VAPWR cfgb_mirp_b[6] xpt_mirp_b bus_B[6] tt_asw_3v3
+x31[5] VGND VDPWR VAPWR cfgb_mirp_b[5] xpt_mirp_b bus_B[5] tt_asw_3v3
+x31[4] VGND VDPWR VAPWR cfgb_mirp_b[4] xpt_mirp_b bus_B[4] tt_asw_3v3
+x31[3] VGND VDPWR VAPWR cfgb_mirp_b[3] xpt_mirp_b bus_B[3] tt_asw_3v3
+x31[2] VGND VDPWR VAPWR cfgb_mirp_b[2] xpt_mirp_b bus_B[2] tt_asw_3v3
+x31[1] VGND VDPWR VAPWR cfgb_mirp_b[1] xpt_mirp_b bus_B[1] tt_asw_3v3
+x32[3] VGND VDPWR VAPWR cfgb_dpn_inm[3] xpt_dpn_inm bus_B[3] tt_asw_3v3
+x32[2] VGND VDPWR VAPWR cfgb_dpn_inm[2] xpt_dpn_inm bus_B[2] tt_asw_3v3
+x32[1] VGND VDPWR VAPWR cfgb_dpn_inm[1] xpt_dpn_inm bus_B[1] tt_asw_3v3
+x33[6] VGND VDPWR VAPWR cfgb_dpn_outm[6] xpt_dpn_outm bus_B[6] tt_asw_3v3
+x33[5] VGND VDPWR VAPWR cfgb_dpn_outm[5] xpt_dpn_outm bus_B[5] tt_asw_3v3
+x33[4] VGND VDPWR VAPWR cfgb_dpn_outm[4] xpt_dpn_outm bus_B[4] tt_asw_3v3
+x33[3] VGND VDPWR VAPWR cfgb_dpn_outm[3] xpt_dpn_outm bus_B[3] tt_asw_3v3
+x33[2] VGND VDPWR VAPWR cfgb_dpn_outm[2] xpt_dpn_outm bus_B[2] tt_asw_3v3
+x33[1] VGND VDPWR VAPWR cfgb_dpn_outm[1] xpt_dpn_outm bus_B[1] tt_asw_3v3
+x34[3] VGND VDPWR VAPWR cfgb_dpp_inm[3] xpt_dpp_inm bus_B[3] tt_asw_3v3
+x34[2] VGND VDPWR VAPWR cfgb_dpp_inm[2] xpt_dpp_inm bus_B[2] tt_asw_3v3
+x34[1] VGND VDPWR VAPWR cfgb_dpp_inm[1] xpt_dpp_inm bus_B[1] tt_asw_3v3
+x35[6] VGND VDPWR VAPWR cfgb_dpp_outm[6] xpt_dpp_outm bus_B[6] tt_asw_3v3
+x35[5] VGND VDPWR VAPWR cfgb_dpp_outm[5] xpt_dpp_outm bus_B[5] tt_asw_3v3
+x35[4] VGND VDPWR VAPWR cfgb_dpp_outm[4] xpt_dpp_outm bus_B[4] tt_asw_3v3
+x35[3] VGND VDPWR VAPWR cfgb_dpp_outm[3] xpt_dpp_outm bus_B[3] tt_asw_3v3
+x35[2] VGND VDPWR VAPWR cfgb_dpp_outm[2] xpt_dpp_outm bus_B[2] tt_asw_3v3
+x35[1] VGND VDPWR VAPWR cfgb_dpp_outm[1] xpt_dpp_outm bus_B[1] tt_asw_3v3
+x36[6] VGND VDPWR VAPWR cfgb_nfetb_d[6] xpt_nfetb_d bus_B[6] tt_asw_3v3
+x36[5] VGND VDPWR VAPWR cfgb_nfetb_d[5] xpt_nfetb_d bus_B[5] tt_asw_3v3
+x36[4] VGND VDPWR VAPWR cfgb_nfetb_d[4] xpt_nfetb_d bus_B[4] tt_asw_3v3
+x36[3] VGND VDPWR VAPWR cfgb_nfetb_d[3] xpt_nfetb_d bus_B[3] tt_asw_3v3
+x36[2] VGND VDPWR VAPWR cfgb_nfetb_d[2] xpt_nfetb_d bus_B[2] tt_asw_3v3
+x36[1] VGND VDPWR VAPWR cfgb_nfetb_d[1] xpt_nfetb_d bus_B[1] tt_asw_3v3
+x37[6] VGND VDPWR VAPWR cfgb_nfetb_g[6] xpt_nfetb_g bus_B[6] tt_asw_3v3
+x37[5] VGND VDPWR VAPWR cfgb_nfetb_g[5] xpt_nfetb_g bus_B[5] tt_asw_3v3
+x37[4] VGND VDPWR VAPWR cfgb_nfetb_g[4] xpt_nfetb_g bus_B[4] tt_asw_3v3
+x37[3] VGND VDPWR VAPWR cfgb_nfetb_g[3] xpt_nfetb_g bus_B[3] tt_asw_3v3
+x37[2] VGND VDPWR VAPWR cfgb_nfetb_g[2] xpt_nfetb_g bus_B[2] tt_asw_3v3
+x37[1] VGND VDPWR VAPWR cfgb_nfetb_g[1] xpt_nfetb_g bus_B[1] tt_asw_3v3
+x38[6] VGND VDPWR VAPWR cfgb_nfetb_s[6] xpt_nfetb_s bus_B[6] tt_asw_3v3
+x38[5] VGND VDPWR VAPWR cfgb_nfetb_s[5] xpt_nfetb_s bus_B[5] tt_asw_3v3
+x38[4] VGND VDPWR VAPWR cfgb_nfetb_s[4] xpt_nfetb_s bus_B[4] tt_asw_3v3
+x38[3] VGND VDPWR VAPWR cfgb_nfetb_s[3] xpt_nfetb_s bus_B[3] tt_asw_3v3
+x38[2] VGND VDPWR VAPWR cfgb_nfetb_s[2] xpt_nfetb_s bus_B[2] tt_asw_3v3
+x38[1] VGND VDPWR VAPWR cfgb_nfetb_s[1] xpt_nfetb_s bus_B[1] tt_asw_3v3
+x39[6] VGND VDPWR VAPWR cfgb_pfetb_d[6] xpt_pfetb_d bus_B[6] tt_asw_3v3
+x39[5] VGND VDPWR VAPWR cfgb_pfetb_d[5] xpt_pfetb_d bus_B[5] tt_asw_3v3
+x39[4] VGND VDPWR VAPWR cfgb_pfetb_d[4] xpt_pfetb_d bus_B[4] tt_asw_3v3
+x39[3] VGND VDPWR VAPWR cfgb_pfetb_d[3] xpt_pfetb_d bus_B[3] tt_asw_3v3
+x39[2] VGND VDPWR VAPWR cfgb_pfetb_d[2] xpt_pfetb_d bus_B[2] tt_asw_3v3
+x39[1] VGND VDPWR VAPWR cfgb_pfetb_d[1] xpt_pfetb_d bus_B[1] tt_asw_3v3
+x40[6] VGND VDPWR VAPWR cfgb_pfetb_g[6] xpt_pfetb_g bus_B[6] tt_asw_3v3
+x40[5] VGND VDPWR VAPWR cfgb_pfetb_g[5] xpt_pfetb_g bus_B[5] tt_asw_3v3
+x40[4] VGND VDPWR VAPWR cfgb_pfetb_g[4] xpt_pfetb_g bus_B[4] tt_asw_3v3
+x40[3] VGND VDPWR VAPWR cfgb_pfetb_g[3] xpt_pfetb_g bus_B[3] tt_asw_3v3
+x40[2] VGND VDPWR VAPWR cfgb_pfetb_g[2] xpt_pfetb_g bus_B[2] tt_asw_3v3
+x40[1] VGND VDPWR VAPWR cfgb_pfetb_g[1] xpt_pfetb_g bus_B[1] tt_asw_3v3
+x41[6] VGND VDPWR VAPWR cfgb_pfetb_s[6] xpt_pfetb_s bus_B[6] tt_asw_3v3
+x41[5] VGND VDPWR VAPWR cfgb_pfetb_s[5] xpt_pfetb_s bus_B[5] tt_asw_3v3
+x41[4] VGND VDPWR VAPWR cfgb_pfetb_s[4] xpt_pfetb_s bus_B[4] tt_asw_3v3
+x41[3] VGND VDPWR VAPWR cfgb_pfetb_s[3] xpt_pfetb_s bus_B[3] tt_asw_3v3
+x41[2] VGND VDPWR VAPWR cfgb_pfetb_s[2] xpt_pfetb_s bus_B[2] tt_asw_3v3
+x41[1] VGND VDPWR VAPWR cfgb_pfetb_s[1] xpt_pfetb_s bus_B[1] tt_asw_3v3
+x42[6] VGND VDPWR VAPWR cfg_bus_short[6] bus_B[6] bus_A[6] tt_asw_3v3
+x42[5] VGND VDPWR VAPWR cfg_bus_short[5] bus_B[5] bus_A[5] tt_asw_3v3
+x42[4] VGND VDPWR VAPWR cfg_bus_short[4] bus_B[4] bus_A[4] tt_asw_3v3
+x42[3] VGND VDPWR VAPWR cfg_bus_short[3] bus_B[3] bus_A[3] tt_asw_3v3
+x42[2] VGND VDPWR VAPWR cfg_bus_short[2] bus_B[2] bus_A[2] tt_asw_3v3
+x42[1] VGND VDPWR VAPWR cfg_bus_short[1] bus_B[1] bus_A[1] tt_asw_3v3
+x1 VAPWR VDPWR xpt_otan_inp xpt_otan_outp xpt_otan_inm ctrl_otan_tail[1] ctrl_otan_tail[0] ctrl_otan_mode[1] ctrl_otan_mode[0]
++ ibias VGND xpt_otan_outm ota_n
+x3 VAPWR VDPWR ibias_p xpt_mirp_a xpt_mirp_b ctrl_mirp_a[1] ctrl_mirp_a[0] ctrl_mirp_b[1] ctrl_mirp_b[0] VGND mirror_p
+x4 VAPWR VDPWR xpt_dpn_outp xpt_dpn_outm xpt_dpn_inp xpt_dpn_inm ctrl_dpn_tail[1] ctrl_dpn_tail[0] ctrl_dpn_source ibias VGND
++ diff_n
+x5 VAPWR VDPWR xpt_dpp_outp xpt_dpp_outm xpt_dpp_inp xpt_dpp_inm ctrl_dpp_tail[1] ctrl_dpp_tail[0] ctrl_dpp_source ibias_p VGND
++ diff_p
+x6 VAPWR VDPWR xpt_nfeta_d xpt_nfeta_g xpt_nfeta_s ctrl_nfeta_source ctrl_nfeta_width[1] ctrl_nfeta_width[0] VGND nmos_prog
+x7 VAPWR VDPWR xpt_nfetb_d xpt_nfetb_g xpt_nfetb_s ctrl_nfetb_source ctrl_nfetb_width[1] ctrl_nfetb_width[0] VGND nmos_prog
+x8 VAPWR VDPWR xpt_pfeta_s xpt_pfeta_g xpt_pfeta_d ctrl_pfeta_source ctrl_pfeta_width[1] ctrl_pfeta_width[0] VGND pmos_prog
+x9 VAPWR VDPWR xpt_pfetb_s xpt_pfetb_g xpt_pfetb_d ctrl_pfetb_source ctrl_pfetb_width[1] ctrl_pfetb_width[0] VGND pmos_prog
+x1[6] VGND VDPWR VAPWR cfgb_otan_outm[6] xpt_otan_outm bus_B[6] tt_asw_3v3
+x1[5] VGND VDPWR VAPWR cfgb_otan_outm[5] xpt_otan_outm bus_B[5] tt_asw_3v3
+x1[4] VGND VDPWR VAPWR cfgb_otan_outm[4] xpt_otan_outm bus_B[4] tt_asw_3v3
+x1[3] VGND VDPWR VAPWR cfgb_otan_outm[3] xpt_otan_outm bus_B[3] tt_asw_3v3
+x1[2] VGND VDPWR VAPWR cfgb_otan_outm[2] xpt_otan_outm bus_B[2] tt_asw_3v3
+x1[1] VGND VDPWR VAPWR cfgb_otan_outm[1] xpt_otan_outm bus_B[1] tt_asw_3v3
+x2[6] VGND VDPWR VAPWR cfg_bus_pwr[6] bus_B[6] VAPWR tt_asw_3v3
+x2[5] VGND VDPWR VAPWR cfg_bus_pwr[5] bus_A[4] VAPWR tt_asw_3v3
+x2[4] VGND VDPWR VAPWR cfg_bus_pwr[4] bus_B[1] VAPWR tt_asw_3v3
+x2[3] VGND VDPWR VAPWR cfg_bus_pwr[3] bus_A[6] VGND tt_asw_3v3
+x2[2] VGND VDPWR VAPWR cfg_bus_pwr[2] bus_B[5] VGND tt_asw_3v3
+x2[1] VGND VDPWR VAPWR cfg_bus_pwr[1] bus_A[2] VGND tt_asw_3v3
+.ends
+
+
+* expanding   symbol:  pad_model.sym # of pins=3
+** sym_path: /work/ttsky-mini-mosbius/xschem/pad_model.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/pad_model.sch
+.subckt pad_model VGND pin mod
+*.iopin pin
+*.iopin mod
+*.iopin VGND
+XM1 net3 VAPWR mod VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=60 nf=12 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 net3 VGND mod VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=180 nf=18 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+C1 pin VGND 2p
+V1 VAPWR VGND 3.3
+R1 net1 pin 1
+L1 net2 net1 1n
+C2 net2 VGND 3p
+R2 net3 net2 50
+C3 mod VGND 250f
+XM3 net3 VGND VGND VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=60 nf=12 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=15 m=15
+XM4 net3 VAPWR VGND VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=180 nf=18 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=15 m=15
+.ends
+
+
+* expanding   symbol:  mirror_n.sym # of pins=9
+** sym_path: /work/ttsky-mini-mosbius/xschem/mirror_n.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/mirror_n.sch
+.subckt mirror_n VAPWR VDPWR ibias iout_fixed iout_1 iout_2 ictrl_1[1] ictrl_1[0] ictrl_2[1] ictrl_2[0] GND
+*.iopin ibias
+*.iopin iout_fixed
+*.iopin iout_1
+*.ipin ictrl_1[1],ictrl_1[0]
+*.ipin ictrl_2[1],ictrl_2[0]
+*.iopin iout_2
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+XM1 ibias ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 iout_fixed ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM6 i1_1x ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM8 iout_1 ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM10 i1_2x ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+x4 GND VDPWR VAPWR ictrl_1[0] i1_1x iout_1 tt_asw_3v3
+x5 GND VDPWR VAPWR ictrl_1[1] i1_2x iout_1 tt_asw_3v3
+XM14 i2_1x ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM16 iout_2 ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM18 i2_2x ibias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+x1 GND VDPWR VAPWR ictrl_2[0] i2_1x iout_2 tt_asw_3v3
+x2 GND VDPWR VAPWR ictrl_2[1] i2_2x iout_2 tt_asw_3v3
+.ends
+
+
+* expanding   symbol:  tt_asw_3v3.sym # of pins=6
+** sym_path: /work/ttsky-mini-mosbius/xschem/tt_asw_3v3.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/tt_asw_3v3.sch
+.subckt tt_asw_3v3 VGND VDPWR VAPWR ctrl mod bus
+*.iopin mod
+*.iopin bus
+*.ipin ctrl
+*.iopin VGND
+*.iopin VDPWR
+*.iopin VAPWR
+XM1 tgon_n net2 VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=0.84 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 tgon_n net2 VGND VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM3 tgon net1 VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=0.84 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM4 tgon net1 VGND VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM5 bus tgon_n mod VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=180 nf=18 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM6 bus tgon mod VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=60 nf=12 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM7 ctrl_n ctrl VGND VGND sky130_fd_pr__nfet_01v8 L=0.15 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM8 ctrl_n ctrl VDPWR VDPWR sky130_fd_pr__pfet_01v8_hvt L=0.15 W=1 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM9 net1 ctrl VGND VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM10 net2 ctrl_n VGND VGND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM11 net1 net2 net3 VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM12 net2 net1 net4 VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM13 net3 net1 VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM14 net4 net2 VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=0.42 nf=1 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+.ends
+
+
+* expanding   symbol:  ota_n.sym # of pins=10
+** sym_path: /work/ttsky-mini-mosbius/xschem/ota_n.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/ota_n.sch
+.subckt ota_n VAPWR VDPWR inp outp inm ctrl_tail[1] ctrl_tail[0] ctrl_mode[1] ctrl_mode[0] vbias GND outm
+*.iopin vbias
+*.ipin ctrl_tail[1],ctrl_tail[0]
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+*.ipin ctrl_mode[1],ctrl_mode[0]
+*.ipin inp
+*.ipin inm
+*.opin outp
+*.opin outm
+XM1 outp outp VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 outm gate VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+x2 GND VDPWR VAPWR ctrl_mode[0] outp gate tt_asw_3v3
+x3 GND VDPWR VAPWR ctrl_mode[1] outm gate tt_asw_3v3
+XM3 outp inp itail GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=40 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM4 outm inm itail GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=40 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM6 itail_1x vbias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM8 itail vbias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM10 itail_2x vbias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=40 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+x4 GND VDPWR VAPWR ctrl_tail[0] itail_1x itail tt_asw_3v3
+x5 GND VDPWR VAPWR ctrl_tail[1] itail_2x itail tt_asw_3v3
+.ends
+
+
+* expanding   symbol:  mirror_p.sym # of pins=8
+** sym_path: /work/ttsky-mini-mosbius/xschem/mirror_p.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/mirror_p.sch
+.subckt mirror_p VAPWR VDPWR ibias iout_1 iout_2 ictrl_1[1] ictrl_1[0] ictrl_2[1] ictrl_2[0] GND
+*.iopin ibias
+*.iopin iout_1
+*.ipin ictrl_1[1],ictrl_1[0]
+*.ipin ictrl_2[1],ictrl_2[0]
+*.iopin iout_2
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+x4 GND VDPWR VAPWR ictrl_1[0] i1_1x iout_1 tt_asw_3v3
+x5 GND VDPWR VAPWR ictrl_1[1] i1_2x iout_1 tt_asw_3v3
+x1 GND VDPWR VAPWR ictrl_2[0] i2_1x iout_2 tt_asw_3v3
+x2 GND VDPWR VAPWR ictrl_2[1] i2_2x iout_2 tt_asw_3v3
+XM3 iout_1 ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM4 ibias ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM5 i1_1x ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM7 i1_2x ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM1 iout_2 ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 i2_1x ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM6 i2_2x ibias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+.ends
+
+
+* expanding   symbol:  diff_n.sym # of pins=10
+** sym_path: /work/ttsky-mini-mosbius/xschem/diff_n.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/diff_n.sch
+.subckt diff_n VAPWR VDPWR outp outm inp inm ctrl_tail[1] ctrl_tail[0] ctrl_source vbias GND
+*.iopin vbias
+*.ipin ctrl_tail[1],ctrl_tail[0]
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+*.ipin ctrl_source
+*.ipin inp
+*.ipin inm
+*.iopin outp
+*.iopin outm
+XM1 outp inp itail GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=40 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 outm inm itail GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=40 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM6 itail_1x vbias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM8 itail vbias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM10 itail_2x vbias GND GND sky130_fd_pr__nfet_g5v0d10v5 L=1 W=40 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+x4 GND VDPWR VAPWR ctrl_tail[0] itail_1x itail tt_asw_3v3
+x5 GND VDPWR VAPWR ctrl_tail[1] itail_2x itail tt_asw_3v3
+x1 GND VDPWR VAPWR ctrl_source itail GND tt_asw_3v3
+.ends
+
+
+* expanding   symbol:  diff_p.sym # of pins=10
+** sym_path: /work/ttsky-mini-mosbius/xschem/diff_p.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/diff_p.sch
+.subckt diff_p VAPWR VDPWR outp outm inp inm ctrl_tail[1] ctrl_tail[0] ctrl_source vbias GND
+*.iopin vbias
+*.ipin ctrl_tail[1],ctrl_tail[0]
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+*.ipin ctrl_source
+*.ipin inp
+*.ipin inm
+*.iopin outp
+*.iopin outm
+x4 GND VDPWR VAPWR ctrl_tail[0] itail_1x itail tt_asw_3v3
+x5 GND VDPWR VAPWR ctrl_tail[1] itail_2x itail tt_asw_3v3
+x1 GND VDPWR VAPWR ctrl_source itail VAPWR tt_asw_3v3
+XM3 outp inp itail VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=120 nf=16 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM4 outm inm itail VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=120 nf=16 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM1 itail vbias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM5 itail_1x vbias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM7 itail_2x vbias VAPWR VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=1 W=120 nf=16 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+.ends
+
+
+* expanding   symbol:  nmos_prog.sym # of pins=8
+** sym_path: /work/ttsky-mini-mosbius/xschem/nmos_prog.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/nmos_prog.sch
+.subckt nmos_prog VAPWR VDPWR Vd Vg Vs ctrl_source ctrl_width[1] ctrl_width[0] GND
+*.ipin ctrl_width[1],ctrl_width[0]
+*.iopin Vs
+*.iopin Vg
+*.iopin Vd
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+*.ipin ctrl_source
+XM1 Vd Vg Vs GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29' pd='2*int((nf+1)/2) * (W/nf + 0.29)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 Vd_1x Vg Vs GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=10 nf=2 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM3 Vd_2x Vg Vs GND sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=20 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+x1 GND VDPWR VAPWR ctrl_width[0] Vd_1x Vd tt_asw_3v3
+x2 GND VDPWR VAPWR ctrl_width[1] Vd_2x Vd tt_asw_3v3
+x3 GND VDPWR VAPWR ctrl_source Vs GND tt_asw_3v3
+.ends
+
+
+* expanding   symbol:  pmos_prog.sym # of pins=8
+** sym_path: /work/ttsky-mini-mosbius/xschem/pmos_prog.sym
+** sch_path: /work/ttsky-mini-mosbius/xschem/pmos_prog.sch
+.subckt pmos_prog VAPWR VDPWR Vs Vg Vd ctrl_source ctrl_width[1] ctrl_width[0] GND
+*.ipin ctrl_width[1],ctrl_width[0]
+*.iopin Vs
+*.iopin Vg
+*.iopin Vd
+*.iopin VAPWR
+*.iopin VDPWR
+*.iopin GND
+*.ipin ctrl_source
+x1 GND VDPWR VAPWR ctrl_width[0] Vd_1x Vd tt_asw_3v3
+x2 GND VDPWR VAPWR ctrl_width[1] Vd_2x Vd tt_asw_3v3
+x3 GND VDPWR VAPWR ctrl_source Vs VAPWR tt_asw_3v3
+XM1 Vd Vg Vs VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29' pd='2*int((nf+1)/2) * (W/nf + 0.29)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM2 Vd_1x Vg Vs VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=30 nf=4 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+XM3 Vd_2x Vg Vs VAPWR sky130_fd_pr__pfet_g5v0d10v5 L=0.5 W=60 nf=8 ad='int((nf+1)/2) * W/nf * 0.29' as='int((nf+2)/2) * W/nf * 0.29'
++ pd='2*int((nf+1)/2) * (W/nf + 0.29)' ps='2*int((nf+2)/2) * (W/nf + 0.29)' nrd='0.29 / W' nrs='0.29 / W' sa=0 sb=0 sd=0 mult=1
+.ends
+
+.GLOBAL GND
+.end
+
