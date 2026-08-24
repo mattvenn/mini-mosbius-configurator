@@ -48,6 +48,7 @@ C {devices/iopin.sym} 220 60 0 0 {name=p4 lab=ua3}
 C {devices/iopin.sym} -400 60 0 0 {name=p5 lab=ua4}
 C {devices/iopin.sym} -400 100 0 0 {name=p6 lab=ua5}
 C {devices/iopin.sym} 290 -50 2 1 {name=p7 lab=VAPWR}
+C {devices/iopin.sym} 400 -50 2 1 {name=p8 lab=VDPWR}
 C {devices/iopin.sym} 290 330 2 1 {name=p9 lab=VGND}
 C {mosbius_pmos.sym} -50 10 0 0 {name=M1 w=1 b=VAPWR}
 C {mosbius_nmos.sym} -50 110 0 0 {name=M2 w=1 b=VGND}

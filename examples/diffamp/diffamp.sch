@@ -31,7 +31,12 @@ C {mosbius_nmos.sym} 200 0 0 0 {name=M2 w=4}
 C {mosbius_ntail.sym} 100 150 0 0 {name=T1 tail=4}
 C {mosbius_pmos.sym} 0 -200 0 0 {name=M3 w=1}
 C {mosbius_pmos.sym} 200 -200 0 0 {name=M4 w=1}
+C {devices/iopin.sym} -300 -260 0 0 {name=p0 lab=ibias}
 C {devices/iopin.sym} -77.5 0 0 1 {name=p1 lab=ua1}
 C {devices/iopin.sym} 140 0 0 1 {name=p2 lab=ua2}
+C {devices/iopin.sym} -300 -220 0 0 {name=p2b lab=ua3}
 C {devices/iopin.sym} 330 -100 2 1 {name=p3 lab=ua4}
+C {devices/iopin.sym} -300 -180 0 0 {name=p3b lab=ua5}
 C {devices/iopin.sym} 20 -260 0 1 {name=p4 lab=VAPWR}
+C {devices/iopin.sym} -300 -140 0 0 {name=p4b lab=VDPWR}
+C {devices/iopin.sym} -300 -100 0 0 {name=p4c lab=VGND}
