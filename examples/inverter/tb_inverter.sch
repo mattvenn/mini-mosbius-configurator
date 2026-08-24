@@ -37,7 +37,7 @@ C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/inverter/inverter.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
 schematic=inverter_routed
-spice_sym_def="tcleval(.include [file normalize build/inverter_routed.spice])"
+spice_sym_def="tcleval([mosbius_routed_include build/inverter_routed.spice])"
 tclcommand="textwindow [file normalize build/inverter_routed.spice]"}
 C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
 C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=ua1}
@@ -98,4 +98,8 @@ C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 C {devices/launcher.sym} 210 -280 0 0 {name=h5
 descr="load waves" 
 tclcommand="xschem raw_read $netlist_dir/tb_inverter.raw tran"
+}
+C {devices/launcher.sym} 210 -240 0 0 {name=h6
+descr="generate routed spice"
+tclcommand="execute 1 sh tools/regenerate_routed.sh examples/inverter/inverter.sch"
 }

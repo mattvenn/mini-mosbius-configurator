@@ -121,6 +121,14 @@ fix.
 - **The audience is beginners learning analog design** (§1.1). Every diagnostic
   states what happened, why the hardware behaves that way, and what to try
   instead. Terse error messages are a bug.
+- **Picture their first five minutes.** They are already running xschem in the
+  IIC-OSIC-TOOLS container -- that is how they got here -- they have just
+  cloned this repo, and they have opened one of the examples. They have not
+  read the READMEs, have not run any `mosbius` command, and have no `build/`
+  directory yet. So: anything that only works after a step they haven't taken
+  has to say so itself, in the place they meet it, and name the command that
+  fixes it. Judge a change by what that person sees, not by what it looks
+  like to someone who already knows the pipeline.
 - **That rule covers the words themselves, not just the structure.** Anything
   a user reads -- diagnostics, `decode` output, role names, net names -- gets
   spelled out rather than abbreviated, and **matches the vocabulary the user

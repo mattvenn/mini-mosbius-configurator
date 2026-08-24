@@ -40,3 +40,80 @@ append XSCHEM_LIBRARY_PATH :[file join $mosbius_root xschem mosbius_lib]
 # 3. One netlist directory for the whole repo, rather than a simulation/
 #    beside each schematic. build/ is gitignored.
 set netlist_dir [file join $mosbius_root build]
+
+# 4. What a testbench should emit for a design's routed netlist -- the
+#    output of `mosbius simulate`, which lives in build/ and is therefore
+#    NOT in a fresh clone. A testbench calls this from an instance's
+#    spice_sym_def instead of writing a bare `.include`:
+#
+#        spice_sym_def="tcleval([mosbius_routed_include build/ring_routed.spice])"
+#
+#    When the file is there this is exactly the bare .include it replaces.
+#    When it is not, netlisting still succeeds (xschem has no reason to
+#    fail -- it is only writing a path), and the failure surfaces two
+#    steps later as ngspice's "Could not find include file ...", which
+#    names the file but not the command that makes it. Someone who has
+#    just cloned the repo and opened an example has no way to get from
+#    that to `mosbius simulate`. So say it here, at the moment they press
+#    Netlist: a dialog if there is a GUI, and a comment block in the
+#    netlist itself, which is what a batch/CI run gets. (The puts to
+#    stderr below does NOT reach the terminal from `xschem -n -q` -- xschem
+#    swallows it. Verified 2026-08-24. It is left in for the GUI's own Tcl
+#    console; the netlist comment is the one that always lands.)
+#
+#    Keep every double quote out of the returned text. xschem re-parses a
+#    tcleval result as a property value, so a quote inside it truncates the
+#    netlist mid-message AND swallows the .include that follows -- verified
+#    2026-08-24, it silently emitted half a sentence and no include line.
+proc mosbius_routed_include {path} {
+    set abs [file normalize $path]
+    if {[file exists $path]} {
+        # Arm the warning again, so if this file ever goes missing later the
+        # user is told about it then too.
+        unset -nocomplain ::mosbius_warned($path)
+        return ".include $abs"
+    }
+    set lines [list \
+        "$path has not been generated yet, so this testbench has no netlist" \
+        "behind its routed block and ngspice will stop on the .include below." \
+        "" \
+        "It is not in a fresh clone because build/ is generated, not committed." \
+        "Press the -generate routed spice- button on the testbench sheet, or" \
+        "run this from a shell at the top of the repo:" \
+        "" \
+        "    python3 -m mosbius.cli route build/<design>.spice --out build/<design>.mosbius.json" \
+        "    python3 -m mosbius.cli simulate build/<design>.mosbius.json"]
+    set msg [join $lines "\n"]
+    puts stderr "\n*** $msg\n"
+    # xschem evaluates this property TWICE per netlist run -- measured, by
+    # logging every call: same pid, the second call sees the first call's
+    # globals. So a dialog raised unconditionally here has to be dismissed
+    # twice.
+    #
+    # Two timing-based guards were tried and both fail for the same reason:
+    # tk_messageBox is modal, so it blocks until the user clicks, and the
+    # SECOND evaluation only happens after that. A window short enough to
+    # still warn on a later netlist has always expired by then, and an
+    # `after` timer has already fired. Nothing measured in seconds can win
+    # a race against a human dismissing a dialog.
+    #
+    # So: a one-shot flag per path, cleared in the exists branch above. One
+    # dialog per problem, however slow the reader. The cost is that pressing
+    # Netlist again while the file is still missing does not raise it a
+    # second time -- the netlist comment block above and ngspice's own
+    # "Could not find include file" still cover that.
+    if {[info exists ::has_x] && ![info exists ::mosbius_warned($path)]} {
+        set ::mosbius_warned($path) 1
+        catch {mosbius_show_routed_warning $msg}
+    }
+    set out {}
+    foreach l $lines { lappend out "* $l" }
+    return "[join $out "\n"]\n.include $abs"
+}
+
+# The dialog half of mosbius_routed_include, kept separate so the guard
+# there reads as one line -- see the comment beside it.
+proc mosbius_show_routed_warning {msg} {
+    catch {tk_messageBox -icon warning -type ok \
+        -title {routed netlist not generated yet} -message $msg}
+}
