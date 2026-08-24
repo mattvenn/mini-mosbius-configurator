@@ -88,7 +88,19 @@ C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 * Power-up state is arbitrary (no stable fixed point before either pulse
 * arrives, same reasoning as the ring oscillator's free-running loop), so
 * the meaningful measurements are AFTER each forcing pulse, not before.
-.option rshunt=1e11 reltol=0.01
+* Vgnd is what gives ngspice its node 0. xschem emits ground as a named
+* global net (VGND, plus .GLOBAL VGND), never as SPICE node 0, so without
+* it nothing in this deck connects to 0 and the whole circuit floats.
+* .option rshunt used to hide that by strapping every node to 0 through a
+* huge resistor -- solvable, but the absolute level was then set only by
+* the balance of those shunt currents, so any current with no DC return
+* path dragged the entire circuit thousands of volts away from 0 with the
+* real signals riding on top. Ground it properly instead; rshunt is then
+* unnecessary. See examples/ringosc/tb_ring.sch for the worked case.
+
+Vgnd VGND 0 0
+
+.option reltol=0.01
 .control
   save all
   tran 100p 400n

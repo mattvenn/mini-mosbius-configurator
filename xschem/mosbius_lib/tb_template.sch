@@ -39,7 +39,15 @@ C {devices/lab_wire.sym} -100 30 1 0 {name=p10 sig_type=std_logic lab=ua5}
 C {sky130_fd_pr/corner.sym} -300 250 0 0 {name=CORNER only_toplevel=true corner=tt}
 C {devices/code_shown.sym} -300 350 0 0 {name=NGSPICE only_toplevel=true value="
 * Add your stimulus (Vua1, etc.) and .control block here.
-.option rshunt=1e11
+*
+* Vgnd is not optional. xschem emits ground as a named global net (VGND,
+* plus .GLOBAL VGND), never as SPICE node 0, so without this line nothing
+* connects to 0 and the whole circuit floats -- any current with no DC
+* return path then drags every node thousands of volts away from 0, with
+* your real signals riding on top of the offset.
+Vgnd VGND 0 0
+
+.option reltol=0.01
 .control
   save all
   tran 1n 1u

@@ -33,3 +33,29 @@ Traceback (most recent call last):
 9 as drawn has no pad loading. routed hides it. also I forgot the analog muxes on all the io pins
 
 10 add a separate CI that checks some spice sims, like the ring osc frequency is within bounds
+
+11 tb_diffamp: all four gain_* measures report failed even though ngspice
+computes the number
+
+- log shows `meas tran gain_drawn_pos param=9.596000e-01 failed!` -- the value
+  is right there, the measure just also sets a failure status
+
+- affects gain_drawn_pos, gain_drawn_neg, gain_routed_pos, gain_routed_neg
+
+- looks like ngspice's `.meas ... PARAM=` returning a result but flagging
+  failure; the vout_* measures it derives from all succeed
+
+- pre-existing, not caused by the rshunt -> Vgnd change: the same four measures
+  fail identically in runs before and after it (the computed values shift in the
+  last digits, as every measure in every deck does) (2026-08-24)
+
+12 tb_srlatch: treset_drawn / treset_routed never measure
+
+- `Error: measure treset_drawn trig(TARG) : out of interval` -- the TARG edge
+  (v(out_drawn) falling through 1.65) is not found inside the 400n window, so
+  the reset propagation delay is never reported
+
+- the qd_/qr_after_set and after_reset FIND measures in the same deck are fine,
+  so the latch itself is switching; it is the delay measure that is mis-set up
+
+- pre-existing, same before and after the rshunt -> Vgnd change (2026-08-24)
