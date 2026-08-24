@@ -270,6 +270,21 @@ These were all got wrong once. The sources that look authoritative are not.
    subcircuit name always follows the `schematic=` file, not the symbol's
    file name. Verified both ways 2026-08-24.
 
+9. **A bare `"` inside a `code`/`code_shown` symbol's `value="..."` silently
+   truncates the netlist there.** xschem ends the attribute string at the
+   first unescaped double quote, and everything after it -- the rest of your
+   prose, `.option`, the whole `.control`/`.endc` block, every `.meas` -- is
+   dropped without a warning. The netlist still generates, so the failure
+   surfaces two steps later as ngspice's `no control job`, which points at
+   the netlist rather than at the schematic that produced it. The tell is in
+   `build/<tb>.spice`: the user architecture code stops mid-sentence, right
+   at the offending quote, and `**** end user architecture code` follows
+   immediately. Quote prose with `'single quotes'` (a SPICE comment does not
+   care) or escape as `\"`. Note this is only about quotes *inside* a value:
+   the `descr="..."` and `tclcommand="..."` attributes on launcher symbols
+   are fine, since those quotes are the delimiters themselves. Hit on
+   `examples/ringosc/tb_ring.sch` and fixed 2026-08-24.
+
 ## Useful facts
 
 - **The generic-device symbols have no body or bias pin.** Both are
