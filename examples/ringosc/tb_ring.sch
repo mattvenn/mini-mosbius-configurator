@@ -14,7 +14,7 @@ divy=5
 subdivy=1
 unity=1
 x1=0
-x2=2e-06
+x2=2e-07
 divx=5
 subdivx=1
 xlabmag=1.0
@@ -83,19 +83,47 @@ C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 * number of inversions around a loop has no stable fixed point, so each
 * free-runs from there on its own -- no separate stimulus needed.
 * RISE=2/3 skips the first, asymmetric startup edge and measures one
-* period once each branch has settled into steady oscillation. The window
-* below (2us) and the .meas RISE indices are a first guess, not measured
-* on real hardware yet -- widen tran's stop time if a RISE=3 edge hasn't
-* happened by then, or tighten it once you've seen the real period.
+* period once each branch has settled into steady oscillation.
+*
+* The 200ns window is measured, not guessed. out_routed spends its first
+* ~60ns slewing Cload2's 100pF up from 0V, then free-runs with a 15.0ns
+* period (~66.6MHz): rising edges land at 60.1, 74.3, 89.3, 104.5 and
+* 119.8ns, so RISE=3 arrives by ~90ns and 200ns still leaves margin for the
+* startup time shifting run to run. It used to be 2us -- 130-odd periods
+* past the last edge anyone measures -- and that is not merely wasteful,
+* because the cost grows faster than the window: 200ns takes 25s, 400ns
+* took 14 minutes, and 2us ran for hours.
+*
+* Note the 15.0ns period, not README.md's 1.98ns for the same circuit as
+* routed: Cload1/Cload2 came from tb_inverter.sch, where 100pF models an
+* external probe hanging off an output pad. A ring has no output pad
+* separate from its loop, so here that 100pF lands *inside* the feedback
+* path and sets the frequency.
+*
+* out_drawn does not oscillate at all, and its two .meas lines below fail.
+* That is a real limitation of this testbench, not a window still too
+* short. Cload1's 100pF sits on ua1, which is inside ring.sch's loop, while
+* net1 and net2 are ideal wires carrying only device capacitance -- so the
+* as-drawn loop is a slow integrator feeding two zero-delay inverters
+* straight back into it, which is a comparator with instant feedback and no
+* hysteresis. out_drawn duly latches at the ~1.6V trip point and chatters
+* there (439 crossings of 1.65V in 40ns) instead of swinging rail to rail.
+* The as-routed branch is unaffected because the real switch matrix puts
+* genuine RC delay on every stage node. Shrinking Cload1 until the drawn
+* ring oscillates puts it back at README.md's ~0.41ns period, 40x faster
+* than the routed branch -- which is why one tran stop time and time step
+* cannot serve both branches well, and why that is still open.
 
 .option rshunt=1e11 reltol=0.01
 .control
   save all
-  tran 1n 2000n UIC
+  tran 0.5n 200n UIC
   meas tran period_drawn TRIG v(out_drawn) VAL=1.65 RISE=2 TARG v(out_drawn) VAL=1.65 RISE=3
   meas tran period_routed TRIG v(out_routed) VAL=1.65 RISE=2 TARG v(out_routed) VAL=1.65 RISE=3
-  meas tran freq_drawn PARAM='1/period_drawn'
-  meas tran freq_routed PARAM='1/period_routed'
+  let freq_routed = 1/period_routed
+  print freq_routed
+  let freq_drawn = 1/period_drawn
+  print freq_drawn
   wrdata ring_tb_out_drawn.txt v(out_drawn)
   wrdata ring_tb_out_routed.txt v(out_routed)
   write tb_ring.raw
