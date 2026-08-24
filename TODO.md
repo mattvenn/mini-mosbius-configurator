@@ -32,4 +32,6 @@ Traceback (most recent call last):
 
 9 as drawn has no pad loading. routed hides it. also I forgot the analog muxes on all the io pins
 
-10 add a separate CI that checks some spice sims, like the ring osc frequency is within bounds
+10 .github/workflows/spice-regression.yml checks the inverter (trise_drawn/trise_routed
+   within 25% of examples/inverter/README.md's reference numbers), once a month plus
+   workflow_dispatch. Still to add: the ring oscillator's frequency within bounds.

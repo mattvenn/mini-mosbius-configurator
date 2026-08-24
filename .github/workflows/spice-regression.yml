@@ -1,0 +1,28 @@
+name: Spice Regression
+
+# ngspice runs against sky130A take ~1-2 minutes each just to load the
+# model library (see CLAUDE.md), so this is deliberately not on every push
+# -- just a monthly canary, plus workflow_dispatch for an on-demand check.
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+jobs:
+  inverter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Simulate examples/inverter in IIC-OSIC-TOOLS
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+            --skip bash -lc 'sh tools/check_inverter_sim.sh'
+
+      - name: Upload ngspice log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inverter-ngspice-log
+          path: build/ngspice_tb_inverter.log
+          if-no-files-found: ignore
