@@ -94,7 +94,7 @@ import sys
 sys.path.insert(0, ".")
 from mosbius.model import SwitchConfig
 from mosbius.bitmap import ALL_BITS
-from mosbius.spice import SINGLE_BIT_PINS
+from mosbius.spice import CONFIG_TIE_OHMS, SINGLE_BIT_PINS
 
 bitstream = sys.argv[1]
 cfg = SwitchConfig.from_bitstream(bitstream)
@@ -176,7 +176,7 @@ import sys
 sys.path.insert(0, ".")
 from mosbius.model import SwitchConfig
 from mosbius.bitmap import ALL_BITS
-from mosbius.spice import SINGLE_BIT_PINS
+from mosbius.spice import CONFIG_TIE_OHMS, SINGLE_BIT_PINS
 
 bitstream = sys.argv[1]
 cfg = SwitchConfig.from_bitstream(bitstream)
@@ -186,7 +186,7 @@ for bit in range(192):
     info = ALL_BITS[bit]
     pin_net = info.pin if info.pin in SINGLE_BIT_PINS else f"{info.pin}[{info.index}]"
     pin_net_to_rail[pin_net] = "VDPWR" if bit in cfg.bits else "GND"
-rcfg_block = "\n".join(f"Rcfg{i} {net} {rail} 0" for i, (net, rail) in enumerate(pin_net_to_rail.items()))
+rcfg_block = "\n".join(f"Rcfg{i} {net} {rail} {CONFIG_TIE_OHMS}" for i, (net, rail) in enumerate(pin_net_to_rail.items()))
 
 toks = [t for t in open("build/mosbius_subckt_header_lowmem.txt").read().split()
         if t not in (".subckt", "mosbius", "+")]

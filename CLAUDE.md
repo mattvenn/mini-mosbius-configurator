@@ -13,11 +13,34 @@ anything. Do not re-derive facts that are already marked VERIFIED there.
 Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
-`TODO.md` holds deferred work. Nothing is open right now -- its last item
-(§1, Level-2 simulation of the routed design) closed 2026-08-23, shipped
-as `mosbius simulate` (SPEC.md §3.7). The file is renumbered from 1
-whenever items are removed, and every citation of it in this repo is
-updated in the same commit, so a `TODO.md` §number here is always live.
+`TODO.md` holds deferred work. It is renumbered from 1 whenever items are
+removed, so a `TODO.md` §number goes stale the moment anything above it
+closes -- cite one only in `TODO.md` itself, and describe the item in
+prose anywhere else. (The older `TODO.md Sec N` citations still scattered
+through `SPEC.md`, `tools/` and `tests/` predate that rule and mostly
+point at the numbering of a list that has since been rewritten; treat
+them as historical labels, not as live pointers.)
+
+Also closed on 2026-08-23: handing `mosbius simulate` the netlist
+(`build/inverter.spice`) instead of the routed design
+(`build/inverter.mosbius.json`) ended in a `json.decoder.JSONDecodeError`
+traceback. `mosbius/simulate.py` now raises `SimulateError` -- naming
+which of the two files the command reads, why routing has to happen
+first, and the two commands to run with the user's own filenames already
+substituted in -- for a netlist, a missing/unreadable path, JSON with no
+`bitstream` entry, and a `bitstream` that won't unpack. The mirror slip
+is covered too: a routed design JSON handed to `route`/`watch` now says
+so, instead of "no mosbius_* instances found in this netlist".
+
+Closed on 2026-08-23, so don't re-report it: the 192 config-bit ties
+`mosbius/spice.py` emits are no longer written as a literal `0` ohms.
+ngspice refuses a zero-ohm resistor, silently substitutes 1e-12 and warns
+once per resistor, so every `mosbius simulate` deck opened with 192
+`Value of resistor r.x2.rcfgNNN is too small` lines that buried any real
+warning. `CONFIG_TIE_OHMS` now writes ngspice's own substitute value out,
+which changes nothing electrically -- verified on `examples/inverter/`,
+where both measured rise times are identical to the last digit before and
+after, and the warning count goes 192 -> 0.
 
 Closed on 2026-08-21, so don't re-report them: a reversed drain/source is
 now a `D2` hint that fires before the "DOESN'T FIT" it explains; a single
@@ -47,9 +70,10 @@ instead of just trying the netlist's own order and letting a badly-
 ordered-but-electrically-fine circuit fail to route.
 
 Closed on 2026-08-23, so don't re-report or re-investigate: a routed
-design can now get a real, silicon-accurate Level-2 SPICE simulation with
+design can now get a real, silicon-accurate SPICE simulation of itself as
+routed onto the chip, with
 one command, `mosbius simulate <routed.mosbius.json>`. It writes a
-self-contained `<name>_mosbius.spice` subcircuit -- the real switch
+self-contained `<name>_routed.spice` subcircuit -- the real switch
 matrix, real row-coupling capacitance, real bus-wire capacitance, and
 real pad models on whichever package pins the design actually uses --
 with the same 9-pin port list (`ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR
@@ -70,7 +94,7 @@ started.
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it
 reads that file, which puts sky130A *and* `xschem/mosbius_lib` on the symbol
-path and sets `netlist_dir` to `build/`. Netlist button, then point the
+path, pins the PDK variant to sky130A, and sets `netlist_dir` to `build/`. Netlist button, then point the
 router straight at `build/<name>.spice`.
 
 **Launch xschem from anywhere else and both halves of that break, silently
@@ -111,6 +135,27 @@ fix.
   when one of those has to appear in a message, translate it first
   (`model.TERMINAL_BY_CROSSPOINT` exists for that). Prefer a longer sentence
   over a shorter one that assumes vocabulary.
+
+- **There is no "Level 1" / "Level 2" in this project's vocabulary.** Say
+  what the thing is: a design **as drawn** (your schematic, ideal wires, no
+  switch matrix), the same design **as routed** (through the real configured
+  switch matrix, with its parasitics and pads -- what `mosbius simulate`
+  builds), and what was **measured on silicon**. Decided 2026-08-24, closing
+  TODO.md's own question about it. Two reasons, either sufficient: SPEC.md
+  §3.1b already uses "Level 1" and "Level 2" for the *hierarchy* -- the
+  design block and the testbench that instantiates it -- so the fidelity
+  sense collided with our own source of truth; and in SPICE itself `LEVEL=1`
+  and `LEVEL=2` are MOSFET model levels, where 2 is the cruder 1970s model,
+  so "a Level-2 simulation" reads to an analog engineer as *less* accurate
+  than the BSIM4 models we actually run. Net and measurement names follow the
+  same words: `out_drawn`/`out_routed`, `trise_drawn`/`trise_routed`. So do
+  the blocks themselves: a design keeps its own name (`.subckt inverter` --
+  that is what the design IS, and it is forced anyway, since a subcircuit's
+  name follows its `schematic=` file), and what `mosbius simulate` generates
+  from it is `<name>_routed` in `<name>_routed.spice`. Not `<name>_mosbius`:
+  everything here is mosbius, so that suffix distinguished nothing, and it
+  named the chip rather than what had been done to the design (renamed
+  2026-08-24).
 
 ## Running the EDA tools
 
@@ -201,6 +246,21 @@ These were all got wrong once. The sources that look authoritative are not.
    if you meet it: seeing it does not by itself mean `.spiceinit` is at
    fault, and an old schematic netlisted with an old symbol library will
    still produce it.
+
+8. **A subcircuit instance's `schematic=` attribute is resolved relative to
+   the SYMBOL's directory, and a failed lookup falls back silently.**
+   `xschem/mosbius_lib/mini_mosbius.sym` is one symbol for every design --
+   the chip's nine pins -- and which design an instance stands for is its
+   `schematic=`. Point it at a design in `examples/` with a bare
+   `schematic=inverter` or a relative `schematic=inverter.sch` and xschem
+   looks beside the *symbol*, in `xschem/mosbius_lib/`, finds nothing, and
+   falls back to the symbol's own (empty) body -- emitting `.subckt inverter`
+   with no transistors in it, which netlists and simulates perfectly happily
+   and measures nothing. Use the absolute form,
+   `schematic="tcleval([file normalize examples/inverter/inverter.sch])"`,
+   whenever the design is not in the same directory as the symbol. The
+   subcircuit name always follows the `schematic=` file, not the symbol's
+   file name. Verified both ways 2026-08-24.
 
 ## Useful facts
 

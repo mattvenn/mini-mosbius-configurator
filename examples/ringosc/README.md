@@ -1,11 +1,11 @@
-# Investigation: ring oscillator (Level-1 vs Level-2 vs real silicon)
+# Investigation: ring oscillator (as drawn vs as routed vs real silicon)
 
 **Status: open investigation, not a finished example.** Unlike
 `examples/inverter/` and `examples/srlatch/`, nothing here is a polished
 tutorial artifact -- this is a working note on a specific gap-closing
 exercise, kept so it can be picked back up later without re-deriving
 everything from scratch. The schematic is now committed (`ring.sch`, see
-below); the Level-2 testbench still is not (see "Reproducing this"), so
+below); the as-routed testbench still is not (see "Reproducing this"), so
 this file records what was found and how to redo the rest of it.
 
 ## The circuit
@@ -102,13 +102,13 @@ Three simulation levels, in increasing fidelity:
 
 | Level | What it models | Period | Frequency | vs. real silicon |
 |---|---|---|---|---|
-| Level-1 ideal | `mosbius_nmos`/`mosbius_pmos` generic symbols, direct net-to-net wiring, no switch matrix at all | 0.41ns | ~2.45GHz | ~82x too fast |
-| Level-2 real switch matrix | the actual chip netlist (`mosbius.sym`/`mosbius.sch`) with real `tt_asw_3v3` transmission gates, config driven by `mosbius/spice.py` | 1.98ns | ~505MHz | ~17x too fast |
+| As drawn (ideal) | `mosbius_nmos`/`mosbius_pmos` generic symbols, direct net-to-net wiring, no switch matrix at all | 0.41ns | ~2.45GHz | ~82x too fast |
+| As routed (real switch matrix) | the actual chip netlist (`mosbius.sym`/`mosbius.sch`) with real `tt_asw_3v3` transmission gates, config driven by `mosbius/spice.py` | 1.98ns | ~505MHz | ~17x too fast |
 | Real silicon | — | ~33.3ns | ~30MHz | — |
 
 Including the real transmission gates closed most of the gap (82x -> 17x
 too fast), confirming the switch matrix's resistance/capacitance is the
-dominant effect Level-1 leaves out (SPEC.md Sec 3.1b's whole point). The
+dominant effect drawing alone leaves out (SPEC.md Sec 3.1b's whole point). The
 remaining ~17x gap has specific, identified, untested causes -- see
 "What's still open" below, not an unexplained mystery.
 
@@ -152,7 +152,7 @@ anywhere else, so redoing it means rebuilding from these steps:
    xschem resolves a bare symbol name against where it is running from, so
    whichever way you netlist, it has to be running in
    `ttsky-mini-mosbius/xschem`. The GUI would do just as well: start xschem
-   from that directory, open `build/ring_l2.sch`, press Netlist, and read
+   from that directory, open `build/ring_routed.sch`, press Netlist, and read
    the result from whatever `netlist_dir` is in force -- note this step is
    the one case that does *not* run from the repo root, so the repo's own
    `xschemrc` does not apply to it.
@@ -167,7 +167,7 @@ anywhere else, so redoing it means rebuilding from these steps:
      hpretl/iic-osic-tools:latest --skip bash -lc \
      'export PDK=sky130A PDK_ROOT=/foss/pdks
       xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q \
-        -o /work/build /work/build/ring_l2.sch'
+        -o /work/build /work/build/ring_routed.sch'
    ```
    Referencing `mosbius.sym` by an *absolute* path instead breaks
    xschem's resolution of its sibling symbols (`tt_asw_3v3`, `nmos_prog`,
@@ -196,7 +196,7 @@ anywhere else, so redoing it means rebuilding from these steps:
 
 ## What's still open
 
-Why Level-2's ~505MHz is still ~17x faster than the real ~30MHz, roughly
+Why the routed ~505MHz is still ~17x faster than the real ~30MHz, roughly
 in order of how likely each is to matter, not yet tested:
 
 - **The 148 dropped-as-open switches were removed entirely**, not kept as

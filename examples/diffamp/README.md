@@ -142,9 +142,9 @@ python3 -m mosbius.cli route build/diffamp.spice
 
 `diffamp.sch` netlists to the *same real sky130 transistor sizing* as the
 hardware blocks it stands in for, just without the switch-matrix overhead
-in between (SPEC.md §3.1b's Level-1 "ideal" simulation).
+in between (the design as drawn -- ideal wires, no switch matrix, SPEC.md §3.1b).
 
-![Diff amp Level-1 waveform: ua4 steps up and down in decreasing increments as +-2/5/10/20/40mV differential steps are applied to ua1 against ua2 held at 1.5V, visibly compressing at the largest steps](diffamp.png)
+![Diff amp as-drawn waveform: ua4 steps up and down in decreasing increments as +-2/5/10/20/40mV differential steps are applied to ua1 against ua2 held at 1.5V, visibly compressing at the largest steps](diffamp.png)
 
 `ua2` (inm) is held at a fixed 1.5V common-mode bias; `ua1` (inp) steps
 through a differential offset of 2, 5, 10, 20 and 40mV, then the same five
@@ -203,7 +203,7 @@ wrdata diffamp_sweep.txt v(ua1) v(ua2) v(ua4)
 
 ```bash
 python3 tools/plot_tb.py build/diffamp_sweep.txt examples/diffamp/diffamp.png \
-  "Diff amp (Level-1): +-2/5/10/20/40mV steps on ua1, ua2 fixed 1.5V" \
+  "Diff amp (as drawn): +-2/5/10/20/40mV steps on ua1, ua2 fixed 1.5V" \
   "ua1 (inp):0" "ua2 (inm):1" "ua4 (out):2"
 ```
 

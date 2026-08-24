@@ -15,7 +15,8 @@ v {xschem version=3.4.8RC file_version=1.2
 * (nfet3_/pfet3_) and passes the bulk as its @body parameter. Do not
 * "fix" that by wiring the bulk to a net: `extra` ports are invisible to
 * xschem's connectivity check, so a bulk net reads as undriven and the
-* GUI reports an error on every netlist. See TODO.md section 3.
+* GUI reports an error on every netlist. See CLAUDE.md's "Useful
+* facts" -- the same is true of a drawn ibias.
 *
 * The pin-box (B) records below are declared in netlist pin order, which
 * is also the .subckt port order. mosbius/netlist.py's DEVICE_PINS holds

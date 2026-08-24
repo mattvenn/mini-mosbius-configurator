@@ -849,7 +849,7 @@ The shift register only appears on the hardware path, where it is a trivially
 simple serialiser.
 
 **Real bus-wire capacitance** (added 2026-08-22, from the ring-oscillator
-Level-2 investigation, TODO.md Sec 1): a Level-2 simulation built purely from
+routed-simulation investigation): a routed simulation built purely from
 `render_config_spice()` plus the real switch-matrix devices still treats
 every switch-matrix bus row (`bus_A[1..6]`/`bus_B[1..6]`) as a zero-length
 ideal net -- the actual physical metal trace running a bus row's full length
@@ -871,7 +871,7 @@ open switch's aggregate contribution) gave a materially worse result
 transistor's off-state electrical behaviour and a wire's layout
 capacitance are additive, different physical effects, not redundant.
 Keeping every switch in the matrix as a real transistor, open or closed,
-is load-bearing for Level-2 accuracy.
+is load-bearing for the accuracy of a routed simulation.
 
 **Shipped as `mosbius simulate` (TODO.md Sec 1, closed 2026-08-23).**
 Everything above -- the real switch matrix, the real row-coupling
@@ -880,8 +880,8 @@ column's shared device-terminal net, ~43fF, independent of the bus-wire
 effect above and additive with it), the bus-wire capacitance, and real
 pad models on whichever package pins a design's routing actually uses --
 is packaged as one command: `mosbius simulate <routed.mosbius.json>`
-writes a single self-contained `<name>_mosbius.spice` file, a
-`.subckt <name>_mosbius ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`
+writes a single self-contained `<name>_routed.spice` file, a
+`.subckt <name>_routed ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`
 matching the exact 9-pin port list every hand-drawn design in this
 project already exposes via `devices/iopin.sym`. Drop it into an existing
 testbench in place of the ideal `mosbius_*`-symbol schematic block (e.g.
@@ -991,7 +991,10 @@ mini-mosbius-configurator/
 ├── xschem/mosbius_lib/         the xschem library
 │   ├── mosbius_nmos.sym        generic devices (§3.4), w = 1..4
 │   ├── mosbius_pmos.sym        ...
-│   ├── minimosbius_template.sch  design block: fixed port list, empty inside
+│   ├── mini_mosbius.sym          the chip as a block: the nine real pins,
+│   │                             one symbol for every design (§3.1b)
+│   ├── mini_mosbius.sch          that symbol's own schematic: the design
+│   │                             block, fixed port list, empty inside
 │   └── tb_template.sch           testbench: sources, ibias, analysis (§3.1b)
 ├── tests/
 │   ├── test_bitstream.py

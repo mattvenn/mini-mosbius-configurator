@@ -132,7 +132,7 @@ after RESET releases](srlatch.png)
 
 Re-simulated 2026-08-21 against the schematic above, so the pin labels are
 this circuit's: **`ua1` = SET, `ua2` = RESET, `ua3` = Q.** This is SPEC.md
-§3.1b's Level-1 "ideal" result -- real sky130 device sizing, direct
+§3.1b's as-drawn result -- real sky130 device sizing, direct
 net-to-net wiring, no switch matrix in between -- with no load on `ua3`
 beyond the circuit itself.
 
@@ -191,7 +191,7 @@ wrdata srlatch_tb.txt v(ua1) v(ua2) v(ua3)
 
 ```bash
 python3 tools/plot_tb.py build/srlatch_tb.txt examples/srlatch/srlatch.png \
-  "SR latch (Level-1): SET on ua1, RESET on ua2, Q on ua3" \
+  "SR latch (as drawn): SET on ua1, RESET on ua2, Q on ua3" \
   "ua1 (SET):0" "ua2 (RESET):1" "ua3 (Q):2"
 ```
 

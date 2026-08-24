@@ -15,6 +15,7 @@ from mosbius.model import SwitchConfig
 from mosbius.spice import (
     BUS_WIRE_CAPACITANCE_F,
     SINGLE_BIT_PINS,
+    CONFIG_TIE_OHMS,
     render_bus_wire_caps,
     render_config_spice,
 )
@@ -31,13 +32,25 @@ def test_render_has_192_ties():
 def test_empty_config_ties_everything_to_vgnd():
     text = render_config_spice(SwitchConfig(bits=frozenset()))
     tie_lines = [l for l in text.splitlines() if l.startswith("Rcfg")]
-    assert all(l.endswith("VGND 0") for l in tie_lines)
+    assert all(l.endswith(f"VGND {CONFIG_TIE_OHMS}") for l in tie_lines)
 
 
 def test_all_bits_set_ties_everything_to_vdpwr():
     text = render_config_spice(SwitchConfig(bits=frozenset(range(192))))
     tie_lines = [l for l in text.splitlines() if l.startswith("Rcfg")]
-    assert all(l.endswith("VDPWR 0") for l in tie_lines)
+    assert all(l.endswith(f"VDPWR {CONFIG_TIE_OHMS}") for l in tie_lines)
+
+
+def test_ties_are_not_literal_zero_ohms(inverter_config):
+    # ngspice rejects a zero-ohm resistor: it substitutes 1e-12 ohms and
+    # warns once per resistor, so a literal `0` here buried every real
+    # warning of a routed-design simulation under 192 copies of
+    # "Value of resistor r.x2.rcfgNNN is too small".
+    text = render_config_spice(inverter_config)
+    for line in text.splitlines():
+        if not line.startswith("Rcfg"):
+            continue
+        assert float(line.split()[3]) > 0.0, line
 
 
 def test_net_names_match_bitmap_pin_and_index(inverter_config):
@@ -47,7 +60,7 @@ def test_net_names_match_bitmap_pin_and_index(inverter_config):
     d_bit = bit_for("cfga_nfeta_d", 3)
     line = lines[f"Rcfg{d_bit}"]
     assert "cfga_nfeta_d[3]" in line
-    assert line.endswith("VDPWR 0")
+    assert line.endswith(f"VDPWR {CONFIG_TIE_OHMS}")
 
     source_bit = setting_bit("ctrl_nfeta_source")
     line = lines[f"Rcfg{source_bit}"]
