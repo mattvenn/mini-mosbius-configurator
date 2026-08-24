@@ -30,9 +30,9 @@ logy=0
 T {The same inverter twice: x1 as drawn (ideal wires, no switch matrix)} -530 -680 0 0 0.25 0.25 {}
 T {and x2 as routed onto the real chip. Both are mini_mosbius.sym --} -530 -650 0 0 0.25 0.25 {}
 T {schematic= is what says which one an instance stands for.} -530 -620 0 0 0.25 0.25 {}
-T {x2's spice_sym_def points at build/inverter_routed.spice -- regenerate it with:} -530 -590 0 0 0.25 0.25 {}
-T {mosbius route build/inverter.spice --out build/inverter.mosbius.json} -530 -560 0 0 0.25 0.25 {}
-T {mosbius simulate build/inverter.mosbius.json --out build/inverter_routed.spice} -530 -530 0 0 0.25 0.25 {}
+T {x2 needs build/inverter_routed.spice, which is generated, so it is not in} -530 -590 0 0 0.25 0.25 {}
+T {a fresh clone. Ctrl-click the -generate routed spice- arrow to build it,} -530 -560 0 0 0.25 0.25 {}
+T {then press Netlist again. Netlisting without it tells you the same thing.} -530 -530 0 0 0.25 0.25 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/inverter/inverter.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -82,7 +82,8 @@ C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 * Vin pulses ua1 high->low at t=10n; the inverter output responds with a
 * rising edge (examples/inverter/README.md's existing as-drawn methodology,
 * now driven from a real xschem testbench instead of a hand-patched netlist).
-.option rshunt=1e11
+
+.option rshunt=1e11 reltol=0.01
 .control
   save all
   tran 1n 400n

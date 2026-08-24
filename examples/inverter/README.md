@@ -146,30 +146,47 @@ sits in the same directory as the symbol, like
 
 ### Regenerating `build/inverter_routed.spice`
 
-`x2`'s `spice_sym_def` points at `build/inverter_routed.spice`, which is
-gitignored (like every other `build/` artifact) and has to be regenerated:
+`x2`'s `spice_sym_def` points at `build/inverter_routed.spice`. Everything
+in `build/` is generated, so that file is never in a fresh clone, and the
+testbench cannot simulate without it.
+
+You do not have to remember any of this. With `tb_inverter.sch` open,
+ctrl-click the **generate routed spice** arrow on the sheet: it netlists
+`inverter.sch`, routes it, and writes the routed netlist, reporting each
+step in xschem's process window. Press Netlist again afterwards to pick it
+up.
+
+The same thing from a shell at the top of the repo, for any design:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-  --skip bash -lc 'export PDK=sky130A PDK_ROOT=/foss/pdks; xschem -n -q examples/inverter/inverter.sch'
-python3 -m mosbius.cli route build/inverter.spice --out build/inverter.mosbius.json
-python3 -m mosbius.cli simulate build/inverter.mosbius.json --out build/inverter_routed.spice
+sh tools/regenerate_routed.sh examples/inverter/inverter.sch
 ```
+
+which is just these three steps:
+
+```bash
+xschem -n -q examples/inverter/inverter.sch
+python3 -m mosbius.cli route build/inverter.spice --out build/inverter.mosbius.json
+python3 -m mosbius.cli simulate build/inverter.mosbius.json
+```
+
+No `PDK=sky130A` export is needed any more: the repo's own `xschemrc`
+pins the variant (it used to be possible to netlist with sky130A's symbols
+but a `.lib` path pointing into `ihp-sg13g2`, which produces a netlist that
+looks perfect and cannot simulate).
 
 The routed bitstream should still read
-`080000004010000001000000000000000040000400000000`, matching the
-"Routing" section above -- if it doesn't, something about the drawn
-circuit has changed. Then netlist the testbench itself, **exporting
-`PDK=sky130A` for this step too, not just the ngspice run** -- without it
-the container defaults to a different PDK and `sky130_fd_pr/corner.sym`
-bakes a wrong, nonexistent `.lib` path into the output (a real trap hit
-building this example, distinct from the already-documented "netlist from
-the wrong directory" one):
+`080000004010000001000000000000000040000400000000`, matching the "Routing"
+section above -- if it doesn't, something about the drawn circuit has
+changed. Routing is deterministic for an unchanged schematic, so deleting
+`build/` and starting again reproduces exactly this bitstream.
 
-```bash
-docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-  --skip bash -lc 'export PDK=sky130A PDK_ROOT=/foss/pdks; xschem -n -q examples/inverter/tb_inverter.sch'
-```
+If you netlist the testbench *without* generating it first, you are told
+so at that moment rather than left to decode a SPICE error two steps later:
+`xschemrc`'s `mosbius_routed_include` puts the explanation and the commands
+into the netlist as comments, and raises one dialog in the GUI. The
+`.include` is still emitted, so ngspice stops rather than quietly
+simulating a comparison with nothing on one side.
 
 `build/tb_inverter.spice` is then a complete, self-contained deck --
 `.control` already has a real `tran`, two `.meas` rise-time measurements
@@ -178,39 +195,63 @@ docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
 
 ### What running it shows
 
-**Needs the higher-RAM machine, not this project's usual dev host.**
-`x2`'s included netlist carries the full real switch matrix (every
-`tt_asw_3v3`, open or closed, per TODO.md Sec 1's own investigation) --
-the same ~1.9GB-ceiling OOM every other full-matrix run in this project
-hits, confirmed here too (memory climbed to the host's ceiling with no
-ngspice output produced, same pattern as `tools/run_ringo_full_sim.sh`
-and friends before they were moved to a bigger machine). `x1` alone (the
-as-drawn branch) is cheap and will run fine anywhere; it's specifically
-running *both* branches together in one `.tran` that needs the extra RAM.
-
-Run on the second machine (2026-08-23), `tran` tightened to `1n 400n`
-(one full pulse period, down from the original `100p 1u` -- see the
-`.control` block's own comment for why 1u/100p was the actual runtime
-cost, not circuit size):
+Re-measured 2026-08-24, on the routing the router produces today
+(`0800000040100000...`):
 
 ```
-trise_l1 =  88.36ns
-trise_l2 =  89.85ns
+trise_drawn  =  88.43ns
+trise_routed = 130.33ns
 ```
 
-`trise_l1` lands close to the 84.4ns from the hand-patched Level-1-only
+`trise_drawn` lands close to the 84.4ns from the hand-patched as-drawn
 netlist above -- the small difference is the testbench's own added
-wiring/source impedance, not a discrepancy worth chasing. The real
-result is `trise_l2` vs `trise_l1`: **only ~1.7% slower**, a far smaller
-gap than the ring-oscillator investigation's finding that switch-matrix
-parasitics dominate (that's what took the ring oscillator from 82x off
-real silicon down to 1.28x). The difference is the load: this testbench's
-`Cload1`/`Cload2` are 100pF each, swamping anything the switch matrix
-adds (row-coupling ~43fF/switch, bus-wire caps in the same range) --
-while the ring oscillator has no such external load, so its stages'
-own small switch-matrix parasitics are a much bigger fraction of the
-total capacitance there. Read together, these two examples cross-check
-`mosbius simulate`'s Level-2 model in the two load regimes a real design
-can be in: switch-matrix-dominated (ring oscillator, no external load)
-and external-load-dominated (this inverter, 100pF pad/scope load) --
-in both cases the model behaves the way the physics predicts it should.
+wiring/source impedance, plus `x2`'s input pad loading the shared `ua1`
+stimulus, not a discrepancy worth chasing.
+
+The result is `trise_routed` vs `trise_drawn`: **about 47% slower**, even
+with a 100pF load on both. Two effects, separated by running the same
+testbench again with `Cload` at 10pF instead of 100pF:
+
+| load | `trise_drawn` | `trise_routed` | ratio |
+|---|---|---|---|
+| 100pF | 88.43ns | 130.33ns | 1.47 |
+| 10pF | 8.90ns | 24.63ns | 2.77 |
+
+A purely resistive difference would hold the ratio constant across loads
+and a purely capacitive one would shrink it at the larger load, so it is
+both. Solving the two measurements together puts roughly **10.8pF of extra
+capacitance** on the routed output and a series switch resistance of about
+**33%** of the drive resistance. The capacitance figure is a good match for
+what `mosbius simulate` actually instantiates on a used package pin: the
+pad model in `mosbius/data/mosbius_device_library.spice` carries `2p` at the
+pin and `3p` behind its bond inductance, on top of the drain/source
+capacitance of a 60um NMOS and 180um PMOS ESD pair.
+
+So the dominant thing the routed model adds here is the **bond pad**, not
+the switch matrix. Row coupling (~43fF/switch) and bus-wire capacitance
+(~900fF/row) really are swamped by a 100pF load, as the earlier version of
+this section said -- that reasoning was right, it was just measuring the
+wrong quantity, because a pad an order of magnitude bigger than either was
+sitting in the path too.
+
+Read together with the ring oscillator, the two examples cross-check
+`mosbius simulate` in the two regimes a real design can be in:
+switch-matrix-dominated (ring oscillator, no external load, no pad in the
+signal path between stages) and pad-and-load-dominated (this inverter,
+driving a real package pin into 100pF).
+
+**Runtime.** About 35s in the IIC-OSIC-TOOLS container, of which ~13s is
+sky130 library parsing and ~20s is building the circuit and solving the DC
+operating point -- the transient itself is about a second. The `.option`
+line sets `reltol=0.01` rather than ngspice's `1e-3` default, which is what
+buys that: it took the run from ~110s to ~35s and moved both rise times by
+under 0.1%. The operating point converges only after dynamic and true gmin
+stepping both fail and ngspice falls back to source stepping, which is
+where most of the remaining time goes; `rshunt` and `gmin` adjustments did
+not help that.
+
+An earlier version of this section said running both branches together
+needed a higher-RAM machine and OOMed at ~1.9GB on the usual dev host.
+That is no longer true and has been removed: it runs here repeatedly,
+in well under a minute. The full-matrix decks in `tools/` that hit that
+ceiling are much larger than what `mosbius simulate` emits for one design.
