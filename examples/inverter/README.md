@@ -169,3 +169,30 @@ ngspice output produced, same pattern as `tools/run_ringo_full_sim.sh`
 and friends before they were moved to a bigger machine). `x1` alone (the
 Level-1 branch) is cheap and will run fine anywhere; it's specifically
 running *both* branches together in one `.tran` that needs the extra RAM.
+
+Run on the second machine (2026-08-23), `tran` tightened to `1n 400n`
+(one full pulse period, down from the original `100p 1u` -- see the
+`.control` block's own comment for why 1u/100p was the actual runtime
+cost, not circuit size):
+
+```
+trise_l1 =  88.36ns
+trise_l2 =  89.85ns
+```
+
+`trise_l1` lands close to the 84.4ns from the hand-patched Level-1-only
+netlist above -- the small difference is the testbench's own added
+wiring/source impedance, not a discrepancy worth chasing. The real
+result is `trise_l2` vs `trise_l1`: **only ~1.7% slower**, a far smaller
+gap than the ring-oscillator investigation's finding that switch-matrix
+parasitics dominate (that's what took the ring oscillator from 82x off
+real silicon down to 1.28x). The difference is the load: this testbench's
+`Cload1`/`Cload2` are 100pF each, swamping anything the switch matrix
+adds (row-coupling ~43fF/switch, bus-wire caps in the same range) --
+while the ring oscillator has no such external load, so its stages'
+own small switch-matrix parasitics are a much bigger fraction of the
+total capacitance there. Read together, these two examples cross-check
+`mosbius simulate`'s Level-2 model in the two load regimes a real design
+can be in: switch-matrix-dominated (ring oscillator, no external load)
+and external-load-dominated (this inverter, 100pF pad/scope load) --
+in both cases the model behaves the way the physics predicts it should.

@@ -59,7 +59,14 @@ C {devices/code_shown.sym} -300 -500 0 0 {name=NGSPICE only_toplevel=true value=
 .option rshunt=1e11
 .control
   save all
-  tran 100p 1u
+* Vin's PULSE args give one period every 400n (falls at 10n, rises back
+* at 212n) -- one period covers both .meas edges with margin, and ngspice
+* inserts breakpoints at the PULSE's own transition times regardless of
+* the step below, so 1n doesn't blur the 1n rise/fall edges. Without an
+* explicit Tmax, this step value is also the solver's max internal
+* timestep, so this is the actual runtime knob -- 100p over 1u forced >=
+* 10000 steps through the full switch-matrix circuit for no accuracy gain.
+  tran 1n 400n
   meas tran trise_l1 TRIG v(out_l1) VAL=0.33 RISE=1 TARG v(out_l1) VAL=2.97 RISE=1
   meas tran trise_l2 TRIG v(out_l2) VAL=0.33 RISE=1 TARG v(out_l2) VAL=2.97 RISE=1
   wrdata inverter_tb_ua1.txt v(ua1)
