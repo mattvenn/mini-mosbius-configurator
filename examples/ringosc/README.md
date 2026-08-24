@@ -4,9 +4,12 @@
 `examples/inverter/` and `examples/srlatch/`, nothing here is a polished
 tutorial artifact -- this is a working note on a specific gap-closing
 exercise, kept so it can be picked back up later without re-deriving
-everything from scratch. The schematic is now committed (`ring.sch`, see
-below); the as-routed testbench still is not (see "Reproducing this"), so
-this file records what was found and how to redo the rest of it.
+everything from scratch. The schematic (`ring.sch`) and a testbench
+(`tb_ring.sch`, modeled on `examples/inverter/tb_inverter.sch`) are both
+committed, but `tb_ring.sch` has not actually been run yet -- this dev
+host OOMs on the full switch matrix a free-running ring needs (see
+CLAUDE.md/[[ring_oscillator_l2_sim]]), so it needs a higher-RAM machine.
+This file records what was found and how to pick the rest of it up.
 
 ## The circuit
 
@@ -47,10 +50,14 @@ five is unreachable -- which makes three the practical ceiling.
 
 ## The schematic
 
-`ring.sch` is a hand-drawn 3-stage ring, added 2026-08-21 -- the first
-schematic from this investigation to be kept. Open it in xschem with
-`xschem/mosbius_lib` on the library path, press Netlist, and route what it
-writes:
+`ring.sch` is a hand-drawn 3-stage ring. As of 2026-08-24 it builds the
+*same topology* as the measured bitstream above, not a different one --
+`nmos_a`/`pmos_a` for the first inverting stage, `ndiffpair+`/`pdiffpair+`
+and `ndiffpair-`/`pdiffpair-` (each pair standalone-tied to its own rail,
+no `mosbius_ntail`/`mosbius_ptail` drawn, per CLAUDE.md Trap #3) for the
+other two, wired in the same loop: `ua2` -> `ua1` -> `ua4` -> `ua2`. Open
+it in xschem with `xschem/mosbius_lib` on the library path, press Netlist,
+and route what it writes:
 
 ```
 $ python3 -m mosbius.cli route build/ring.spice
@@ -59,42 +66,77 @@ OK -- no errors or warnings (1 info note hidden, use --verbose).
 Device roles:
   XM1          -> nmos_a        w=4
   XM2          -> pmos_a        w=4
-  XM3          -> nmos_b        w=4
-  XM4          -> pmos_b        w=4
-  XM5          -> ndiffpair+    w=4 (fixed)
-  XM6          -> pdiffpair+    w=4 (fixed)
+  XM3          -> ndiffpair+    w=4 (fixed)
+  XM4          -> ndiffpair-    w=4 (fixed)
+  XM5          -> pdiffpair+    w=4 (fixed)
+  XM6          -> pdiffpair-    w=4 (fixed)
 
-Bitstream: 3f008803f004001801000020100804000060040100000021
+Bitstream: 380000007001000010000404250109000400000040000014
 ```
 
-(Seven unused-bus-segment notes, one per segment, used to hide behind that
-count -- `merge_findings` (TODO.md was §3, closed 2026-08-22) collapses
-them, so `--verbose` shows a single block naming all seven and giving the
-reason once, instead of seven near-identical ones.)
+Every device is drawn at `w=4` for the reason given above: `ndiffpair+`/
+`ndiffpair-`/`pdiffpair+`/`pdiffpair-` cannot be anything else, so the
+other stage has to be brought up to match them rather than the other way
+round. Drawn at `w=1` the router now says so out loud instead of quietly
+building a mismatched ring (`check.py`'s `R1`).
 
-Every device is drawn at `w=4` for the reason given above: `ndiffpair+` and
-`pdiffpair+` cannot be anything else, so the other two stages have to be
-brought up to match them rather than the other way round. Drawn at `w=1`
-the router now says so out loud instead of quietly building a 1x/1x/4x ring
-(`check.py`'s `R1`); `w=4` on the two diff-pair halves is redundant but
-costs nothing and documents the intent.
+**This reproduces the measured design's device roles and wiring exactly,
+but not its literal bitstream -- compare the two hex strings above.** Every
+hex digit matches except the third byte (`00` here vs `88` measured),
+which decodes (`mosbius.cli decode`) to one difference:
+`ndiffpair+`/`ndiffpair-`'s `shared_source_tied_to_VGND` (and the PMOS
+pair's `..._VAPWR`) reads `False` here, `True` in the measured design.
+Both give the diff pair's shared source the same final DC connection (its
+own rail) -- the difference is *which switch* makes that connection: the
+measured design uses `ctrl_dpn_source`/`ctrl_dpp_source`, the chip's
+dedicated rail-tie for a diff pair whose source is wired straight to
+VGND/VAPWR (CLAUDE.md Trap #3's "each half is an ordinary common-source
+FET"); routing `ring.sch` here instead ties the pair's shared source
+through the general-purpose bus/crosspoint switches, because that is how
+this router's allocator resolves two same-polarity FETs sharing an
+*internal* net (SPEC.md §3.4's "spend the constrained resource first").
 
-**This is not the measured bitstream, and is not trying to be.** Both are
-the same three-stage topology, put onto different hardware:
+Drawing `ring.sch` the other way -- each diff-pair half's source wired
+directly to its rail instead of to each other -- does reach
+`ctrl_dpn_source`/`ctrl_dpp_source`, but costs the pairing: with `nmos_a`
+already holding the only other independent-slot claim, the router's
+allocator is free to place one of `ndiffpair+`/`ndiffpair-`'s two
+candidate FETs in the remaining `nmos_b` slot instead of pairing them,
+which breaks this ring's loop. That was tried and confirmed while building
+this example (2026-08-24) -- a real allocator behavior, not a drawing
+mistake to fix. Since the two switch paths carry different parasitics,
+this ~1-bit-off routed simulation will not land on exactly the same
+frequency as the literal measured bitstream; for a bit-exact comparison,
+see "Exact comparison" below.
 
-| | `ring.sch` | measured `3800...0014` |
-|---|---|---|
-| stages | `nmos_a`/`pmos_a`, `nmos_b`/`pmos_b`, `ndiffpair+`/`pdiffpair+` | `nmos_a`/`pmos_a`, `ndiffpair±`, `pdiffpair±` |
-| loop | `ua1` -> `bus_A[2]` -> `bus_A[6]`+`bus_B[6]` -> `ua1` | `ua[2]` -> `ua[1]` -> `ua[4]` -> `ua[2]` |
-| stage outputs on package pins | one | three |
+`ring.sch` also brings only `ua1` out as a loop node touching a real
+package pin -- same as the measured bitstream, which also has only `ua1`
+among its three loop nodes on a real pin (`ua4`/`ua2` are internal bus
+rows, per the "Nets" table `mosbius.cli decode` prints). So unlike the
+pre-2026-08-24 version of this schematic, there is no known reason to
+expect this one's pad loading to differ from the measured design's.
 
-The measured version brings all three stage outputs out to `ua[]` pins, so
-every node is scopeable -- and every node carries pad capacitance.
-`ring.sch` brings out only `ua1` and keeps the other two stage outputs on
-internal bus rows. That should make it run *faster* than 30MHz, on one
-pad's worth of load instead of three, so read the ~30MHz above as belonging
-to the bitstream it was measured on rather than to this schematic. Nobody
-has put this bitstream on silicon yet.
+## Exact comparison
+
+To simulate the *literal* measured bitstream -- bit-for-bit, not just the
+same device roles -- skip routing `ring.sch` and build the routed
+subcircuit directly from the known-good bitstream, since `mosbius simulate`
+only ever reads a `"bitstream"` field out of its input JSON:
+
+```bash
+python3 -c "
+import json
+json.dump({'bitstream': '380088007001000010000404250109000400000040000014'},
+          open('build/ring_measured.mosbius.json', 'w'))
+"
+python3 -m mosbius.cli simulate build/ring_measured.mosbius.json
+```
+
+This writes `build/ring_measured_routed.spice`, a self-contained
+`.subckt ring_measured_routed` with the same 9-pin port list as
+`ring.sch`'s own routed output -- drop it into `tb_ring.sch` in place of
+`ring_routed` (or point a copy of the testbench's `x2` instance at it) for
+the number that is directly comparable to the ~30MHz silicon measurement.
 
 ## What was tried
 

@@ -77,42 +77,43 @@ C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 * Free-running period of the same 3-stage ring oscillator as drawn
 * (out_drawn, x1) and as routed onto the real chip (out_routed, x2).
 * ring.sch has no input pin -- its loop closes back through ua1, which is
-* what out_drawn/out_routed actually is here (examples/ringosc/README.md's
-* topology: nmos_a/pmos_a, nmos_b/pmos_b, ndiffpair+/pdiffpair+).
+* what out_drawn/out_routed actually is here. As of 2026-08-24 ring.sch
+* builds the SAME topology as the bitstream measured at ~30MHz on real
+* silicon (380088...0014, examples/ringosc/README.md): nmos_a/pmos_a is
+* the first inverting stage, ndiffpair+/pdiffpair+ and ndiffpair-/
+* pdiffpair- (standalone-tied, no mosbius_ntail/ptail drawn) are the
+* other two, loop ua2 -> ua1 -> ua4 -> ua2. Routing ring.sch reproduces
+* that design's device roles and wiring exactly, but NOT its literal
+* bitstream -- see ring.sch's own header comment for why (a real router
+* allocator limitation, not a drawing mistake) and README.md's "Exact
+* comparison" for how to simulate the literal measured bitstream instead.
 * UIC skips the DC operating point and starts both branches at 0V: an odd
 * number of inversions around a loop has no stable fixed point, so each
 * free-runs from there on its own -- no separate stimulus needed.
 * RISE=2/3 skips the first, asymmetric startup edge and measures one
 * period once each branch has settled into steady oscillation.
 *
-* The 200ns window is measured, not guessed. out_routed spends its first
-* ~60ns slewing Cload2's 100pF up from 0V, then free-runs with a 15.0ns
-* period (~66.6MHz): rising edges land at 60.1, 74.3, 89.3, 104.5 and
-* 119.8ns, so RISE=3 arrives by ~90ns and 200ns still leaves margin for the
-* startup time shifting run to run. It used to be 2us -- 130-odd periods
-* past the last edge anyone measures -- and that is not merely wasteful,
-* because the cost grows faster than the window: 200ns takes 25s, 400ns
-* took 14 minutes, and 2us ran for hours.
-*
-* Note the 15.0ns period, not README.md's 1.98ns for the same circuit as
-* routed: Cload1/Cload2 came from tb_inverter.sch, where 100pF models an
-* external probe hanging off an output pad. A ring has no output pad
-* separate from its loop, so here that 100pF lands *inside* the feedback
-* path and sets the frequency.
-*
-* out_drawn does not oscillate at all, and its two .meas lines below fail.
-* That is a real limitation of this testbench, not a window still too
-* short. Cload1's 100pF sits on ua1, which is inside ring.sch's loop, while
-* net1 and net2 are ideal wires carrying only device capacitance -- so the
-* as-drawn loop is a slow integrator feeding two zero-delay inverters
-* straight back into it, which is a comparator with instant feedback and no
-* hysteresis. out_drawn duly latches at the ~1.6V trip point and chatters
-* there (439 crossings of 1.65V in 40ns) instead of swinging rail to rail.
-* The as-routed branch is unaffected because the real switch matrix puts
-* genuine RC delay on every stage node. Shrinking Cload1 until the drawn
-* ring oscillates puts it back at README.md's ~0.41ns period, 40x faster
-* than the routed branch -- which is why one tran stop time and time step
-* cannot serve both branches well, and why that is still open.
+* NOT YET RUN against this topology -- the 200ns window, and Cload1/
+* Cload2's placement, are carried over from the OLD topology's numbers
+* and need re-checking once this actually runs (build/ dev host OOMs on
+* the full switch matrix, see CLAUDE.md/[[ring_oscillator_l2_sim]]; run
+* on a higher-RAM machine). Two known open questions to check when it
+* does run:
+*  1. Cload1/Cload2's 100pF came from tb_inverter.sch, where it models an
+*     external probe hanging off an output pad -- appropriate there
+*     because that pad is NOT in the feedback loop. Here out_drawn/
+*     out_routed (ua1) IS the loop's own feedback node, so 100pF sitting
+*     there may swamp the real switch-matrix parasitics and dominate the
+*     measured frequency rather than modeling real probe loading. Worth
+*     checking with a smaller value (or none) once it runs.
+*  2. out_drawn (x1, ideal wires, no switch matrix) may not oscillate at
+*     all for the same reason it didn't under the old topology: with
+*     Cload1 sitting inside a zero-delay ideal loop, the as-drawn branch
+*     can end up a comparator with instant feedback and no hysteresis,
+*     latching at the switching threshold instead of swinging rail to
+*     rail. If so, out_drawn's .meas line below will simply fail --
+*     that is a real limitation of comparing ideal-wire and real-switch-
+*     matrix rings in one transient, not a bug to chase.
 
 .option rshunt=1e11 reltol=0.01
 .control
