@@ -7,6 +7,8 @@ template="name=x1"
 V {}
 S {}
 E {}
+T {This is the empty mini-MOSbius design block, and the schematic} -80 -390 0 0 0.25 0.25 {}
+T {behind mini_mosbius.sym. Copy it to start a design of your own.} -80 -360 0 0 0.25 0.25 {}
 T {Draw your circuit here. Wire it to the ports below --} -80 -300 0 0 0.25 0.25 {}
 T {those are exactly the chip's real pins (SPEC.md Sec 3.1b):} -80 -270 0 0 0.25 0.25 {}
 T {ibias, ua1..ua5, VAPWR (3.3V), VDPWR (1.8V), VGND. Use} -80 -240 0 0 0.25 0.25 {}

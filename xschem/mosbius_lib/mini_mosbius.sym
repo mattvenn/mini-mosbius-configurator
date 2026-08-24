@@ -1,0 +1,78 @@
+v {xschem version=3.4.8RC file_version=1.2
+*
+* The mini-MOSbius chip as a block: its nine real pins and nothing else
+* (SPEC.md Sec 3.1b). Every design has exactly these pins, so this one
+* symbol is every design's symbol -- the five ua bus pins down the left,
+* the two supplies and the bias reference on the right.
+*
+* Which design an instance stands for is an instance attribute, not a
+* separate symbol file:
+*
+*     C {mini_mosbius.sym} 0 0 0 0 {name=x1
+*     schematic=inverter.sch}
+*
+* netlists as `x1 <nets> inverter`, wrapping inverter.sch's contents.
+* Without a schematic= it falls back to this symbol's own schematic,
+* mini_mosbius.sch -- the empty design block. That file has to exist and
+* has to keep this name: xschem opens <symbol>.sch when a subcircuit
+* symbol is placed, and errors in the GUI if it is missing (reported
+* 2026-08-24, when this symbol was renamed without its schematic).
+* The .sch EXTENSION IS LOAD-BEARING: `schematic=inverter.sch` resolves
+* against the referring schematic's own directory, while a bare
+* `schematic=inverter` is looked up on XSCHEM_LIBRARY_PATH instead, does
+* not find a design sitting in examples/, and falls back to THIS file's
+* empty body -- giving you `.subckt inverter` with no transistors in it,
+* which netlists and simulates perfectly happily and answers nothing.
+* Verified both ways 2026-08-23/24. If a testbench's results look
+* impossibly clean, check this first.
+*
+* The subcircuit name follows the schematic= file, not this symbol's
+* name, so the same instance can also stand for a generated netlist:
+* examples/inverter/tb_inverter.sch's x2 sets schematic=inverter_routed
+* with a spice_sym_def .include, and gets `.subckt inverter_routed` --
+* the same design as it exists inside the real chip, from
+* `mosbius simulate`.
+*
+* The B (pin box) records below are in netlist pin order, which is also
+* the .subckt port order, and mosbius/simulate.py hard-codes that same
+* order for the subcircuit it generates. Re-space or move the pins
+* freely -- but never reorder these nine lines, or a design's routed
+* block silently swaps two connections. Moving them DOES break any
+* testbench already wired to the old positions (xschem connects a label
+* by the coordinate it touches): xschem/mosbius_lib/tb_template.sch had
+* to be re-wired for exactly that reason when these pins moved.
+}
+G {}
+K {type=subcircuit
+format="@name @pinlist @symname"
+template="name=x1"
+}
+V {}
+S {}
+F {}
+E {}
+L 4 -100 -140 100 -140 {}
+L 4 -100 140 100 140 {}
+L 4 -100 -140 -100 140 {}
+L 4 100 -140 100 140 {}
+B 5 97.5 77.5 102.5 82.5 {name=ibias dir=inout}
+B 5 -102.5 -82.5 -97.5 -77.5 {name=ua1 dir=inout}
+B 5 -102.5 -42.5 -97.5 -37.5 {name=ua2 dir=inout}
+B 5 -102.5 -2.5 -97.5 2.5 {name=ua3 dir=inout}
+B 5 -102.5 37.5 -97.5 42.5 {name=ua4 dir=inout}
+B 5 -102.5 77.5 -97.5 82.5 {name=ua5 dir=inout}
+B 5 97.5 -102.5 102.5 -97.5 {name=VAPWR dir=inout}
+B 5 97.5 -42.5 102.5 -37.5 {name=VDPWR dir=inout}
+B 5 97.5 17.5 102.5 22.5 {name=VGND dir=inout}
+T {mini-MOSbius} -95 -195 0 0 0.25 0.25 {}
+T {@symname} -95 -160 0 0 0.3 0.3 {}
+T {@name} 70 -160 0 0 0.2 0.2 {}
+T {ibias} 85 70 0 1 0.15 0.15 {}
+T {ua1} -75 -90 0 1 0.15 0.15 {}
+T {ua2} -75 -50 0 1 0.15 0.15 {}
+T {ua3} -75 -10 0 1 0.15 0.15 {}
+T {ua4} -75 30 0 1 0.15 0.15 {}
+T {ua5} -75 70 0 1 0.15 0.15 {}
+T {VAPWR} 65 -110 0 0 0.15 0.15 {}
+T {VDPWR} 65 -50 0 0 0.15 0.15 {}
+T {VGND} 65 10 0 0 0.15 0.15 {}

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Parse an xschem-netlisted SPICE file for a design built on
-minimosbius_template.sch into a MosbiusDesign (SPEC.md Sec 3, architecture
+mini_mosbius.sch into a MosbiusDesign (SPEC.md Sec 3, architecture
 diagram: "xschem -n (netlist) -> MosbiusDesign").
 
 A design instantiates only the seven generic devices from xschem/mosbius_lib
@@ -74,7 +74,7 @@ PORT_NAMES = {"ibias", "ua1", "ua2", "ua3", "ua4", "ua5", "VAPWR", "VDPWR", "VGN
 
 
 class NetlistError(ValueError):
-    """The netlist doesn't look like a design built on minimosbius_template.sch."""
+    """The netlist doesn't look like a design built on mini_mosbius.sch."""
 
 
 @dataclass(frozen=True)
@@ -119,8 +119,24 @@ _PROP_RE = re.compile(r"(\w+)=(\S+)")
 
 def parse_netlist(text: str) -> MosbiusDesign:
     """Parse the text of an xschem-generated SPICE netlist of a design
-    built on minimosbius_template.sch.
+    built on mini_mosbius.sch.
     """
+    # A routed design JSON is the other file `build/` holds for the same
+    # design, one character away in the name (`ring.mosbius.json` vs
+    # `ring.spice`), so it is the file most likely to arrive here by
+    # mistake -- and "no mosbius_* instances found" would be a true but
+    # unhelpful thing to say about it.
+    if text.lstrip().startswith("{") and '"bitstream"' in text:
+        raise NetlistError(
+            "this is a routed design, not an xschem netlist\n"
+            "  A file with a \"bitstream\" entry in it is what\n"
+            "  `mosbius route --out <file>` writes: routing's answer, not the\n"
+            "  question it was asked. `mosbius route` and `mosbius watch` read the\n"
+            "  netlist xschem writes for your schematic, `build/<name>.spice`.\n"
+            "  To simulate the routing this file already holds, the command is\n"
+            "  `python3 -m mosbius.cli simulate <this file>`."
+        )
+
     devices: list[DeviceRequest] = []
     for line in text.splitlines():
         if line.strip().startswith(("*", ".")):

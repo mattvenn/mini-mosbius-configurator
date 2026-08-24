@@ -92,6 +92,19 @@ def test_route_reports_impossible_on_bad_netlist(tmp_path: Path, capsys):
     assert "IMPOSSIBLE" in err
 
 
+def test_simulate_reports_cant_simulate_on_a_netlist(tmp_path: Path, capsys):
+    # The netlist, not the routed design JSON `mosbius route --out` writes:
+    # a failed exit and an explanation, not a JSONDecodeError traceback.
+    netlist = tmp_path / "inverter.spice"
+    netlist.write_text(INVERTER_NETLIST)
+    rc = main(["simulate", str(netlist)])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "CAN'T SIMULATE" in err
+    assert "xschem netlist" in err
+    assert "Traceback" not in err
+
+
 def test_watch_once_delegates_to_watch_module(tmp_path: Path, capsys):
     netlist = tmp_path / "inverter.spice"
     netlist.write_text(INVERTER_NETLIST)

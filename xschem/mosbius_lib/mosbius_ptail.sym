@@ -14,7 +14,7 @@ v {xschem version=3.4.8RC file_version=1.2
 *
 * Gate and source are NOT drawn, and that is not a style choice: the
 * bank's gate is `ibias_p`, generated *inside* the chip by mirror_n's
-* iout_fixed leg -- it is not a port of minimosbius_template.sch and
+* iout_fixed leg -- it is not a port of mini_mosbius.sch and
 * cannot become one without exposing chip internals as pins, so there is
 * no honest net to draw this gate to (unlike mosbius_ntail's gate, which
 * really is the `ibias` pin). Its source is VAPWR. Both hard-wired on

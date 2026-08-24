@@ -35,7 +35,7 @@ how many you need and how they're connected.
 
 ## 1. Draw the circuit
 
-Copy `xschem/mosbius_lib/minimosbius_template.sch` to a new file **in the
+Copy `xschem/mosbius_lib/mini_mosbius.sch` to a new file **in the
 same directory**, e.g. `xschem/mosbius_lib/my_inverter.sch`. Keeping it
 there matters: schematics refer to symbols by bare name (`mosbius_nmos.sym`),
 so they only resolve while the file sits somewhere xschem's library path
@@ -161,7 +161,7 @@ within about a second.
 `mosbius_nmos`/`mosbius_pmos` netlist to the *same real sky130 transistor
 sizing* as the actual hardware block, just without the switch-matrix
 overhead in between -- so simulating your `my_inverter.sch` directly (before
-routing) gives a Level-1 "ideal" result: what the circuit does electrically,
+routing) gives the "as drawn" result: what the circuit does electrically,
 with parasitics from the real switch matrix left out. `examples/inverter/`
 has a full worked simulation with a plot and an explanation of what that
 comparison does and doesn't tell you; the short version is that adding a

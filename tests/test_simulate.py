@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from mosbius.model import SwitchConfig
 from mosbius.simulate import (
+    SimulateError,
     name_from_routed_path,
     render_mosbius_wrapper,
     simulate_from_routed_json,
@@ -54,7 +57,7 @@ def test_used_external_pins_empty_config():
 def test_wrapper_subckt_name_and_port_list():
     config = SwitchConfig.from_bitstream(MEASURED_RING_BITSTREAM)
     text = render_mosbius_wrapper(config, "ring")
-    assert "\n.subckt ring_mosbius ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND\n" in "\n" + text
+    assert "\n.subckt ring_routed ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND\n" in "\n" + text
 
 
 def test_wrapper_is_self_contained_no_include():
@@ -114,7 +117,7 @@ def test_wrapper_subckt_ends_balanced():
     config = SwitchConfig.from_bitstream(MEASURED_RING_BITSTREAM)
     text = render_mosbius_wrapper(config, "ring")
     # 10 subckts from the embedded device library + this wrapper's own
-    # ring_mosbius == 11, both properly newline-preceded (the wrapper's
+    # ring_routed == 11, both properly newline-preceded (the wrapper's
     # own .subckt line isn't the literal first line of the file -- header
     # comments come first).
     assert text.count("\n.subckt ") == 11
@@ -141,5 +144,68 @@ def test_simulate_from_routed_json(tmp_path):
     name, text = simulate_from_routed_json(routed_path)
 
     assert name == "ring"
-    assert ".subckt ring_mosbius" in text
+    assert ".subckt ring_routed" in text
     assert "Xpad_ua1" in text
+
+
+# -- what happens when the wrong file arrives ---------------------------
+#
+# `build/` holds two files per design whose names differ by one word:
+# the netlist xschem wrote (`inverter.spice`) and what routing wrote from
+# it (`inverter.mosbius.json`). `mosbius simulate` reads the second, so
+# handing it the first is the expected slip, and it used to end in a
+# `json.decoder.JSONDecodeError` traceback rather than a sentence saying
+# which file it wanted.
+
+
+def test_netlist_instead_of_routed_json_explains_the_difference(tmp_path):
+    netlist = tmp_path / "inverter.spice"
+    netlist.write_text(
+        "** sch_path: /foss/designs/x/inverter.sch\n"
+        ".subckt inverter ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND\n"
+        "XM1 ua1 ua2 VGND VGND mosbius_nmos w=1\n"
+        ".ends\n"
+    )
+
+    with pytest.raises(SimulateError) as excinfo:
+        simulate_from_routed_json(netlist)
+
+    message = str(excinfo.value)
+    assert "xschem netlist" in message
+    # The way out, with this user's own filenames already substituted in.
+    assert f"route {netlist} --out {tmp_path / 'inverter.mosbius.json'}" in message
+    assert f"simulate {tmp_path / 'inverter.mosbius.json'}" in message
+
+
+def test_missing_file_says_how_to_produce_it(tmp_path):
+    missing = tmp_path / "ring.mosbius.json"
+
+    with pytest.raises(SimulateError) as excinfo:
+        simulate_from_routed_json(missing)
+
+    message = str(excinfo.value)
+    assert "no file at" in message
+    # Routing a <name>.mosbius.json that doesn't exist yet starts from the
+    # netlist of the same name, not from the missing file itself.
+    assert f"route {tmp_path / 'ring.spice'} --out {missing}" in message
+
+
+def test_json_without_a_bitstream_is_not_a_routed_design(tmp_path):
+    path = tmp_path / "notrouted.json"
+    path.write_text(json.dumps({"device_roles": {}}))
+
+    with pytest.raises(SimulateError, match="not a routed design"):
+        simulate_from_routed_json(path)
+
+
+def test_unreadable_bitstream_keeps_the_underlying_explanation(tmp_path):
+    path = tmp_path / "ring.mosbius.json"
+    path.write_text(json.dumps({"bitstream": "deadbeef"}))
+
+    with pytest.raises(SimulateError) as excinfo:
+        simulate_from_routed_json(path)
+
+    message = str(excinfo.value)
+    assert "isn't a usable configuration" in message
+    # bitstream.py's own count-the-characters explanation survives.
+    assert "8 hex characters" in message

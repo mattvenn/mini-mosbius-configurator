@@ -5,8 +5,9 @@
 #
 #     xschem examples/inverter/inverter.sch
 #
-# It does three things: find the PDK's device symbols and models, find our
-# own symbol library, and put every netlist in one place.
+# It does three things: find the PDK's device symbols and models (pinning
+# the variant to sky130A, see below), find our own symbol library, and put
+# every netlist in one place.
 
 # Where this file lives -- computed before sourcing anything else, because
 # `info script` follows whichever file is currently being sourced.
@@ -20,6 +21,15 @@ if {[info exists env(PDK_ROOT)]} {
 } else {
     set mosbius_pdk_root /foss/pdks
 }
+#    Naming the file explicitly is not enough on its own: the file we are
+#    about to source derives SKYWATER_MODELS (and the library path) from
+#    $env(PDK) itself, so with the container's default still in place it
+#    resolves sky130's own symbols but writes
+#    `.lib /foss/pdks/ihp-sg13g2/libs.tech/combined/sky130.lib.spice tt`
+#    into every netlist -- a path that doesn't exist, from a netlist that
+#    otherwise looks perfectly fine. Set the variant first, for us and for
+#    everything sourced below. Verified 2026-08-23.
+set env(PDK) sky130A
 source $mosbius_pdk_root/sky130A/libs.tech/xschem/xschemrc
 
 # 2. Our library. Must come AFTER the source above: the sky130A xschemrc

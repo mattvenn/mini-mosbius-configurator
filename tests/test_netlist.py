@@ -100,12 +100,25 @@ def test_wrong_connection_count_raises():
         parse_netlist("M1 a b c mosbius_nmos w=1\n")
 
 
+def test_routed_design_json_is_named_as_such():
+    # `route`/`watch` read build/<name>.spice; routing's own output,
+    # build/<name>.mosbius.json, is one word away in the name and lands
+    # here by mistake. "no mosbius_* instances found" is true of it but
+    # explains nothing.
+    routed_json = '{\n  "bitstream": "00" ,\n  "device_roles": {}\n}\n'
+    with pytest.raises(NetlistError) as excinfo:
+        parse_netlist(routed_json)
+    message = str(excinfo.value)
+    assert "routed design, not an xschem netlist" in message
+    assert "mosbius.cli simulate" in message
+
+
 def test_no_devices_raises():
     with pytest.raises(NetlistError, match="no mosbius_"):
         parse_netlist("** empty netlist, no mosbius devices\n.end\n")
 
 
-def test_port_names_match_minimosbius_template_ports():
+def test_port_names_match_mini_mosbius_ports():
     assert PORT_NAMES == {"ibias", "ua1", "ua2", "ua3", "ua4", "ua5", "VAPWR", "VDPWR", "VGND"}
 
 

@@ -8,7 +8,7 @@ comparison, not just a convenient toy.
 
 `inverter.sch` was drawn by hand in xschem on 2026-08-21, replacing an
 earlier machine-generated version built against the pre-redraw symbol
-geometry. It is built on `minimosbius_template.sch` from
+geometry. It is built on `mini_mosbius.sch` from
 `mosbius_nmos.sym`/`mosbius_pmos.sym`, wired to `ua1` (input), `ua2`
 (output), `VGND` and `VAPWR` -- which is exactly what `TUTORIAL.md` walks
 you through drawing, so this is the finished article for that walkthrough
@@ -60,7 +60,7 @@ before the router existed.
 
 `inverter.sch` netlists to the *same real sky130 transistor sizing* as the
 hardware block it stands in for, just without the switch-matrix overhead in
-between (SPEC.md Sec 3.1b's Level-1 "ideal" simulation) -- so this is what
+between (the design as drawn -- ideal wires, no switch matrix, SPEC.md Sec 3.1b) -- so this is what
 the circuit does electrically, with the real switch-matrix parasitics left
 out.
 
@@ -85,7 +85,7 @@ At `w=4`, rise time is **21.1 ns** -- about 4x faster than the `w=1` case,
 tracking the published ~50ns -> ~25ns improvement (a 2x change) reasonably
 well in direction and roughly in magnitude, if not exactly: this
 simulation's absolute numbers run somewhat higher than the published ones
-(84ns vs ~50ns at `w=1`), consistent with a Level-1 ideal model that leaves
+(84ns vs ~50ns at `w=1`), consistent with an as-drawn ideal model that leaves
 out the real switch-matrix's added parasitic resistance/capacitance -- see
 "What this does and doesn't prove" below.
 
@@ -95,48 +95,65 @@ The **published trise numbers are real silicon**, from tnt's own hardware
 bring-up -- not from this project's simulation, and not something this
 project's own hardware has confirmed (see M4 status in the root README: no
 demoboard was available in this environment). What the numbers above show
-is that this project's Level-1 ideal simulation, run through the actual
+is that this project's as-drawn ideal simulation, run through the actual
 toolchain (draw -> netlist -> route -> check, all verified against real
 xschem/ngspice), lands in the same regime and responds to the same `w=1`
 vs `w=4` change in the same direction -- a real, if partial, cross-check of
 the device models in `xschem/mosbius_lib/`. Confirming the *routed* config
-(Level-2, with real switch parasitics) behaves the same way on *this
+(as routed, with real switch parasitics) behaves the same way on *this
 project's own* hardware bring-up is still open -- SPEC.md Sec 8.4's
 `--verify` exit criterion.
 
-## Level-1 vs Level-2, side by side: `tb_inverter.sch`
+## As drawn vs as routed, side by side: `tb_inverter.sch`
 
-Everything above was Level-1 only, produced by netlisting `inverter.sch`
+Everything above was the as-drawn model only, produced by netlisting `inverter.sch`
 directly and hand-patching stimulus into the resulting SPICE text -- not a
 real xschem testbench. `tb_inverter.sch` replaces that with the workflow
-`mosbius simulate` (SPEC.md Sec 3.7, TODO.md Sec 1) is actually meant for:
+`mosbius simulate` (SPEC.md Sec 3.7) is actually meant for:
 a real top-level testbench with two instances of the same design, `x1`
 (ideal, ordinary hierarchy) and `x2` (a duplicate, its `spice_sym_def`
 instance property pointing at a real, silicon-accurate netlist), sharing
 one stimulus and one set of rails, so the *only* difference between
-`out_l1` (x1's output) and `out_l2` (x2's output) is Level-1 vs Level-2
+`out_drawn` (x1's output) and `out_routed` (x2's output) is as-drawn vs as-routed
 fidelity. This is the same `spice_sym_def` swap-in mechanism used in
 [github.com/mattvenn/tt08-analog-ring-osc's `tb_ring.sch`](https://github.com/mattvenn/tt08-analog-ring-osc/blob/main/xschem/tb_ring.sch)
 to compare an ideal schematic against a post-layout extraction -- here the
 "extraction" is `mosbius simulate`'s output instead of a magic PEX run.
 
-`examples/inverter/inverter.sym` is a plain symbol for `inverter.sch`
-(matching `xschem/mosbius_lib/minimosbius_template.sym`'s port list
-exactly), needed because `inverter.sch` had never actually been
-*instantiated* as a hierarchical block before -- every existing example in
-this project is netlisted standalone at the top level, not referenced from
-a separate testbench.
+Both `x1` and `x2` are the same symbol, `xschem/mosbius_lib/mini_mosbius.sym`
+-- the mini-MOSbius chip as a block, nine real pins and nothing else, which
+is identical for every design. What makes an instance stand for a
+*particular* design is its `schematic=` attribute, not a symbol of its own:
 
-### Regenerating `build/inverter_mosbius.spice`
+| instance | `schematic=` | netlists as | is |
+|---|---|---|---|
+| `x1` | `tcleval([file normalize examples/inverter/inverter.sch])` | `.subckt inverter` | the inverter **as drawn** -- ideal wires, no switch matrix |
+| `x2` | `inverter_routed` (+ `spice_sym_def`) | `.subckt inverter_routed` | the same inverter **as routed** onto the chip, from `mosbius simulate` |
 
-`x2`'s `spice_sym_def` points at `build/inverter_mosbius.spice`, which is
+The subcircuit name follows the `schematic=` file, which is why `x1` comes
+out as `inverter` and not as `mini_mosbius`.
+
+`x1`'s absolute `tcleval([file normalize ...])` form is load-bearing and is
+not decoration. `schematic=` is resolved relative to the *symbol's* own
+directory, and this symbol lives in `xschem/mosbius_lib/`, so both
+`schematic=inverter` and `schematic=inverter.sch` look for a file that
+isn't there and quietly fall back to the symbol's own empty body. You then
+get `.subckt inverter` containing no transistors at all -- a netlist that
+runs, and measures nothing. Verified both ways 2026-08-24. (A design that
+sits in the same directory as the symbol, like
+`xschem/mosbius_lib/tb_template.sch`'s, can use the plain
+`schematic=my_design.sch` form.)
+
+### Regenerating `build/inverter_routed.spice`
+
+`x2`'s `spice_sym_def` points at `build/inverter_routed.spice`, which is
 gitignored (like every other `build/` artifact) and has to be regenerated:
 
 ```bash
 docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
   --skip bash -lc 'export PDK=sky130A PDK_ROOT=/foss/pdks; xschem -n -q examples/inverter/inverter.sch'
 python3 -m mosbius.cli route build/inverter.spice --out build/inverter.mosbius.json
-python3 -m mosbius.cli simulate build/inverter.mosbius.json --out build/inverter_mosbius.spice
+python3 -m mosbius.cli simulate build/inverter.mosbius.json --out build/inverter_routed.spice
 ```
 
 The routed bitstream should still read
@@ -156,7 +173,8 @@ docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
 
 `build/tb_inverter.spice` is then a complete, self-contained deck --
 `.control` already has a real `tran`, two `.meas` rise-time measurements
-(`trise_l1`, `trise_l2`), and `wrdata` output for `ua1`/`out_l1`/`out_l2`.
+(`trise_drawn`, `trise_routed`), and `wrdata` output for
+`ua1`/`out_drawn`/`out_routed`.
 
 ### What running it shows
 
@@ -167,7 +185,7 @@ the same ~1.9GB-ceiling OOM every other full-matrix run in this project
 hits, confirmed here too (memory climbed to the host's ceiling with no
 ngspice output produced, same pattern as `tools/run_ringo_full_sim.sh`
 and friends before they were moved to a bigger machine). `x1` alone (the
-Level-1 branch) is cheap and will run fine anywhere; it's specifically
+as-drawn branch) is cheap and will run fine anywhere; it's specifically
 running *both* branches together in one `.tran` that needs the extra RAM.
 
 Run on the second machine (2026-08-23), `tran` tightened to `1n 400n`
