@@ -4,25 +4,91 @@
 `examples/inverter/` and `examples/srlatch/`, nothing here is a polished
 tutorial artifact -- this is a working note on a specific gap-closing
 exercise, kept so it can be picked back up later without re-deriving
-everything from scratch. The schematic (`ring.sch`) and a testbench
-(`tb_ring.sch`, modeled on `examples/inverter/tb_inverter.sch`) are both
-committed, but `tb_ring.sch` has not actually been run yet -- this dev
-host OOMs on the full switch matrix a free-running ring needs (see
-CLAUDE.md/[[ring_oscillator_l2_sim]]), so it needs a higher-RAM machine.
-This file records what was found and how to pick the rest of it up.
+everything from scratch. `ring.sch` and `tb_ring.sch` are both committed
+and both run: the testbench takes about two minutes in the
+IIC-OSIC-TOOLS container. (An earlier version of this note said it OOMed
+and needed a higher-RAM machine. That was the hand-built full-matrix deck
+described under "Reproducing this", not what `mosbius simulate` emits.)
 
 ## The circuit
 
-Bitstream `380088007001000010000404250109000400000040000014` decodes
-(`python3 -m mosbius.cli decode 380088...0014`) to a 3-stage ring
-oscillator: three inverting stages built from the six non-independent-slot
-FETs (`nmos_a`/`pmos_a` w=4 as one stage, `ndiffpair+`/`pdiffpair+` and `ndiffpair-`/`pdiffpair-` as
-the other two, each pair standalone-tied to its own rail per CLAUDE.md
-trap #3), wired in a loop: `ua[2] -> ua[1] -> ua[4] -> ua[2]`. Three
-inversions around a closed loop is odd, so the loop has no stable fixed
-point -- it free-runs.
+Three inverting stages in a loop, plus an output buffer -- eight
+transistors, which is every usable single FET the chip has.
 
-This bitstream has been loaded onto real silicon and **measured at ~30MHz**.
+```
+    ua1 -> net1 -> ua2 -> ua1          the loop, three inversions
+    ua1 -> ua3                         the buffer
+```
+
+Three inversions round a closed loop is odd, so the loop has no stable
+fixed point and free-runs. The buffer is a fourth inverter tapping `ua1`
+and driving `ua3`, which is what anything outside the chip measures.
+
+**Why there is a buffer.** Without it you have to observe a loop node,
+and a loop node is inside the feedback path: a scope probe there changes
+the oscillator instead of measuring it. Measured on this circuit, 100pF
+on a loop node stops the drawn ring oscillating outright (it latches at
+~1.6V) and even 1pF drags it from 2.5GHz to 1.5GHz with the swing already
+collapsing. With the buffer, the load sits on `ua3`, outside the loop, so
+a probe capacitance models a probe again -- the same situation as
+`examples/inverter/`. The loop pays only the buffer's gate capacitance,
+which is a real on-chip load rather than an invented one.
+
+**But the buffer cannot drive that load, and that is a result too.** A
+ring stage drives one gate, tens of fF. The buffer drives `cload` plus a
+bond pad -- 15pF, three orders of magnitude more -- with an identical
+`w=4` device. Scaling `examples/inverter/`'s own measurement (a `w=1`
+inverter takes 8.9ns to slew 10pF, so `w=4` takes about 2.2ns), the drawn
+ring's 240ps half-period gives it about a tenth of the time it needs.
+Measured swings, steady state:
+
+| node | swing | centre |
+|---|---|---|
+| `loop_drawn` | 3.463 V | 1.694 V |
+| `out_drawn` | 0.249 V | 1.941 V |
+| `loop_routed` | 2.630 V | 1.610 V |
+| `out_routed` | 1.550 V | 1.323 V |
+
+The oscillator is healthy -- the loop node swings past both rails. Only
+the buffered output is squashed, and the routed branch, with 8.6ns per
+half period, gets most of the way there. Real chips solve this with a
+tapered chain of progressively larger inverters; this chip has no
+transistors left to build one, since all eight usable single FETs are
+already committed.
+
+**So frequency is measured on the loop nodes, not the outputs.** That is
+not a preference. `out_drawn` spans 1.82-2.07V and never properly crosses
+the 1.5V trigger, so the same deck reported 58.3MHz one run and 44.0MHz
+the next with no electrical change. Counted over the whole steady-state
+window, `loop_drawn` crosses 1.5V 74 times with **zero** spread in period,
+`out_drawn` 8 times with +-4.1ps. The `.meas` lines trigger on
+`loop_drawn`/`loop_routed`; `out_drawn`/`out_routed` and their `cload`
+stay as the pin view, which is a real answer about driving an external
+load off this chip.
+
+**Which loop nodes carry pads.** `net1` is not named after a package pin,
+and `route.py` guarantees such nets never land on a bonded bus row -- so
+it carries only the row's own ~0.9pF of wire capacitance. `ua1` and `ua2`
+do carry pads. You cannot make all three internal: only bus row 6 is free
+of a bond wire on *both* sides, so at most one internal net can span the
+two bus sides, and with eight devices split four per side the loop cannot
+avoid spanning more than once. The router says so rather than quietly
+moving one onto a pin:
+
+```
+DOESN'T FIT -- 'net1' spans both bus sides and no row can join them
+  ... Free on both sides here: bus row 6.
+  The terminals above can share only bus rows 1, 2 and 3.
+```
+
+`mosbius route` prints which nets ended up bonded -- see "The schematic".
+
+**The measured-silicon reference is a different circuit.** Bitstream
+`380088007001000010000404250109000400000040000014` -- a three-stage ring
+with no buffer, all three loop nodes on package pins -- has been loaded
+onto real silicon and **measured at ~30MHz**. Everything below that
+compares against ~30MHz is comparing against that bitstream, not against
+this schematic. See "Exact comparison".
 
 ### Why `w=4`, and why three stages is the maximum
 
@@ -48,16 +114,17 @@ mirror legs expose a single terminal (`out`) and the OTA is a fixed block, so
 neither can serve as an inverter FET. Four stages would fit but is even, and
 five is unreachable -- which makes three the practical ceiling.
 
+That leaves exactly one NMOS and one PMOS over, which is exactly one
+inverter, which is the buffer. Nothing is spare afterwards: all eight
+usable single FETs are committed, so this circuit cannot also widen a
+stage. The leftovers are diff-pair halves at fixed W=40 nf=8 and W=120
+nf=16 -- identically `w=4` -- so the buffer comes out the same strength as
+a stage without any compromise.
+
 ## The schematic
 
-`ring.sch` is a hand-drawn 3-stage ring. As of 2026-08-24 it builds the
-*same topology* as the measured bitstream above, not a different one --
-`nmos_a`/`pmos_a` for the first inverting stage, `ndiffpair+`/`pdiffpair+`
-and `ndiffpair-`/`pdiffpair-` (each pair standalone-tied to its own rail,
-no `mosbius_ntail`/`mosbius_ptail` drawn, per CLAUDE.md Trap #3) for the
-other two, wired in the same loop: `ua2` -> `ua1` -> `ua4` -> `ua2`. Open
-it in xschem with `xschem/mosbius_lib` on the library path, press Netlist,
-and route what it writes:
+`ring.sch` is hand-drawn. Open it in xschem launched from the repo root,
+press Netlist, and route what it writes:
 
 ```
 $ python3 -m mosbius.cli route build/ring.spice
@@ -66,55 +133,38 @@ OK -- no errors or warnings (1 info note hidden, use --verbose).
 Device roles:
   XM1          -> nmos_a        w=4
   XM2          -> pmos_a        w=4
-  XM3          -> ndiffpair+    w=4 (fixed)
-  XM4          -> ndiffpair-    w=4 (fixed)
-  XM5          -> pdiffpair+    w=4 (fixed)
-  XM6          -> pdiffpair-    w=4 (fixed)
+  XM3          -> nmos_b        w=4
+  XM4          -> pmos_b        w=4
+  XM5          -> ndiffpair+    w=4 (fixed)
+  XM6          -> pdiffpair+    w=4 (fixed)
+  XM7          -> ndiffpair-    w=4 (fixed)
+  XM8          -> pdiffpair-    w=4 (fixed)
 
-Bitstream: 380000007001000010000404250109000400000040000014
+Bus rows:
+  net1     bus_A[2]
+  ua1      bus_A[1] + bus_B[1]   package pin ua1 -- bond pad + analog mux
+  ua2      bus_A[3] + bus_B[3]   package pin ua2 -- bond pad + analog mux
+  ua3      bus_A[5] + bus_B[5]   package pin ua3 -- bond pad + analog mux
+
+Bitstream: 3f008803f004001401000210188406000050040100000019
 ```
 
-Every device is drawn at `w=4` for the reason given above: `ndiffpair+`/
-`ndiffpair-`/`pdiffpair+`/`pdiffpair-` cannot be anything else, so the
-other stage has to be brought up to match them rather than the other way
-round. Drawn at `w=1` the router now says so out loud instead of quietly
-building a mismatched ring (`check.py`'s `R1`).
+The "Bus rows" section is what tells you the pad story for a given
+routing. `net1` landed on a bare row; `ua1`, `ua2` and `ua3` did not, and
+`ua3` could not -- it is the output, so it has to be reachable.
 
-**This reproduces the measured design's device roles and wiring exactly,
-but not its literal bitstream -- compare the two hex strings above.** Every
-hex digit matches except the third byte (`00` here vs `88` measured),
-which decodes (`mosbius.cli decode`) to one difference:
-`ndiffpair+`/`ndiffpair-`'s `shared_source_tied_to_VGND` (and the PMOS
-pair's `..._VAPWR`) reads `False` here, `True` in the measured design.
-Both give the diff pair's shared source the same final DC connection (its
-own rail) -- the difference is *which switch* makes that connection: the
-measured design uses `ctrl_dpn_source`/`ctrl_dpp_source`, the chip's
-dedicated rail-tie for a diff pair whose source is wired straight to
-VGND/VAPWR (CLAUDE.md Trap #3's "each half is an ordinary common-source
-FET"); routing `ring.sch` here instead ties the pair's shared source
-through the general-purpose bus/crosspoint switches, because that is how
-this router's allocator resolves two same-polarity FETs sharing an
-*internal* net (SPEC.md §3.4's "spend the constrained resource first").
+Every device is drawn at `w=4` for the reason given above: the diff-pair
+halves cannot be anything else, so the programmable FETs have to be
+brought up to match rather than the other way round. Drawn at `w=1` the
+router says so out loud instead of quietly building a mismatched ring
+(`check.py`'s `R1`).
 
-Drawing `ring.sch` the other way -- each diff-pair half's source wired
-directly to its rail instead of to each other -- does reach
-`ctrl_dpn_source`/`ctrl_dpp_source`, but costs the pairing: with `nmos_a`
-already holding the only other independent-slot claim, the router's
-allocator is free to place one of `ndiffpair+`/`ndiffpair-`'s two
-candidate FETs in the remaining `nmos_b` slot instead of pairing them,
-which breaks this ring's loop. That was tried and confirmed while building
-this example (2026-08-24) -- a real allocator behavior, not a drawing
-mistake to fix. Since the two switch paths carry different parasitics,
-this ~1-bit-off routed simulation will not land on exactly the same
-frequency as the literal measured bitstream; for a bit-exact comparison,
-see "Exact comparison" below.
-
-`ring.sch` also brings only `ua1` out as a loop node touching a real
-package pin -- same as the measured bitstream, which also has only `ua1`
-among its three loop nodes on a real pin (`ua4`/`ua2` are internal bus
-rows, per the "Nets" table `mosbius.cli decode` prints). So unlike the
-pre-2026-08-24 version of this schematic, there is no known reason to
-expect this one's pad loading to differ from the measured design's.
+Which device becomes which hardware slot is the allocator's choice, not
+the drawing's, and it is not stable against unrelated edits -- the buffer
+here landed on `nmos_b`/`pmos_b` and the loop's third stage on the
+diff-pair halves, but an earlier arrangement of the same circuit came out
+the other way round. Read the roles from the route output rather than
+assuming.
 
 ## Exact comparison
 
@@ -134,13 +184,22 @@ python3 -m mosbius.cli simulate build/ring_measured.mosbius.json
 
 This writes `build/ring_measured_routed.spice`, a self-contained
 `.subckt ring_measured_routed` with the same 9-pin port list as
-`ring.sch`'s own routed output -- drop it into `tb_ring.sch` in place of
-`ring_routed` (or point a copy of the testbench's `x2` instance at it) for
-the number that is directly comparable to the ~30MHz silicon measurement.
+`ring.sch`'s own routed output -- point a copy of the testbench's `x2`
+instance at it for the number directly comparable to the ~30MHz silicon
+measurement.
+
+Two things to change in that copy, because the measured bitstream is the
+unbuffered circuit: its loop nodes are `ua[1]`, `ua[2]` and `ua[4]`, so
+`out_routed` has to move to one of those rather than `ua3`, and
+`Cload_routed` has to come off, since observing a loop node means the
+probe is back inside the feedback path. That is the comparison being made
+-- the measured silicon had no buffer to hide behind.
 
 ## What was tried
 
-Successive stages of the investigation, in increasing fidelity:
+Successive stages of the investigation, in increasing fidelity. The first
+four rows are the *unbuffered, all-pins* circuit, which is what the ~30MHz
+silicon measurement is of:
 
 | What it models | Period | Frequency | vs. real silicon |
 |---|---|---|---|
@@ -158,10 +217,47 @@ last combination is what `mosbius simulate` emits now, so the middle row
 is history rather than something you can reproduce from the current tool;
 it is kept because the size of each step is the actual result here.
 
+### What the committed schematic measures now
+
+`ring.sch` is no longer that circuit -- it has the buffer, and one of its
+three loop nodes is an internal net. Running `tb_ring.sch` as committed,
+measured on the loop nodes:
+
+```
+freq_drawn  = 2.083 GHz    (period 480.2 ps)
+freq_routed = 43.89 MHz    (period 22.78 ns)
+```
+
+`freq_drawn` sits below the 2.45GHz in the table because the loop now
+carries the buffer's gate capacitance, which the unbuffered version did
+not have. `freq_routed` is ~1.46x the ~30MHz silicon figure, but that
+figure is of a *different* circuit -- unbuffered, all three loop nodes on
+pins -- so the two are not directly comparable. This circuit has never
+been measured on silicon.
+
+**The experiment worth running.** Route the same eight devices with every
+loop node on a package pin, and compare against this one, where `net1` is
+internal. Same devices, same widths, same topology, same tail ties, same
+observation point on `ua3` -- only one bond pad's worth of bus row
+differs. Two bitstreams, one board, a frequency counter. That would test
+the pad and mux model directly, which nothing in this project currently
+does: `examples/inverter/README.md`'s conclusion that the bond pad
+dominates rests on simulation alone.
+
+The simulated ratio for that pair has **not** been measured soundly yet.
+An earlier attempt gave 1.7x, but it was measured on `out_routed`, which
+is the one node that does not reliably cross the trigger level -- see
+above. Redo it with the measures on the loop nodes before quoting a
+number.
+
 ## Reproducing this
 
-Nothing from this exercise was committed to `build/` (gitignored) or
-anywhere else, so redoing it means rebuilding from these steps:
+This section is **history**. It describes the hand-built full-matrix deck
+used before `mosbius simulate` existed -- the "switch matrix only" row of
+the table above. You do not need any of it to run this example today;
+`sh tools/regenerate_routed.sh examples/ringosc/ring.sch` does the whole
+job in Python. It is kept because the traps in it are real and would cost
+someone a day to rediscover:
 
 1. **`mosbius.sym`'s pin list already matches `mosbius/spice.py`
    exactly.** `ttsky-mini-mosbius/xschem/mosbius.sym` exposes all 192
@@ -262,24 +358,43 @@ because which guesses turned out to matter is the useful part:
 - **Still open. Only the "tt" (typical) process corner was tried**, not
   the real chip's actual corner. At ~1.28x this is now a plausible size
   for the whole remaining gap rather than a footnote, so it is the next
-  thing to try.
+  thing to try. Every testbench here hardcodes `corner=tt` on its
+  `sky130_fd_pr/corner.sym`.
+- **Still open, and now the biggest one. The pad model has never been
+  checked against silicon.** The committed schematic and an all-pins
+  version of the same circuit differ by one bond pad; measuring both on a
+  demoboard would test the pad and mux model directly, which nothing in
+  this project currently does. The simulated ratio to hold them to still
+  needs measuring properly -- see "What the committed schematic measures
+  now".
 
 ## How `tb_ring.sch` is set up
 
 The sheet's ngspice block is bare; the reasoning behind it lives here.
 
-**No load capacitors, deliberately.** This is the one testbench in the
-project without them, and the reason is what `out_drawn`/`out_routed`
-actually is: the ring's own feedback node, not an output pad. A capacitor
-there changes the oscillator instead of modelling a probe. Measured on
-this circuit, 100pF stops `x1` oscillating outright -- it latches at
-~1.6V -- and even 1pF drags it from 2.5GHz to 1.5GHz with the swing
-already collapsing. `x2` carries its own real parasitics and needs nothing
-added. Contrast `tb_inverter.sch`, where the loaded pad sits outside any
-feedback path, so its `cload` models a probe and only sets the observed
-rise time (see that example's "What the two load capacitors are").
+**Load capacitors on `ua3` only.** `Cload_drawn`/`Cload_routed` are both
+`'cload'` with `.param cload=10p`, one scope probe's worth, held equal on
+both instances so the only difference between `out_drawn` and `out_routed`
+is the chip -- the same convention as every other testbench here, and
+`examples/inverter/README.md`'s "What the two load capacitors are"
+explains why they are equal and why the routed one is not zero. There are
+no capacitors on the loop nodes, for the reason given at the top of this
+file: a cap inside the feedback path changes the oscillator rather than
+measuring it. The buffer is what makes a probe load meaningful here at
+all.
 
-**Two `tran` runs, not one.** The branches oscillate ~70x apart, GHz
+**Labels, and what is measured where.** `ua2` is
+`loop_drawn`/`loop_routed`, `ua3` is `out_drawn`/`out_routed`. The two
+`.meas` lines trigger on the loop nodes, for the reason given at the top
+of this file: the buffered output does not reliably cross 1.5V, so
+measuring there gave a different frequency on consecutive identical runs.
+Both graphs show the loop and the output of their own branch together, so
+the attenuation is visible on the sheet. Port order is `ibias ua1 ua2 ua3 ua4 ua5 ...`,
+so the `lab_wire` on the second port is the loop and the third is the
+output. Getting these one position out is easy and quiet: it put the
+startup kick on an unconnected pin once, and the deck still ran.
+
+**Two `tran` runs, not one.** The branches oscillate ~40x apart, GHz
 versus tens of MHz, and no single analysis serves both: a step fine enough
 to resolve `x1` makes `x2`'s window enormous, and a window long enough for
 `x2` leaves `x1` aliased. ngspice allows several `tran` runs in one
@@ -292,8 +407,9 @@ dataset 0 and dataset 1.
 noise. ngspice is noiseless, and a symmetric ring has a perfectly good
 stable solution with every node parked at the switching threshold, so from
 a 0V `UIC` start both branches sit there forever. The two current pulses
-break that symmetry. `tb_srlatch.sch` has the same problem for the same
-reason and solves it with `.ic` instead.
+break that symmetry, and they inject into the *loop* node, not the
+buffered output -- kicking the output would do nothing. `tb_srlatch.sch`
+has the same symmetry problem and solves it with `.ic` instead.
 
 **`Vgnd VGND 0 0` is what gives ngspice its node 0.** xschem emits ground
 as a named global net (`VGND`, plus `.GLOBAL VGND`), never as SPICE node
@@ -308,4 +424,3 @@ about -277kV with the real signals riding on top. Every node reading
 properly fixes that at the source, and `rshunt` then merely costs solve
 time -- measured 1m54 without it against 2m40 with, same answer to 7
 digits. Every testbench in this project now carries the `Vgnd` line.
-

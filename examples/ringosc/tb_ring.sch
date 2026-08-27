@@ -6,8 +6,8 @@ S {}
 F {}
 E {}
 B 2 180 -180 980 20 {flags=graph
-y1=-0.04
-y2=3.6
+y1=0.46377558
+y2=2.7920956
 ypos1=0
 ypos2=2
 divy=5
@@ -19,15 +19,16 @@ divx=5
 subdivx=1
 xlabmag=1.0
 ylabmag=1.0
-node=tran1.v(out_drawn)
-color=12
 dataset=0
 unitx=1
 logx=0
 logy=0
-}
+color="9 12"
+node="out_drawn
+
+loop_drawn"}
 B 2 180 60 980 260 {flags=graph
-y1=6.9e-06
+y1=1.1e-06
 y2=3
 ypos1=0
 ypos2=2
@@ -44,14 +45,16 @@ dataset=1
 unitx=1
 logx=0
 logy=0
-color=12
-node=tran1.v(out_drawn)}
+color="9 12"
+node="out_routed
+loop_routed"}
 T {Ring oscillator
  
 x1 as drawn - ideal wires, no switch matrix
 x2 as routed on the chip including analog mux and pads 
 
-ua1=OUT - the loop's own feedback node, no input pin} -640 -730 0 0 0.5 0.5 {}
+loop - an internal node of the loop
+out - the buffered output of the ring} -640 -730 0 0 0.5 0.5 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/ringosc/ring.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -59,8 +62,8 @@ schematic=ring_routed
 spice_sym_def="tcleval([mosbius_routed_include build/ring_routed.spice])"
 tclcommand="textwindow [file normalize build/ring_routed.spice]"}
 C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=loop_drawn}
-C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=ua2_drawn}
+C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=ua1_drawn}
+C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=loop_drawn}
 C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=out_drawn}
 C {devices/lab_wire.sym} -550 -80 0 0 {name=p9 sig_type=std_logic lab=ua4_drawn}
 C {devices/lab_wire.sym} -550 -40 0 0 {name=p10 sig_type=std_logic lab=ua5_drawn}
@@ -68,8 +71,8 @@ C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
 C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=loop_routed}
-C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=ua2_routed}
+C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=ua1_routed}
+C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=loop_routed}
 C {devices/lab_wire.sym} -160 -120 0 0 {name=p8b sig_type=std_logic lab=out_routed}
 C {devices/lab_wire.sym} -160 -80 0 0 {name=p9b sig_type=std_logic lab=ua4_routed}
 C {devices/lab_wire.sym} -160 -40 0 0 {name=p10b sig_type=std_logic lab=ua5_routed}
@@ -108,16 +111,16 @@ Vgnd VGND 0 0
   save v(out_drawn) v(out_routed) v(loop_drawn) v(loop_routed)
 
   tran 5p 40n UIC
-  meas tran period_drawn TRIG v(out_drawn) VAL=1.5 RISE=5 TARG v(out_drawn) VAL=1.5 RISE=6
+  meas tran period_drawn TRIG v(loop_drawn) VAL=1.5 RISE=5 TARG v(loop_drawn) VAL=1.5 RISE=6
   let freq_drawn = 1/period_drawn
   print freq_drawn
 
   tran 100p 600n UIC
-  meas tran period_routed TRIG v(out_routed) VAL=1.5 RISE=3 TARG v(out_routed) VAL=1.5 RISE=4
+  meas tran period_routed TRIG v(loop_routed) VAL=1.5 RISE=3 TARG v(loop_routed) VAL=1.5 RISE=4
   let freq_routed = 1/period_routed
   print freq_routed
 
-  write tb_ring.raw tran1.v(out_drawn) tran2.v(out_routed)
+  write tb_ring.raw tran1.all tran2.all
 .endc
 "}
 C {devices/launcher.sym} 210 -280 0 0 {name=h5
