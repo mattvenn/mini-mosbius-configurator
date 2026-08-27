@@ -6,6 +6,7 @@ dispatch and formatting, not the underlying logic (covered elsewhere).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -154,3 +155,40 @@ def test_program_passes_no_reset_and_verify_flags(capsys):
 def test_no_subcommand_is_an_argparse_error():
     with pytest.raises(SystemExit):
         main([])
+
+
+# ---------------------------------------------------------------------------
+# Argument handling: a routed design JSON where a bitstream is expected.
+# ---------------------------------------------------------------------------
+
+def test_decode_accepts_a_routed_design_json(tmp_path, capsys):
+    """Handing decode the file the rest of the pipeline passes around is the
+    obvious thing to try, and used to end in a BitstreamError traceback.
+    """
+    routed = tmp_path / "ring.mosbius.json"
+    routed.write_text(json.dumps({"bitstream": "0" * 46 + "10"}))
+    assert main(["decode", str(routed)]) == 0
+    assert "Devices in use" in capsys.readouterr().out
+
+
+def test_decode_explains_a_file_that_is_not_routed_json(tmp_path, capsys):
+    netlist = tmp_path / "ring.spice"
+    netlist.write_text("XM1 a b VGND VGND mosbius_nmos w=1\n")
+    assert main(["decode", str(netlist)]) == 1
+    err = capsys.readouterr().err
+    assert "does not parse as JSON" in err
+    assert "mosbius.cli route" in err  # names the command that fixes it
+
+
+def test_decode_explains_json_without_a_bitstream(tmp_path, capsys):
+    stray = tmp_path / "other.json"
+    stray.write_text(json.dumps({"device_roles": {}}))
+    assert main(["decode", str(stray)]) == 1
+    assert 'no "bitstream" in it' in capsys.readouterr().err
+
+
+def test_decode_reports_a_bad_bitstream_without_a_traceback(capsys):
+    assert main(["decode", "deadbeef"]) == 1
+    err = capsys.readouterr().err
+    assert "expected exactly 48" in err
+    assert "Traceback" not in err

@@ -10,9 +10,11 @@ diagnostics rule.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+from mosbius.bitstream import BitstreamError
 from mosbius.check import SafetyReport, check, check_design, check_routing, merge_findings
 from mosbius.decode import decode, format_summary
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig
@@ -28,6 +30,52 @@ from mosbius.route import (
 )
 from mosbius.simulate import SimulateError, check_routed_fresh, simulate_from_routed_json
 from mosbius.watch import watch
+
+
+
+class ArgumentError(ValueError):
+    """A command-line argument isn't the kind of thing the command reads,
+    explained rather than raised as a traceback.
+    """
+
+
+def _bitstream_arg(value: str) -> str:
+    """Accept either the 48 hex characters themselves or the path to a
+    routed design JSON, and read the bitstream out of the latter.
+
+    Handing `mosbius decode` a `build/<name>.mosbius.json` is the obvious
+    thing to try -- it is the file the rest of the pipeline passes around,
+    and it is what `mosbius simulate` takes -- so it should work rather
+    than ending in a BitstreamError traceback about hex length. The mirror
+    slip (a routed JSON given to `route`) is already handled the same way.
+    """
+    path = Path(value)
+    if not path.exists():
+        return value
+
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        raise ArgumentError(
+            f"{path} isn't something this command can read\n\n"
+            f"  It expects either the 48 hex characters of a bitstream, or the\n"
+            f"  path to a routed design -- the JSON file `mosbius route --out`\n"
+            f"  writes, usually build/<design>.mosbius.json. This file is\n"
+            f"  neither: it does not parse as JSON.\n\n"
+            f"  If you meant the netlist (build/<design>.spice), route it first:\n\n"
+            f"    python3 -m mosbius.cli route {path} --out build/<design>.mosbius.json\n"
+        )
+
+    stream = data.get("bitstream") if isinstance(data, dict) else None
+    if not isinstance(stream, str):
+        raise ArgumentError(
+            f"{path} is JSON, but has no \"bitstream\" in it\n\n"
+            f"  A routed design records its bitstream under that key. This file\n"
+            f"  may be from an older version of the router, or hand-edited.\n"
+            f"  Re-route the design to rewrite it:\n\n"
+            f"    python3 -m mosbius.cli route build/<design>.spice --out {path}\n"
+        )
+    return stream
 
 
 def _format_report(report, *, verbose: bool = False) -> str:
@@ -51,13 +99,21 @@ def _format_report(report, *, verbose: bool = False) -> str:
 
 
 def cmd_decode(args: argparse.Namespace) -> int:
-    config = SwitchConfig.from_bitstream(args.bitstream, ibias=args.ibias)
+    try:
+        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
+    except (ArgumentError, BitstreamError) as e:
+        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        return 1
     print(format_summary(decode(config)))
     return 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    config = SwitchConfig.from_bitstream(args.bitstream, ibias=args.ibias)
+    try:
+        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
+    except (ArgumentError, BitstreamError) as e:
+        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        return 1
     report = check(config)
     print(_format_report(report, verbose=args.verbose))
     return 1 if report.has_errors else 0
@@ -129,7 +185,13 @@ def cmd_simulate(args: argparse.Namespace) -> int:
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
-    watch(args.netlist, once=args.once)
+    try:
+        watch(args.netlist, once=args.once)
+    except KeyboardInterrupt:
+        # Ctrl-C is how anyone stops a watch -- it is the documented exit,
+        # so it should not look like a crash. mosbius/watch.py's own
+        # __main__ already did this; going through the cli did not.
+        print("\nstopped watching.", file=sys.stderr)
     return 0
 
 
