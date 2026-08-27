@@ -42,3 +42,4 @@ built from mosbius_* symbols never connects it. So it powers nothing you
 draw, and exists so the matrix can be told what to be. Belongs in
 TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
 
+14. check all the mosbius library symbols for cleanup
