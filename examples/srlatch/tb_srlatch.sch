@@ -6,8 +6,8 @@ S {}
 F {}
 E {}
 B 2 180 -180 980 220 {flags=graph
-y1=-0.0034
-y2=3.3
+y1=-0.015
+y2=3.4
 ypos1=0
 ypos2=2
 divy=5
@@ -20,19 +20,21 @@ subdivx=1
 xlabmag=1.0
 ylabmag=1.0
 node="out_drawn
-out_routed"
-color="12 14"
+out_routed
+ua1
+ua2"
+color="12 14 11 18"
 dataset=-1
 unitx=1
 logx=0
 logy=0
 }
-T {The same SR latch twice: x1 as drawn (ideal wires, no switch matrix)} -530 -680 0 0 0.25 0.25 {}
-T {and x2 as routed onto the real chip. Both are mini_mosbius.sym --} -530 -650 0 0 0.25 0.25 {}
-T {schematic= is what says which one an instance stands for.} -530 -620 0 0 0.25 0.25 {}
-T {ua1=SET, ua2=RESET (shared, drive both branches identically), ua3=Q} -530 -590 0 0 0.25 0.25 {}
-T {(out_drawn/out_routed here, one per branch, per examples/srlatch/README.md).} -530 -560 0 0 0.25 0.25 {}
-T {x2 needs build/srlatch_routed.spice, which is generated -- ctrl-click -generate routed spice-, then Netlist again.} -530 -530 0 0 0.25 0.25 {}
+T {SR latch
+ 
+x1 as drawn - ideal wires, no switch matrix
+x2 as routed on the chip including analog mux and pads 
+
+ua1=SET, ua2=RESET} -640 -730 0 0 0.5 0.5 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/srlatch/srlatch.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -72,40 +74,22 @@ C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
 C {devices/vsource.sym} -30 160 0 0 {name=Vreset value="PULSE(0 3.3 220n 1n 1n 40n 1000n)"}
 C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=ua2}
 C {devices/gnd.sym} -30 190 0 0 {name=lvin2 lab=VGND}
-C {devices/capa.sym} -300 -390 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -300 -420 1 0 {name=pc1 sig_type=std_logic lab=out_drawn}
-C {devices/gnd.sym} -300 -360 0 0 {name=lc1 lab=VGND}
-C {devices/capa.sym} -210 -390 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -210 -420 1 0 {name=pc2 sig_type=std_logic lab=out_routed}
-C {devices/gnd.sym} -210 -360 0 0 {name=lc2 lab=VGND}
+C {devices/capa.sym} -320 -410 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
+C {devices/gnd.sym} -320 -380 0 0 {name=lc1 lab=VGND}
+C {devices/capa.sym} -140 -410 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -140 -440 2 0 {name=pc2 sig_type=std_logic lab=out_routed}
+C {devices/gnd.sym} -140 -380 0 0 {name=lc2 lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
-C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
-* SET/RESET response of the same SR latch as drawn (out_drawn, x1) and as
-* routed onto the real chip (out_routed, x2). SET pulses ua1 high 60-100ns,
-* RESET pulses ua2 high 220-260ns (examples/srlatch/README.md's own
-* PULSE() values) -- both shared across x1/x2, so the only difference
-* between out_drawn and out_routed is as-drawn vs as-routed fidelity.
-* Power-up state is arbitrary (no stable fixed point before either pulse
-* arrives, same reasoning as the ring oscillator's free-running loop), so
-* the meaningful measurements are AFTER each forcing pulse, not before.
-* Vgnd is what gives ngspice its node 0. xschem emits ground as a named
-* global net (VGND, plus .GLOBAL VGND), never as SPICE node 0, so without
-* it nothing in this deck connects to 0 and the whole circuit floats.
-* .option rshunt used to hide that by strapping every node to 0 through a
-* huge resistor -- solvable, but the absolute level was then set only by
-* the balance of those shunt currents, so any current with no DC return
-* path dragged the entire circuit thousands of volts away from 0 with the
-* real signals riding on top. Ground it properly instead; rshunt is then
-* unnecessary. See examples/ringosc/tb_ring.sch for the worked case.
-
+C {devices/code_shown.sym} 170 -720 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
-
 .param cload=10p
+.ic v(out_drawn)=0 v(out_routed)=0
 
 .option reltol=0.01
 .control
   save all
-  tran 100p 400n
+  tran 100p 300n
   meas tran qd_after_set FIND v(out_drawn) AT=110n
   meas tran qr_after_set FIND v(out_routed) AT=110n
   meas tran qd_after_reset FIND v(out_drawn) AT=280n

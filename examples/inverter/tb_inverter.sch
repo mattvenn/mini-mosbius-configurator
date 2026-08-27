@@ -28,12 +28,12 @@ unitx=1
 logx=0
 logy=0
 }
-T {The same inverter twice: x1 as drawn (ideal wires, no switch matrix)} -530 -680 0 0 0.25 0.25 {}
-T {and x2 as routed onto the real chip. Both are mini_mosbius.sym --} -530 -650 0 0 0.25 0.25 {}
-T {schematic= is what says which one an instance stands for.} -530 -620 0 0 0.25 0.25 {}
-T {x2 needs build/inverter_routed.spice, which is generated, so it is not in} -530 -590 0 0 0.25 0.25 {}
-T {a fresh clone. Ctrl-click the -generate routed spice- arrow to build it,} -530 -560 0 0 0.25 0.25 {}
-T {then press Netlist again. Netlisting without it tells you the same thing.} -530 -530 0 0 0.25 0.25 {}
+T {CMOS inverter
+ 
+x1 as drawn - ideal wires, no switch matrix
+x2 as routed on the chip including analog mux and pads 
+
+ua1=IN, ua2=OUT} -640 -730 0 0 0.5 0.5 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/inverter/inverter.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -70,12 +70,12 @@ C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
 C {devices/vsource.sym} -130 160 0 0 {name=Vin value="PULSE(3.3 0 10n 1n 1n 250n 500n)"}
 C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=ua1}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
-C {devices/capa.sym} -300 -390 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -300 -420 1 0 {name=pc1 sig_type=std_logic lab=out_drawn}
-C {devices/gnd.sym} -300 -360 0 0 {name=lc1 lab=VGND}
-C {devices/capa.sym} -210 -390 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -210 -420 1 0 {name=pc2 sig_type=std_logic lab=out_routed}
-C {devices/gnd.sym} -210 -360 0 0 {name=lc2 lab=VGND}
+C {devices/capa.sym} -320 -410 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
+C {devices/gnd.sym} -320 -380 0 0 {name=lc1 lab=VGND}
+C {devices/capa.sym} -140 -410 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -140 -440 2 0 {name=pc2 sig_type=std_logic lab=out_routed}
+C {devices/gnd.sym} -140 -380 0 0 {name=lc2 lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
 C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 

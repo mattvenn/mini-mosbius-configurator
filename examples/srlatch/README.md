@@ -239,3 +239,34 @@ depends on the state it starts from, and the two instances need not power
 up in the same one, so this may not be a like-for-like comparison at all.
 Do not read it as the routed chip being quicker than the ideal circuit
 until someone has checked the starting states.
+
+## Power-up state
+
+Before either pulse arrives the latch is in its hold state, which has three
+DC solutions: output high, output low, and the balanced one where both
+inverters sit at their own switching threshold. ngspice is noiseless and
+`x1` is perfectly symmetric, so the operating-point solver used to land on
+that balanced solution -- `out_drawn` starting at **1.497V**, just under
+half of 3.3V because the NMOS is stronger than the PMOS.
+
+It does not stay there. Timestep truncation error provides a tiny
+asymmetry and the latch's own positive feedback amplifies it: measured in
+`build/tb_srlatch.raw`, it held 1.49731V flat to five decimals until
+~13ns, then ran away exponentially -- 1.44V at 18ns, 0.66V at 21.7ns,
+under 1mV by 39ns, fully settled before SET arrives at 60ns. The ~5ns from
+visible to resolved is the real regeneration time constant; the 13ns
+before it is just how long the numerical perturbation took to grow.
+
+`x2` never had the problem: the routed instance is not symmetric -- different
+bus rows, different row-coupling capacitance, pads on some nets and not
+others -- so its operating point lands on a real stable state immediately.
+
+The sheet now carries `.ic v(out_drawn)=0 v(out_routed)=0`, which pins both
+branches to the state they were reaching anyway. Measurements are unchanged
+to five significant figures, but they no longer depend on truncation error
+resolving in time -- a tolerance change, a timestep change or an ngspice
+version could have moved that, and a late escape would have corrupted the
+first measurement. `tb_ring.sch` has the same symmetry problem and solves it
+with current-pulse kicks instead; see that README's "How `tb_ring.sch` is
+set up".
+

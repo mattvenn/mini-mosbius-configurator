@@ -150,6 +150,20 @@ runs, and measures nothing. Verified both ways 2026-08-24.
 `xschem/mosbius_lib/tb_template.sch` uses the same absolute form for the
 same reason, so copying it to your own directory keeps working.
 
+### Stimulus and ground
+
+`Vin` pulses `ua1` from 3.3V down to 0 at t=10ns, shared by both
+instances. The *input* falls, so the inverter's output *rises* -- which is
+why both measurements are `RISE` edges on `out_drawn`/`out_routed` while
+the thing driving them is a falling edge. Everything above this section
+was produced by hand-patching stimulus into a netlist; this is the same
+methodology driven from a real xschem testbench instead.
+
+`Vgnd VGND 0 0` in the ngspice block is not optional -- xschem never emits
+SPICE node 0, so without it the whole circuit floats. Every testbench here
+carries it; `examples/ringosc/README.md`'s "How `tb_ring.sch` is set up"
+has the full story, including what happens when it is missing.
+
 ### Regenerating `build/inverter_routed.spice`
 
 `x2`'s `spice_sym_def` points at `build/inverter_routed.spice`. Everything

@@ -263,3 +263,49 @@ because which guesses turned out to matter is the useful part:
   the real chip's actual corner. At ~1.28x this is now a plausible size
   for the whole remaining gap rather than a footnote, so it is the next
   thing to try.
+
+## How `tb_ring.sch` is set up
+
+The sheet's ngspice block is bare; the reasoning behind it lives here.
+
+**No load capacitors, deliberately.** This is the one testbench in the
+project without them, and the reason is what `out_drawn`/`out_routed`
+actually is: the ring's own feedback node, not an output pad. A capacitor
+there changes the oscillator instead of modelling a probe. Measured on
+this circuit, 100pF stops `x1` oscillating outright -- it latches at
+~1.6V -- and even 1pF drags it from 2.5GHz to 1.5GHz with the swing
+already collapsing. `x2` carries its own real parasitics and needs nothing
+added. Contrast `tb_inverter.sch`, where the loaded pad sits outside any
+feedback path, so its `cload` models a probe and only sets the observed
+rise time (see that example's "What the two load capacitors are").
+
+**Two `tran` runs, not one.** The branches oscillate ~70x apart, GHz
+versus tens of MHz, and no single analysis serves both: a step fine enough
+to resolve `x1` makes `x2`'s window enormous, and a window long enough for
+`x2` leaves `x1` aliased. ngspice allows several `tran` runs in one
+`.control` block -- each makes its own plot (`tran1`, `tran2`, ...) and a
+`.meas` placed immediately after a `tran` measures that run. So each branch
+gets an analysis sized for it, and the two graphs on the sheet read
+dataset 0 and dataset 1.
+
+**`Ikickd`/`Ikickr` are stimulus, not load.** A real ring starts from
+noise. ngspice is noiseless, and a symmetric ring has a perfectly good
+stable solution with every node parked at the switching threshold, so from
+a 0V `UIC` start both branches sit there forever. The two current pulses
+break that symmetry. `tb_srlatch.sch` has the same problem for the same
+reason and solves it with `.ic` instead.
+
+**`Vgnd VGND 0 0` is what gives ngspice its node 0.** xschem emits ground
+as a named global net (`VGND`, plus `.GLOBAL VGND`), never as SPICE node
+0, so without that line nothing in the deck connects to 0 and the whole
+circuit floats. `.option rshunt` papers over it by strapping every node to
+0 through a huge resistor -- enough to make the matrix solvable, but the
+absolute level is then set only by the balance of those shunt currents.
+That is a real hazard: with `x2` deleted for debugging, the 100uA `Ibias`
+source lost its only DC return path and the entire circuit floated to
+about -277kV with the real signals riding on top. Every node reading
+-277777.xx meant a floating reference, not a broken circuit. Grounding it
+properly fixes that at the source, and `rshunt` then merely costs solve
+time -- measured 1m54 without it against 2m40 with, same answer to 7
+digits. Every testbench in this project now carries the `Vgnd` line.
+
