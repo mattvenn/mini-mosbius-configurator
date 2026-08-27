@@ -28,6 +28,7 @@ import json
 from pathlib import Path
 
 from mosbius.bitstream import BitstreamError
+from mosbius.netlist import schematic_for_netlist
 from mosbius.model import DEFAULT_IBIAS, EXTERNAL_PINS, SwitchConfig, bus_node, connected_components
 from mosbius.spice import render_bus_wire_caps, render_config_spice
 
@@ -203,6 +204,58 @@ def _route_hint(path: Path) -> str:
     return (
         f"      python3 -m mosbius.cli route {netlist} --out {routed}\n"
         f"      python3 -m mosbius.cli simulate {routed}"
+    )
+
+
+def check_routed_fresh(routed_path: Path) -> None:
+    """Raise SimulateError if `routed_path` is older than the netlist it
+    was routed from, or than the schematic behind that netlist.
+
+    `mosbius simulate` is the command most likely to be run on its own --
+    the testbench needs its output, so it is the one people reach for
+    after an edit, often without re-running `route`. The routing JSON is
+    two steps downstream of the drawing, and nothing about a stale one
+    looks wrong: it loads, it simulates, and the testbench compares the
+    current drawn circuit against a routed circuit that no longer matches
+    it. So the whole chain gets checked here, not just the nearest link.
+    """
+    name = name_from_routed_path(routed_path)
+    netlist = routed_path.with_name(f"{name}.spice")
+    try:
+        routed_mtime = routed_path.stat().st_mtime
+    except OSError:
+        return  # missing/unreadable is the other error's job, with a better message
+
+    newer: list[tuple[str, Path]] = []
+    if netlist.is_file():
+        if netlist.stat().st_mtime > routed_mtime:
+            newer.append(("netlist", netlist))
+        sch = schematic_for_netlist(netlist)
+        if sch is not None and sch.stat().st_mtime > routed_mtime:
+            newer.append(("schematic", sch))
+
+    if not newer:
+        return
+
+    what = "\n".join(f"    {kind:<10} {path}" for kind, path in newer)
+    sch_for_cmd = next((p for kind, p in newer if kind == "schematic"), None)
+    if sch_for_cmd is not None:
+        fix = f"    sh tools/regenerate_routed.sh {sch_for_cmd}\n"
+    else:
+        fix = (
+            f"    python3 -m mosbius.cli route {netlist} --out {routed_path}\n"
+            f"    python3 -m mosbius.cli simulate {routed_path}\n"
+        )
+    raise SimulateError(
+        f"{routed_path} is out of date\n\n"
+        f"  These were changed after it was written:\n\n"
+        f"{what}\n\n"
+        f"  So this file still describes the circuit as it used to be routed.\n"
+        f"  Simulating it would build a routed netlist for that old circuit,\n"
+        f"  and a drawn-vs-routed testbench would then compare two different\n"
+        f"  designs -- which runs, and produces numbers, and means nothing.\n\n"
+        f"  To fix:\n\n"
+        f"{fix}"
     )
 
 

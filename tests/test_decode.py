@@ -69,3 +69,18 @@ def test_format_summary_mentions_devices_and_nets(inverter_config):
 def test_format_summary_empty_design_says_so():
     text = format_summary(decode(SwitchConfig(bits=frozenset())))
     assert "none" in text.lower()
+
+
+def test_net_line_names_the_segment_each_pin_is_really_bonded_to():
+    """A net joined across both bus sides by cfg_bus_short holds two
+    segments. The pin must be shown against its own -- ua[4] is bus_B[2],
+    and printing the net's alphabetically-first segment named bus_A[2]
+    instead, which reads as the wrong bond (CLAUDE.md trap 1).
+    """
+    from mosbius.decode import decode, format_summary
+    from mosbius.model import SwitchConfig
+
+    config = SwitchConfig.from_bitstream("3f008803f00400140100021018840600005004010000001d")
+    text = format_summary(decode(config))
+    assert "ua[4] (bus_B[2])" in text
+    assert "ua[4] (bus_A[2])" not in text

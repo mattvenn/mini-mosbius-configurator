@@ -18,8 +18,14 @@ import time
 from pathlib import Path
 
 from mosbius.check import check, check_design, check_routing, merge_findings
-from mosbius.netlist import NetlistError, parse_netlist
-from mosbius.route import RouteError, format_device_roles, route
+from mosbius.netlist import NetlistError, StaleNetlistError, check_netlist_fresh, parse_netlist
+from mosbius.route import (
+    RouteError,
+    format_device_roles,
+    format_net_rows,
+    format_pad_note,
+    route,
+)
 
 POLL_INTERVAL_SECONDS = 0.2
 
@@ -38,7 +44,13 @@ def _report(netlist_path: Path) -> str:
     header = f"mosbius watch -- {netlist_path.name}          {_now()}"
 
     try:
+        # Watch follows the netlist, not the schematic, so an edit that was
+        # never netlisted looks like nothing happened at all. Say so on
+        # every pass rather than re-reporting the old circuit as current.
+        check_netlist_fresh(netlist_path)
         design = parse_netlist(text)
+    except StaleNetlistError as e:
+        return f"{header}   OUT OF DATE\n\n  {e}"
     except NetlistError as e:
         return f"{header}   IMPOSSIBLE\n\n  {e}"
 
@@ -89,6 +101,7 @@ def _report(netlist_path: Path) -> str:
     for note in design_notes:
         lines += ["", note, ""]
     lines += format_device_roles(routed)
+    lines += ["", "Bus rows:"] + format_net_rows(routed) + format_pad_note(routed)
     if result.warnings:
         lines.append("")
         lines.append(f"  {len(result.warnings)} warning(s) -- see 'mosbius check' for detail")

@@ -37,6 +37,7 @@ from mosbius.model import (
     DEVICE_TERMINALS,
     EXTERNAL_PINS,
     SwitchConfig,
+    bus_node,
     encode_cycler,
     setting_bit,
 )
@@ -464,6 +465,61 @@ def format_device_roles(routed) -> list[str]:
             note += f"  tail={tail.effective}"
         lines.append(f"  {name:<12} -> {role:<12}{note}")
     return lines
+
+
+# The bus segment each package pin is permanently bonded to, keyed by the
+# net name a schematic would use ("ua2"), so a report can name the pad a
+# net picked up. Derived from EXTERNAL_PINS rather than restated: which
+# pin sits on which segment straddles both bus sides and is the single
+# easiest fact in this project to get backwards (CLAUDE.md trap 1).
+PIN_BOND_SEGMENT: dict[str, str] = {
+    net: bus_node(side, row) for net, (side, row) in PORT_ROW.items()
+}
+
+
+def format_net_rows(routed) -> list[str]:
+    """Which bus row each net landed on, and which of those rows carry a
+    package pin's bond pad.
+
+    A user cannot see this anywhere else: the bitstream does not say it,
+    and the schematic only says it for nets the user named after a pin.
+    It matters because a bonded row is not electrically the same as a bare
+    one -- see the note format_pad_note() adds underneath.
+    """
+    lines = []
+    for net in sorted(routed.net_rows):
+        sides = routed.net_rows[net]
+        where = " + ".join(bus_node(side, sides[side]) for side in sorted(sides))
+        seg = PIN_BOND_SEGMENT.get(net)
+        note = f"   package pin {net} -- bond pad + analog mux" if seg else ""
+        lines.append(f"  {net:<8} {where}{note}")
+    return lines
+
+
+def format_pad_note(routed) -> list[str]:
+    """The explanation that goes with format_net_rows(): what a bonded row
+    costs, and what to do if you did not mean to pay it.
+
+    Empty when no net is on a pin, so a fully internal design says nothing.
+    """
+    pinned = sorted(n for n in routed.net_rows if n in PIN_BOND_SEGMENT)
+    if not pinned:
+        return []
+    which = ", ".join(pinned)
+    plural = "s" if len(pinned) > 1 else ""
+    return [
+        "",
+        f"  {which} sit{'' if len(pinned) > 1 else 's'} on package pin{plural}, so "
+        f"{'each' if len(pinned) > 1 else 'it'} carries the chip's bond",
+        "  pad and its analog mux switch as well as the bus row itself: roughly",
+        "  5 pF plus series resistance, against about 0.9 pF for a bare row. That",
+        "  is the price of being able to reach the net from outside the chip.",
+        "",
+        "  A net you do not need to probe can be named anything that is not",
+        "  ua1..ua5 -- the router keeps such nets off the bonded rows entirely,",
+        "  and says so rather than silently moving one there if it runs out of",
+        "  room.",
+    ]
 
 
 # ---------------------------------------------------------------------------

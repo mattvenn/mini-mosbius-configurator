@@ -136,3 +136,55 @@ def test_x_prefixed_instance_names_parse():
     assert [d.name for d in design.devices] == ["XM1", "XM2"]
     assert [d.kind for d in design.devices] == ["nmos", "pmos"]
     assert design.devices[0].terminals == {"g": "ua1", "d": "ua2", "s": "VGND", "b": "VGND"}
+
+
+# ---------------------------------------------------------------------------
+# Staleness: a netlist older than the schematic it came from.
+# ---------------------------------------------------------------------------
+
+import os
+
+from mosbius.netlist import StaleNetlistError, check_netlist_fresh, schematic_for_netlist
+
+
+def _pair(tmp_path, sch_newer):
+    sch = tmp_path / "ring.sch"
+    sch.write_text("v {xschem}\n")
+    netlist = tmp_path / "ring.spice"
+    netlist.write_text(f"** sch_path: {sch}\nXM1 a b VGND VGND mosbius_nmos w=1\n")
+    # Explicit mtimes: writing both in the same test is far faster than the
+    # filesystem's timestamp resolution, so relying on write order is flaky.
+    os.utime(netlist, (1000, 1000))
+    os.utime(sch, (2000, 2000) if sch_newer else (500, 500))
+    return netlist
+
+
+def test_netlist_older_than_its_schematic_is_refused(tmp_path):
+    netlist = _pair(tmp_path, sch_newer=True)
+    with pytest.raises(StaleNetlistError) as e:
+        check_netlist_fresh(netlist)
+    # The message has to name the fix, not just the problem (SPEC.md Sec 1.1).
+    assert "regenerate_routed.sh" in str(e.value)
+    assert "Netlist" in str(e.value)
+
+
+def test_netlist_newer_than_its_schematic_passes(tmp_path):
+    check_netlist_fresh(_pair(tmp_path, sch_newer=False))  # must not raise
+
+
+def test_unresolvable_sch_path_is_skipped_rather_than_guessed(tmp_path):
+    """A netlist written in a container and read somewhere else records a
+    path that does not exist here. Falsely calling a fresh netlist stale
+    would be worse than not checking, so this stays quiet.
+    """
+    netlist = tmp_path / "orphan.spice"
+    netlist.write_text("** sch_path: /nowhere/that/exists/orphan.sch\nXM1 a b VGND VGND mosbius_nmos w=1\n")
+    assert schematic_for_netlist(netlist) is None
+    check_netlist_fresh(netlist)  # must not raise
+
+
+def test_netlist_without_a_sch_path_header_is_skipped(tmp_path):
+    netlist = tmp_path / "handwritten.spice"
+    netlist.write_text("XM1 a b VGND VGND mosbius_nmos w=1\n")
+    assert schematic_for_netlist(netlist) is None
+    check_netlist_fresh(netlist)

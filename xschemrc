@@ -71,7 +71,7 @@ proc mosbius_routed_include {path} {
         # Arm the warning again, so if this file ever goes missing later the
         # user is told about it then too.
         unset -nocomplain ::mosbius_warned($path)
-        return ".include $abs"
+        return [mosbius_routed_staleness $path $abs]
     }
     set lines [list \
         "$path has not been generated yet, so this testbench has no netlist" \
@@ -109,6 +109,76 @@ proc mosbius_routed_include {path} {
     set out {}
     foreach l $lines { lappend out "* $l" }
     return "[join $out "\n"]\n.include $abs"
+}
+
+# Which .sch a generated routed netlist came from: build/ring_routed.spice
+# -> ring.sch. Looked for beside the schematic being netlisted first, since
+# a design and its testbench nearly always sit together, then under
+# examples/ and the symbol library. Returns empty if it cannot be found --
+# a missed check is a far smaller harm than telling someone their fresh
+# netlist is stale when it is not.
+proc mosbius_design_sch {path} {
+    set base [file rootname [file tail $path]]
+    if {[string match *_routed $base]} {
+        set base [string range $base 0 end-7]
+    }
+    set cands {}
+    catch {lappend cands [file join [file dirname [xschem get schname]] $base.sch]}
+    foreach d [glob -nocomplain examples/*/$base.sch xschem/mosbius_lib/$base.sch] {
+        lappend cands $d
+    }
+    foreach c $cands {
+        if {[file isfile $c]} { return $c }
+    }
+    return {}
+}
+
+# The routed netlist exists, but is it still the circuit on the sheet?
+#
+# This is the quiet failure the whole drawn-vs-routed testbench is exposed
+# to. The drawn instance re-reads its schematic= every time you press
+# Netlist, so it is always current; the routed instance is a generated file
+# three steps downstream. Edit the design, forget to regenerate, and you
+# get today's drawn circuit compared against last week's routed one -- and
+# it runs, and prints plausible numbers, and the only thing that was
+# supposed to differ between the two halves was fidelity.
+#
+# The .include is still emitted: refusing here would surface as ngspice
+# complaining about a missing subcircuit, which points even further from
+# the cause. The comment block and the dialog are the warning.
+proc mosbius_routed_staleness {path abs} {
+    set sch [mosbius_design_sch $path]
+    if {$sch eq {} || [file mtime $sch] <= [file mtime $path]} {
+        unset -nocomplain ::mosbius_stale_warned($path)
+        return ".include $abs"
+    }
+    set lines [list \
+        "$sch was edited after $path was generated." \
+        "" \
+        "This testbench draws its as-drawn half straight from the schematic, so" \
+        "that half is current -- but the as-routed half is this generated file," \
+        "which is not. The two are now different circuits, and comparing them" \
+        "measures nothing. The simulation will still run." \
+        "" \
+        "Press the -generate routed spice- button on this sheet, or run" \
+        "" \
+        "    sh tools/regenerate_routed.sh $sch" \
+        "" \
+        "and then press Netlist again."]
+    set msg [join $lines "\n"]
+    puts stderr "\n*** $msg\n"
+    if {[info exists ::has_x] && ![info exists ::mosbius_stale_warned($path)]} {
+        set ::mosbius_stale_warned($path) 1
+        catch {mosbius_show_stale_warning $msg}
+    }
+    set out {}
+    foreach l $lines { lappend out "* $l" }
+    return "[join $out "\n"]\n.include $abs"
+}
+
+proc mosbius_show_stale_warning {msg} {
+    catch {tk_messageBox -icon warning -type ok \
+        -title {routed netlist is out of date} -message $msg}
 }
 
 # The dialog half of mosbius_routed_include, kept separate so the guard

@@ -16,7 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from mosbius.model import DEVICE_TERMINALS, EXTERNAL_PINS, SwitchConfig, connected_components
+from mosbius.model import (
+    DEVICE_TERMINALS,
+    EXTERNAL_PINS,
+    SwitchConfig,
+    bus_node,
+    connected_components,
+)
 
 
 @dataclass(frozen=True)
@@ -154,9 +160,18 @@ def format_summary(decoded: DecodedDesign) -> str:
     for net in decoded.nets:
         if net.name not in net_terminals:
             continue
+        # Each pin against the segment IT is bonded to -- not the net's
+        # alphabetically-first segment, which for a net joined across the
+        # two bus sides names the far side and reads as the wrong bond
+        # (CLAUDE.md trap 1: ua[4] is bus_B[2], never bus_A[2]). A net can
+        # also carry more than one pin once cfg_bus_short joins two rows,
+        # so show all of them rather than just the first.
         pins = sorted(n for n in net.nodes if n in EXTERNAL_PINS)
-        segs = sorted(n for n in net.nodes if n.startswith("bus_"))
-        pin_desc = f"{pins[0]} ({segs[0]})  " if pins and segs else ""
+        pin_desc = ""
+        if pins:
+            pin_desc = "  ".join(
+                f"{pin} ({bus_node(*EXTERNAL_PINS[pin])})" for pin in pins
+            ) + "  "
         terms = "  ".join(net_terminals[net.name])
         lines.append(f"  {net.name:<8} {pin_desc}{terms}")
 

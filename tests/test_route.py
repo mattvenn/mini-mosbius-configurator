@@ -508,3 +508,76 @@ def test_no_random_design_escapes_with_a_bare_traceback():
             continue  # a diagnosis, which is the whole point
         check_routing(result)
         check(result.config)
+
+
+# ---------------------------------------------------------------------------
+# Bus-row reporting: which rows nets landed on, and which carry a bond pad.
+# ---------------------------------------------------------------------------
+
+RING_BUFFERED_NETLIST = """
+XM1 net1 net2 VGND VGND mosbius_nmos w=4
+XM2 net1 net2 VAPWR VAPWR mosbius_pmos w=4
+XM3 ua2 net1 VGND VGND mosbius_nmos w=4
+XM4 ua2 net1 VAPWR VAPWR mosbius_pmos w=4
+XM5 net2 ua2 VGND VGND mosbius_nmos w=4
+XM6 net2 ua2 VAPWR VAPWR mosbius_pmos w=4
+XM7 net1 ua3 VGND VGND mosbius_nmos w=4
+XM8 net1 ua3 VAPWR VAPWR mosbius_pmos w=4
+"""
+
+
+def test_pin_bond_segment_matches_the_real_pin_map():
+    """ua4 bonds to bus_B[2], not bus_A[2]. Which pin sits on which side is
+    the single easiest fact here to get backwards (CLAUDE.md trap 1), so
+    pin it down rather than trusting the derivation to stay right.
+    """
+    from mosbius.route import PIN_BOND_SEGMENT
+
+    assert PIN_BOND_SEGMENT == {
+        "ua1": "bus_A[1]",
+        "ua2": "bus_A[3]",
+        "ua3": "bus_A[5]",
+        "ua4": "bus_B[2]",
+        "ua5": "bus_B[4]",
+    }
+
+
+def test_net_rows_report_flags_only_the_pin_bonded_nets():
+    from mosbius.route import format_net_rows, format_pad_note
+
+    routed = route(parse_netlist(RING_BUFFERED_NETLIST))
+    rows = "\n".join(format_net_rows(routed))
+
+    # Every net gets a row; only the ua-named ones are called out as padded.
+    for net in ("net1", "net2", "ua2", "ua3"):
+        assert net in rows
+    for line in format_net_rows(routed):
+        flagged = "bond pad" in line
+        assert flagged == line.split()[0].startswith("ua")
+
+    note = "\n".join(format_pad_note(routed))
+    assert "ua2, ua3" in note
+    assert "ua1..ua5" in note  # tells the user how to opt out
+
+
+def test_internal_nets_never_land_on_a_bonded_row():
+    """The 'no pin' guarantee: a net not named after a package pin cannot
+    be given a bonded segment, however tight the routing gets. This is
+    what makes renaming a net the way to keep a pad off it.
+    """
+    from mosbius.route import PIN_BOND_SEGMENT
+
+    routed = route(parse_netlist(RING_BUFFERED_NETLIST))
+    bonded = set(PIN_BOND_SEGMENT.values())
+    for net, sides in routed.net_rows.items():
+        if net in PIN_BOND_SEGMENT or net in ("VAPWR", "VGND"):
+            continue
+        for side, row in sides.items():
+            assert f"bus_{side}[{row}]" not in bonded, f"{net} landed on a bonded row"
+
+
+def test_no_pad_note_when_nothing_is_on_a_pin():
+    from mosbius.route import format_pad_note
+
+    routed = route(parse_netlist(INVERTER_NETLIST.replace("ua1", "nin").replace("ua2", "nout")))
+    assert format_pad_note(routed) == []

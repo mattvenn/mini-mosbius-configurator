@@ -16,15 +16,17 @@ from pathlib import Path
 from mosbius.check import SafetyReport, check, check_design, check_routing, merge_findings
 from mosbius.decode import decode, format_summary
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig
-from mosbius.netlist import NetlistError, parse_netlist
+from mosbius.netlist import NetlistError, StaleNetlistError, check_netlist_fresh, parse_netlist
 from mosbius.program import ProgramError, program
 from mosbius.route import (
     RouteError,
     format_device_roles,
+    format_net_rows,
+    format_pad_note,
     route as route_fresh,
     route_sticky,
 )
-from mosbius.simulate import SimulateError, simulate_from_routed_json
+from mosbius.simulate import SimulateError, check_routed_fresh, simulate_from_routed_json
 from mosbius.watch import watch
 
 
@@ -63,7 +65,11 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 def cmd_route(args: argparse.Namespace) -> int:
     try:
+        check_netlist_fresh(args.netlist)
         design = parse_netlist(args.netlist.read_text())
+    except StaleNetlistError as e:
+        print(f"OUT OF DATE\n\n  {e}", file=sys.stderr)
+        return 1
     except NetlistError as e:
         print(f"IMPOSSIBLE\n\n  {e}", file=sys.stderr)
         return 1
@@ -101,12 +107,17 @@ def cmd_route(args: argparse.Namespace) -> int:
     for line in format_device_roles(routed):
         print(line)
     print()
+    print("Bus rows:")
+    for line in format_net_rows(routed) + format_pad_note(routed):
+        print(line)
+    print()
     print(f"Bitstream: {routed.config.to_bitstream()}")
     return 1 if report.has_errors else 0
 
 
 def cmd_simulate(args: argparse.Namespace) -> int:
     try:
+        check_routed_fresh(args.routed)
         name, spice_text = simulate_from_routed_json(args.routed)
     except SimulateError as e:
         print(f"CAN'T SIMULATE\n\n  {e}", file=sys.stderr)

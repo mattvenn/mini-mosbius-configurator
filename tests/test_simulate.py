@@ -209,3 +209,52 @@ def test_unreadable_bitstream_keeps_the_underlying_explanation(tmp_path):
     assert "isn't a usable configuration" in message
     # bitstream.py's own count-the-characters explanation survives.
     assert "8 hex characters" in message
+
+
+# ---------------------------------------------------------------------------
+# Staleness: a routing older than the netlist or schematic behind it.
+# ---------------------------------------------------------------------------
+
+import os
+
+from mosbius.simulate import check_routed_fresh
+
+
+def _chain(tmp_path, *, netlist_mtime, sch_mtime, routed_mtime=1000):
+    sch = tmp_path / "ring.sch"
+    sch.write_text("v {xschem}\n")
+    netlist = tmp_path / "ring.spice"
+    netlist.write_text(f"** sch_path: {sch}\nXM1 a b VGND VGND mosbius_nmos w=1\n")
+    routed = tmp_path / "ring.mosbius.json"
+    routed.write_text('{"bitstream": "' + "0" * 48 + '"}')
+    os.utime(routed, (routed_mtime, routed_mtime))
+    os.utime(netlist, (netlist_mtime, netlist_mtime))
+    os.utime(sch, (sch_mtime, sch_mtime))
+    return routed
+
+
+def test_routing_older_than_its_netlist_is_refused(tmp_path):
+    routed = _chain(tmp_path, netlist_mtime=2000, sch_mtime=500)
+    with pytest.raises(SimulateError) as e:
+        check_routed_fresh(routed)
+    assert "netlist" in str(e.value)
+
+
+def test_routing_older_than_the_schematic_is_refused_even_if_the_netlist_is_old(tmp_path):
+    """The netlist can be older than the routing while the drawing is
+    newer than both -- someone edited the schematic and never pressed
+    Netlist. That is the case `route` cannot see, because it is never run.
+    """
+    routed = _chain(tmp_path, netlist_mtime=500, sch_mtime=2000)
+    with pytest.raises(SimulateError) as e:
+        check_routed_fresh(routed)
+    assert "schematic" in str(e.value)
+    assert "regenerate_routed.sh" in str(e.value)
+
+
+def test_current_routing_passes(tmp_path):
+    check_routed_fresh(_chain(tmp_path, netlist_mtime=500, sch_mtime=500))
+
+
+def test_missing_routing_defers_to_the_existing_explanation(tmp_path):
+    check_routed_fresh(tmp_path / "nothing.mosbius.json")  # must not raise here

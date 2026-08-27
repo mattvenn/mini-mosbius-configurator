@@ -17,6 +17,8 @@ literally being named e.g. "ua2" *is* the connection request.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import re
 from dataclasses import dataclass
 
@@ -115,6 +117,75 @@ _INSTANCE_RE = re.compile(
     r"(?P<props>(?:\s+\w+=\S+)*)\s*$"
 )
 _PROP_RE = re.compile(r"(\w+)=(\S+)")
+
+
+class StaleNetlistError(ValueError):
+    """The netlist is older than the schematic it was generated from, so
+    routing it would route a circuit the user is no longer looking at.
+
+    Silent staleness is the expensive kind of wrong here: the router
+    happily succeeds, reports a bitstream, and the user compares it
+    against a drawing that says something else. It has to be an error
+    rather than a warning for that reason -- a warning scrolls past.
+    """
+
+
+def schematic_for_netlist(netlist_path: Path) -> Path | None:
+    """The .sch that produced `netlist_path`, or None if it cannot be
+    found on this machine.
+
+    xschem writes its source as the netlist's first line,
+    `** sch_path: /foss/designs/.../ring.sch`. That path is written from
+    inside whatever filesystem xschem ran in -- which for nearly everyone
+    here is the IIC-OSIC-TOOLS container they also route from, so it
+    resolves directly. When it does not (a netlist copied between
+    machines, or a container mounted at a different point), fall back to
+    a same-named .sch beside the netlist or under examples/, and give up
+    quietly rather than guessing: a missed check is a much smaller harm
+    than a false alarm telling someone their fresh netlist is stale.
+    """
+    try:
+        first = netlist_path.read_text().split("\n", 1)[0]
+    except OSError:
+        return None
+    if not first.startswith("** sch_path:"):
+        return None
+    recorded = Path(first[len("** sch_path:"):].strip())
+    if recorded.is_file():
+        return recorded
+
+    name = recorded.name
+    here = netlist_path.resolve().parent
+    for candidate in (here / name, *sorted(here.parent.glob(f"examples/*/{name}"))):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def check_netlist_fresh(netlist_path: Path) -> None:
+    """Raise StaleNetlistError if `netlist_path` predates its schematic.
+
+    Called before parsing, because a stale netlist is not a parse problem
+    and its symptoms turn up much later -- as a routing failure that does
+    not match the drawing, or worse, as a successful route of the wrong
+    circuit.
+    """
+    sch = schematic_for_netlist(netlist_path)
+    if sch is None:
+        return
+    if sch.stat().st_mtime <= netlist_path.stat().st_mtime:
+        return
+    raise StaleNetlistError(
+        f"{netlist_path} is older than the schematic it came from\n\n"
+        f"  {sch}\n  was edited after {netlist_path} was written, so routing this\n"
+        f"  file would route the circuit as it used to be -- and it would\n"
+        f"  most likely succeed, print a bitstream, and tell you nothing was\n"
+        f"  wrong.\n\n"
+        f"  To fix: press Netlist in xschem with {sch.name} open (with xschem\n"
+        f"  launched from the top of the repo, so it writes to build/), then\n"
+        f"  run this command again. Or do the whole chain in one step:\n\n"
+        f"    sh tools/regenerate_routed.sh {sch}\n"
+    )
 
 
 def parse_netlist(text: str) -> MosbiusDesign:
