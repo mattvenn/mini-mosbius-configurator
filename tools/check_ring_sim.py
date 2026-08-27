@@ -17,10 +17,19 @@ capacitance (~900fF/row) are what set its frequency -- so a device-library
 rebuild that got those wrong would sail past the inverter check and fail
 here.
 
-The +-25% band matches the inverter's, and for the same reason: this is a
-monthly canary for the toolchain landing in the right regime, not a golden
-number. A real break (wrong device library, broken routing, parasitics
-dropped) misses by multiples, not by percent.
+The +-5% band is set by what actually varies. With reltol=0.01 repeat runs
+agree to well under 0.1%, and two different IIC-OSIC-TOOLS containers gave
+identical numbers to four significant figures, so the noise floor is far
+below this. 5% leaves room for a minor ngspice or PDK point release
+without crying wolf, while still catching the kind of error a wide band
+misses -- a wrong entry in BUS_WIRE_CAPACITANCE_F, or row coupling
+applied to the wrong number of switches, moves this by tens of percent,
+not by multiples.
+
+If an upstream image update does shift the result past this band, that is
+the check working: the reference numbers here and in the README have gone
+stale and should be re-measured deliberately rather than absorbed by a
+tolerance nobody chose.
 
 Frequencies are read from the loop nodes, not the buffered outputs. The
 buffer cannot slew its 15pF load at these speeds, so out_drawn spans only
@@ -38,7 +47,7 @@ import sys
 # the ~30MHz silicon measurement (though not directly -- that bitstream is
 # the unbuffered, all-pins circuit; see the README).
 REFERENCE_HZ = {"freq_drawn": 2.083e9, "freq_routed": 43.89e6}
-TOLERANCE = 0.25
+TOLERANCE = 0.05
 
 
 def _fmt(hz: float) -> str:
