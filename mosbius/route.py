@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1266,6 +1267,14 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
                 dev: LEGACY_ROLE_NAMES.get(role, role)
                 for dev, role in stored["device_roles"].items()
             }
+            # Reusing the stored routing leaves the file untouched, so its
+            # mtime would keep saying "written before this netlist" even
+            # though it has just been confirmed against it. Downstream
+            # freshness checks (simulate.py's check_routed_fresh) read that
+            # mtime as "this routing is out of date", which sends the user
+            # to regenerate something that is already correct. Stamp it:
+            # the mtime means "last confirmed current", not "last rewritten".
+            os.utime(config_path, None)
             return RoutedDesign(
                 config=SwitchConfig(
                     bits=bitstream.unpack(stored["bitstream"]),

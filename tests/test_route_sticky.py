@@ -136,3 +136,20 @@ def test_the_rename_produces_an_identical_bitstream(tmp_path: Path):
     original = route_sticky(parse_netlist(INVERTER_NETLIST), config_path)
     renamed = route_sticky(parse_netlist(RENAMED), config_path)
     assert renamed.config.to_bitstream() == original.config.to_bitstream()
+
+
+def test_reusing_a_stored_routing_stamps_it_current(tmp_path):
+    """A reused routing is not rewritten, so without a deliberate stamp its
+    mtime keeps claiming it predates the netlist it was just checked
+    against -- and simulate.py's freshness check then tells the user to
+    regenerate a file that is already correct. Regression test for that.
+    """
+    import os
+
+    design = parse_netlist(INVERTER_NETLIST)
+    out = tmp_path / "inverter.mosbius.json"
+    route_sticky(design, out)
+    os.utime(out, (1000, 1000))
+
+    route_sticky(design, out)  # same design: takes the reuse path
+    assert out.stat().st_mtime > 1000
