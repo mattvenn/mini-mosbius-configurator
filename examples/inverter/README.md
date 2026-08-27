@@ -66,9 +66,11 @@ out.
 
 ![Inverter w=1 waveform: ua1 pulses, ua2 responds inverted with a visibly slow rising edge](inverter_w1.png)
 
-At `w=1` on both transistors (the schematic above) with a 100pF load (a
-plausible scope-probe + PCB + pad figure, not something you'd see on-chip),
-10-90% rise time is **84.4 ns**. tnt's own hardware bring-up of the same
+At `w=1` on both transistors (the schematic above) with a 100pF load,
+10-90% rise time is **84.4 ns**. That 100pF is a heavy load -- see "What
+the two load capacitors are" below; the testbench further down uses 10pF,
+and these two figures and their waveform images are the only numbers on
+this page still taken at 100pF. tnt's own hardware bring-up of the same
 circuit -- real silicon, not simulation -- [reported "about a 50ns rise
 time"](https://www.tinytapeout.com/news/mini-mosbius/) at the same starting
 configuration, then "around 25ns" after widening the PMOS to `w=4` ("P
@@ -85,9 +87,14 @@ At `w=4`, rise time is **21.1 ns** -- about 4x faster than the `w=1` case,
 tracking the published ~50ns -> ~25ns improvement (a 2x change) reasonably
 well in direction and roughly in magnitude, if not exactly: this
 simulation's absolute numbers run somewhat higher than the published ones
-(84ns vs ~50ns at `w=1`), consistent with an as-drawn ideal model that leaves
-out the real switch-matrix's added parasitic resistance/capacitance -- see
-"What this does and doesn't prove" below.
+(84ns vs ~50ns at `w=1`). That gap is the load, not the model. An as-drawn
+model leaves out the chip's parasitic resistance and capacitance, which
+makes it *faster* than silicon, not slower -- so omission cannot explain a
+number above the measurement, and the 100pF load used here, heavier than
+whatever tnt probed with, can. At the 10pF the testbench below uses, the
+same as-drawn model gives 8.9ns and the ordering comes out right: as drawn
+is faster than as routed, which is faster than silicon. See "What this does
+and doesn't prove" below.
 
 ## What this does and doesn't prove
 
@@ -139,10 +146,9 @@ directory, and this symbol lives in `xschem/mosbius_lib/`, so both
 `schematic=inverter` and `schematic=inverter.sch` look for a file that
 isn't there and quietly fall back to the symbol's own empty body. You then
 get `.subckt inverter` containing no transistors at all -- a netlist that
-runs, and measures nothing. Verified both ways 2026-08-24. (A design that
-sits in the same directory as the symbol, like
-`xschem/mosbius_lib/tb_template.sch`'s, can use the plain
-`schematic=my_design.sch` form.)
+runs, and measures nothing. Verified both ways 2026-08-24.
+`xschem/mosbius_lib/tb_template.sch` uses the same absolute form for the
+same reason, so copying it to your own directory keeps working.
 
 ### Regenerating `build/inverter_routed.spice`
 
@@ -195,22 +201,20 @@ simulating a comparison with nothing on one side.
 
 ### What running it shows
 
-Re-measured 2026-08-24, on the routing the router produces today
-(`0800000040100000...`):
+Re-measured 2026-08-27 at `cload=10p`, on the routing the router produces
+today (`0800000040100000...`):
 
 ```
-trise_drawn  =  88.43ns
-trise_routed = 130.33ns
+trise_drawn  =  8.90ns
+trise_routed = 24.63ns
 ```
 
-`trise_drawn` lands close to the 84.4ns from the hand-patched as-drawn
-netlist above -- the small difference is the testbench's own added
-wiring/source impedance, plus `x2`'s input pad loading the shared `ua1`
-stimulus, not a discrepancy worth chasing.
+As routed is **2.8x slower** than as drawn. Both are faster than tnt's
+~50ns silicon measurement, which is the ordering you want: the drawn model
+omits the most, the routed model omits less, real silicon omits nothing.
 
-The result is `trise_routed` vs `trise_drawn`: **about 47% slower**, even
-with a 100pF load on both. Two effects, separated by running the same
-testbench again with `Cload` at 10pF instead of 100pF:
+The same testbench at the old 100pF gives 88.43ns and 130.33ns -- a ratio
+of only 1.47. Those two runs together separate the two effects:
 
 | load | `trise_drawn` | `trise_routed` | ratio |
 |---|---|---|---|
@@ -229,16 +233,75 @@ capacitance of a 60um NMOS and 180um PMOS ESD pair.
 
 So the dominant thing the routed model adds here is the **bond pad**, not
 the switch matrix. Row coupling (~43fF/switch) and bus-wire capacitance
-(~900fF/row) really are swamped by a 100pF load, as the earlier version of
+(~900fF/row) really are swamped by a 100pF load, as an earlier version of
 this section said -- that reasoning was right, it was just measuring the
 wrong quantity, because a pad an order of magnitude bigger than either was
-sitting in the path too.
+sitting in the path too. And note what the load choice did to the
+conclusion: at 100pF the chip appears to cost 47%, at 10pF it costs 180%.
+The load is the single biggest lever on the number a reader takes away
+from this example, which is why it is now a named parameter with a stated
+justification rather than a round figure.
 
 Read together with the ring oscillator, the two examples cross-check
 `mosbius simulate` in the two regimes a real design can be in:
 switch-matrix-dominated (ring oscillator, no external load, no pad in the
 signal path between stages) and pad-and-load-dominated (this inverter,
-driving a real package pin into 100pF).
+driving a real package pin into a probe).
+
+### What the two load capacitors are
+
+`tb_inverter.sch` hangs one capacitor on each output, `Cload_drawn` and
+`Cload_routed`, both `'cload'`, with `.param cload=10p` in the sheet's
+ngspice block. Same value on both, deliberately, and the reasoning is
+worth spelling out because two identical caps side by side invite the
+wrong reading.
+
+**The cap is the bench, not the chip.** It stands for the scope probe and
+the PCB trace you would measure through -- a 10x probe is around 10pF.
+It is a *controlled variable*: held identical on both instances so that
+the only difference between `out_drawn` and `out_routed` is the chip
+itself. That is what makes subtracting one from the other mean anything.
+
+What each side contains, then:
+
+| | contains |
+|---|---|
+| `x1`, as drawn | two FETs, ideal wires, probe straight on the drain |
+| `x2`, as routed | switch matrix + row coupling + bus-wire capacitance + `pad_model` (2p board, 1 ohm + 1nH package, 3p pad, the analog mux gate on plus 15 deselected ones), probe outside the pad |
+
+The difference between the two numbers is therefore exactly everything the
+chip inserts between the transistor drain and the package pin.
+
+The probe lands on a different node in each -- on the drain in `x1`,
+outside the pad in `x2`. That asymmetry is correct: it is the same point
+on a real bench, and `x1` has no pad for it to sit outside of. `x1`'s
+missing pad is part of what is being measured, so it must not be
+compensated for by inflating `Cload_drawn`.
+
+**Why `Cload_routed` is not 0**, even though `pad_model` already carries
+board and pad capacitance of its own: 0 would mean measuring with no probe
+attached, and `out_routed` would then be a node nobody could observe. The
+2pF `pad_model` holds at its pin node is package and board, not a probe.
+The small overlap between that 2pF and the 10pF probe figure is a rounding
+error next to getting the concept right.
+
+**Why not per-instance estimates** -- `Cload_drawn` carrying
+probe + PCB + pad + package because its model has none of that, and
+`Cload_routed` carrying probe only because `pad_model` has the rest? Each
+number would be a better standalone prediction of the bench, but the
+difference between them would mean nothing, because you would have
+deliberately compensated the drawn side for the effect the example exists
+to show.
+
+`tb_diffamp.sch` and `tb_srlatch.sch` use the same parameter and the same
+value for the same reasons. `tb_ring.sch` deliberately has no load caps at
+all: its observed node is the oscillator's own feedback node rather than
+an output pad, so a cap there changes the circuit instead of modelling a
+probe -- 100pF stops the drawn ring oscillating outright, and even 1pF
+drags it from 2.5GHz to 1.5GHz. That is the same lesson from the other
+end. Both examples are missing capacitance in the as-drawn model; the ring
+shows it plainly, and the inverter used to bury it under a load ten times
+heavier than the effect.
 
 **Runtime.** About 35s in the IIC-OSIC-TOOLS container, of which ~13s is
 sky130 library parsing and ~20s is building the circuit and solving the DC

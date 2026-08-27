@@ -91,6 +91,31 @@ closing note for the full investigation this shipped from -- reaches
 ring-oscillator bitstream, down from 82x before that investigation
 started.
 
+Closed on 2026-08-27, so don't re-open any of the three: **pad loading is
+finished business.** (a) *The analog muxes were never missing.* Upstream's
+`pad_model.sch` already contains them -- one transmission gate sized
+exactly like `tt_asw_3v3.sch`'s own pass FETs (nfet W=60 nf=12, pfet W=180
+nf=18) with its gates hard-tied to the rails, i.e. this project's mux slot
+permanently selected, plus the same pair at `mult=15` held off, i.e. the 15
+deselected slots' capacitance hanging on the same pad line. `simulate.py`
+puts a `pad_model` on every `ua` pin a config actually uses, so the mux is
+in every routed deck already. (b) *`ibias`/`ua[0]` deliberately has no pad,
+and should not get one.* The demoboard drives it from the Raspberry Pi's
+programmable current source, not a resistor (SPEC.md §3.4b), so the ideal
+current source in the testbenches is the *correct* model of real hardware
+-- and a current source is indifferent to the pad's series resistance, so
+the whole analog half's operating point is identical with or without it.
+The pad would add only ~5pF on the bias node, which nothing here measures,
+against needing a new "is ibias in use" rule (the crosspoint test doesn't
+apply to it) and breaking the port-name/net-name coincidence that makes the
+config ties land. (c) *No `--pads full|none` flag.* It was proposed to make
+the pad-vs-matrix split reproducible; the split is now written up in
+`examples/inverter/README.md`, and one-shot "change one physical assumption
+and re-run" experiments already have a home in `tools/` (`run_ring_pad_loaded.sh`
+and five siblings). A CLI flag would put a physically-impossible deck -- a
+chip with no pads -- on the product path a beginner uses, and would need a
+name of its own, since pads-off is not "as routed".
+
 **There is one netlist directory, `build/`, and `xschemrc` at the repo root
 is what makes that true.** Launch xschem from the top of the repo and it
 reads that file, which puts sky130A *and* `xschem/mosbius_lib` on the symbol

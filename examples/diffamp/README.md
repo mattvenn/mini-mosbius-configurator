@@ -217,3 +217,32 @@ The full 13-level `PWL(...)` (the actual steps table above, each held
 points" warning) is mechanical to generate but tedious to type by hand;
 build it with a short loop over `[0, 2, 5, 10, 20, 40, 0, -2, -5, -10,
 -20, -40, 0]` rather than transcribing it.
+
+## Load capacitors in `tb_diffamp.sch`
+
+`Cload_drawn` and `Cload_routed` are both `'cload'`, with
+`.param cload=10p` in the sheet's ngspice block -- one scope probe's worth
+of load, held identical on both instances so the only difference between
+`out_drawn` and `out_routed` is the chip. `examples/inverter/README.md`'s
+"What the two load capacitors are" section explains why they are equal,
+why the routed one is not 0, and why the value matters.
+
+It matters more here than anywhere else in this project. The load sits
+directly on the amplifier's output, so it sets the gain the testbench
+measures. Re-run 2026-08-27 at 10pF:
+
+| | `out` base | `+40mV` step | `-40mV` step | gain + | gain - |
+|---|---|---|---|---|---|
+| as drawn | 2.147V | 2.457V | 2.044V | 7.8 V/V | 2.6 V/V |
+| as routed | 2.175V | 2.308V | 2.174V | 3.3 V/V | 0.03 V/V |
+
+At the 100pF this testbench used previously, `gain_drawn_pos` was 0.96
+V/V -- the amplifier was loaded until it had essentially no gain left,
+and the measurement said more about the capacitor than the circuit. The
+`~21.3 V/V` in the steps table above is the unloaded figure, so 10pF is
+still real loading; the point is that it is now a load you could actually
+have on a bench rather than one that swamps the result.
+
+Both `gain_*` measures still report `failed` while printing a computed
+number -- an ngspice `.meas ... PARAM=` quirk, unrelated to the load, and
+still open in `TODO.md`.

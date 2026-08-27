@@ -206,3 +206,36 @@ circuit this project independently arrived at, via the router's own
 transistor-budget constraints, is the same 6-transistor cross-coupled
 topology tnt built and described, and it demonstrates the same core
 property (a pulse forces a state that then persists after the pulse ends).
+
+## Load capacitors in `tb_srlatch.sch`
+
+`Cload_drawn` and `Cload_routed` are both `'cload'`, with
+`.param cload=10p` in the sheet's ngspice block -- one scope probe's worth
+of load, held identical on both instances so the only difference between
+`out_drawn` and `out_routed` is the chip. `examples/inverter/README.md`'s
+"What the two load capacitors are" section explains why they are equal,
+why the routed one is not 0, and why the value matters.
+
+Dropping it from 100pF to 10pF fixed a measurement that had never worked.
+At 100pF, `treset_drawn`/`treset_routed` both reported
+`trig(TARG) : out of interval` -- the falling edge through 1.65V simply
+did not happen inside the measurement window, because the load was slow
+enough to stretch the reset past it. At 10pF, re-run 2026-08-27:
+
+```
+qd_after_set     =  3.300V     qr_after_set     =  3.110V
+qd_after_reset   = -0.0000V    qr_after_reset   = -0.0026V
+treset_drawn     = 18.79ns
+treset_routed    = 10.94ns
+```
+
+The stored-state measurements are unchanged in meaning: SET drives the
+output to the rail, RESET returns it to ground, and both survive the pulse
+ending.
+
+`treset_routed` coming out *faster* than `treset_drawn` is the opposite of
+the inverter's result and is not yet explained. A latch's reset delay
+depends on the state it starts from, and the two instances need not power
+up in the same one, so this may not be a like-for-like comparison at all.
+Do not read it as the routed chip being quicker than the ideal circuit
+until someone has checked the starting states.

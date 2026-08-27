@@ -164,9 +164,25 @@ overhead in between -- so simulating your `my_inverter.sch` directly (before
 routing) gives the "as drawn" result: what the circuit does electrically,
 with parasitics from the real switch matrix left out. `examples/inverter/`
 has a full worked simulation with a plot and an explanation of what that
-comparison does and doesn't tell you; the short version is that adding a
-realistic ~100pF probe-and-PCB load gets you into the same tens-of-
-nanoseconds ballpark tnt's own hardware bring-up reported.
+comparison does and doesn't tell you.
+
+To go further and simulate your design **as routed** -- through the real
+switch matrix, with its parasitics and the chip's pads and analog mux --
+copy `xschem/mosbius_lib/tb_template.sch` next to your design and replace
+`my_design.sch` and `my_design_routed` throughout it with your own names.
+It gives you the standard side-by-side: `x1` is your design as drawn, `x2`
+is the same design as routed, both driven by one stimulus, with
+`out_drawn` and `out_routed` to compare. Ctrl-click **generate routed
+spice** on the sheet to build the file `x2` needs, then press Netlist
+again. Add your own `.meas` lines to the `.control` block; the template
+deliberately ships without any, since what is worth measuring depends on
+your circuit.
+
+Both output load capacitors are `'cload'`, set by `.param cload=10p` --
+one scope probe's worth. Keep them equal: that is what makes the only
+difference between `out_drawn` and `out_routed` the chip itself.
+`examples/inverter/README.md`'s "What the two load capacitors are"
+explains why, and why the value matters more than it looks.
 
 ## 6. Upload it (needs a physical demoboard)
 

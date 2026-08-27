@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/inverter/tb_inverter.sch
 against the reference measurements in examples/inverter/README.md
-("What running it shows"): trise_drawn=88.43ns, trise_routed=130.33ns,
-last measured 2026-08-24 on the routing the router produces today.
+("What running it shows"): trise_drawn=8.90ns, trise_routed=24.63ns,
+last measured 2026-08-27 at cload=10p, on the routing the router produces
+today.
 
 Run by tools/check_inverter_sim.sh (the full netlist/route/simulate/ngspice
 pipeline), which .github/workflows/spice-regression.yml runs once a month.
@@ -21,7 +22,7 @@ from __future__ import annotations
 import re
 import sys
 
-REFERENCE_NS = {"trise_drawn": 88.43, "trise_routed": 130.33}
+REFERENCE_NS = {"trise_drawn": 8.90, "trise_routed": 24.63}
 TOLERANCE = 0.25
 
 

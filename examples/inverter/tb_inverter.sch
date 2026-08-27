@@ -14,14 +14,15 @@ divy=5
 subdivy=1
 unity=1
 x1=0
-x2=4e-07
+x2=5e-07
 divx=5
 subdivx=1
 xlabmag=1.0
 ylabmag=1.0
 node="out_drawn
-out_routed"
-color="12 14"
+out_routed
+ua1"
+color="12 14 10"
 dataset=-1
 unitx=1
 logx=0
@@ -66,39 +67,26 @@ C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
 C {devices/isource.sym} -240 170 2 1 {name=Ibias value=100u}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=Ibias}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
-C {devices/vsource.sym} -130 160 0 0 {name=Vin value="PULSE(3.3 0 10n 1n 1n 200n 400n)"}
+C {devices/vsource.sym} -130 160 0 0 {name=Vin value="PULSE(3.3 0 10n 1n 1n 250n 500n)"}
 C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=ua1}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
-C {devices/capa.sym} -300 -390 0 0 {name=Cload1 m=1 value=100p footprint=1206 device="ceramic capacitor"}
+C {devices/capa.sym} -300 -390 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -300 -420 1 0 {name=pc1 sig_type=std_logic lab=out_drawn}
 C {devices/gnd.sym} -300 -360 0 0 {name=lc1 lab=VGND}
-C {devices/capa.sym} -210 -390 0 0 {name=Cload2 m=1 value=100p footprint=1206 device="ceramic capacitor"}
+C {devices/capa.sym} -210 -390 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -210 -420 1 0 {name=pc2 sig_type=std_logic lab=out_routed}
 C {devices/gnd.sym} -210 -360 0 0 {name=lc2 lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
 C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
-* Rise time of the same inverter as drawn (out_drawn, x1) and as routed
-* onto the real chip (out_routed, x2).
-* Vin pulses ua1 high->low at t=10n; the inverter output responds with a
-* rising edge (examples/inverter/README.md's existing as-drawn methodology,
-* now driven from a real xschem testbench instead of a hand-patched netlist).
-
-* Vgnd is what gives ngspice its node 0. xschem emits ground as a named
-* global net (VGND, plus .GLOBAL VGND), never as SPICE node 0, so without
-* it nothing in this deck connects to 0 and the whole circuit floats.
-* .option rshunt used to hide that by strapping every node to 0 through a
-* huge resistor -- solvable, but the absolute level was then set only by
-* the balance of those shunt currents, so any current with no DC return
-* path dragged the entire circuit thousands of volts away from 0 with the
-* real signals riding on top. Ground it properly instead; rshunt is then
-* unnecessary. See examples/ringosc/tb_ring.sch for the worked case.
 
 Vgnd VGND 0 0
+
+.param cload=10p
 
 .option reltol=0.01
 .control
   save all
-  tran 1n 400n
+  tran 1n 500n
   meas tran trise_drawn TRIG v(out_drawn) VAL=0.33 RISE=1 TARG v(out_drawn) VAL=2.97 RISE=1
   meas tran trise_routed TRIG v(out_routed) VAL=0.33 RISE=1 TARG v(out_routed) VAL=2.97 RISE=1
   wrdata inverter_tb_ua1.txt v(ua1)

@@ -140,19 +140,23 @@ the number that is directly comparable to the ~30MHz silicon measurement.
 
 ## What was tried
 
-Three simulation levels, in increasing fidelity:
+Successive stages of the investigation, in increasing fidelity:
 
-| Level | What it models | Period | Frequency | vs. real silicon |
-|---|---|---|---|---|
-| As drawn (ideal) | `mosbius_nmos`/`mosbius_pmos` generic symbols, direct net-to-net wiring, no switch matrix at all | 0.41ns | ~2.45GHz | ~82x too fast |
-| As routed (real switch matrix) | the actual chip netlist (`mosbius.sym`/`mosbius.sch`) with real `tt_asw_3v3` transmission gates, config driven by `mosbius/spice.py` | 1.98ns | ~505MHz | ~17x too fast |
-| Real silicon | — | ~33.3ns | ~30MHz | — |
+| What it models | Period | Frequency | vs. real silicon |
+|---|---|---|---|
+| As drawn: `mosbius_nmos`/`mosbius_pmos` generic symbols, direct net-to-net wiring, no switch matrix at all | 0.41ns | ~2.45GHz | ~82x too fast |
+| Switch matrix only: the actual chip netlist (`mosbius.sym`/`mosbius.sch`) with real `tt_asw_3v3` transmission gates, config driven by `mosbius/spice.py`, but no row coupling, bus-wire capacitance or pads | 1.98ns | ~505MHz | ~17x too fast |
+| As routed, what `mosbius simulate` ships today: the above plus row-coupling capacitance, bus-wire capacitance, and real pad models | ~26.1ns | **~38.33MHz** | ~1.28x too fast |
+| Real silicon | ~33.3ns | ~30MHz | — |
 
 Including the real transmission gates closed most of the gap (82x -> 17x
 too fast), confirming the switch matrix's resistance/capacitance is the
-dominant effect drawing alone leaves out (SPEC.md Sec 3.1b's whole point). The
-remaining ~17x gap has specific, identified, untested causes -- see
-"What's still open" below, not an unexplained mystery.
+dominant effect drawing alone leaves out (SPEC.md Sec 3.1b's whole point).
+Adding the parasitics the matrix sits in -- row coupling, bus-wire
+capacitance, pads -- closed nearly all of the rest, 17x -> 1.28x. That
+last combination is what `mosbius simulate` emits now, so the middle row
+is history rather than something you can reproduce from the current tool;
+it is kept because the size of each step is the actual result here.
 
 ## Reproducing this
 
@@ -238,23 +242,24 @@ anywhere else, so redoing it means rebuilding from these steps:
 
 ## What's still open
 
-Why the routed ~505MHz is still ~17x faster than the real ~30MHz, roughly
-in order of how likely each is to matter, not yet tested:
+The list below was written when the routed model stood at ~505MHz, ~17x
+too fast. The first two items were then acted on and are **closed** --
+they are what took the number to ~38.33MHz, ~1.28x. They are kept here
+because which guesses turned out to matter is the useful part:
 
-- **The 148 dropped-as-open switches were removed entirely**, not kept as
-  small off-state parasitic capacitors. In reality every device stays
-  physically connected to its bus segment whether its own switch is open
-  or closed, so real silicon has loading on every bus segment this
-  simulation strips out. This is the most likely single largest factor,
-  and the natural next thing to try: re-add the dropped switches as small
-  (fF-scale, not the 100pF used for the inverter's external-pin load)
-  parasitic caps rather than deleting them outright.
-- **No external pin/probe/PCB capacitance was modeled** -- this ring's
-  observed nodes (`bus_A[1]`, `bus_A[3]`, `bus_B[2]`) are purely internal
-  in this simulation. Unclear whether the real 30MHz measurement point
-  was probed through an actual package pin (which would add real
-  capacitance, the same effect modeled as 100pF for the inverter example)
-  or observed some other way.
-- **Only the "tt" (typical) process corner was tried**, not the real
-  chip's actual corner -- process spread alone is usually a much smaller
-  effect than the two above, but hasn't been ruled out.
+- **Closed. The 148 dropped-as-open switches were removed entirely**,
+  not kept as small off-state parasitic capacitors, and every device
+  stays physically connected to its bus segment on real silicon whether
+  its own switch is open or closed. Re-adding that loading as row-coupling
+  capacitance (~43fF per switch) was the largest single correction, as
+  predicted.
+- **Closed. No external pin/probe/PCB capacitance was modeled.** Real pad
+  models on the package pins a config actually uses are now part of what
+  `mosbius simulate` emits -- and they carry the analog mux switch too:
+  `pad_model` holds one transmission gate held on (this project's mux
+  slot) plus 15 held off (the deselected slots' loading on the same pad
+  line).
+- **Still open. Only the "tt" (typical) process corner was tried**, not
+  the real chip's actual corner. At ~1.28x this is now a plausible size
+  for the whole remaining gap rather than a footnote, so it is the next
+  thing to try.

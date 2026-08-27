@@ -72,10 +72,10 @@ C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
 C {devices/vsource.sym} -30 160 0 0 {name=Vreset value="PULSE(0 3.3 220n 1n 1n 40n 1000n)"}
 C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=ua2}
 C {devices/gnd.sym} -30 190 0 0 {name=lvin2 lab=VGND}
-C {devices/capa.sym} -300 -390 0 0 {name=Cload1 m=1 value=100p footprint=1206 device="ceramic capacitor"}
+C {devices/capa.sym} -300 -390 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -300 -420 1 0 {name=pc1 sig_type=std_logic lab=out_drawn}
 C {devices/gnd.sym} -300 -360 0 0 {name=lc1 lab=VGND}
-C {devices/capa.sym} -210 -390 0 0 {name=Cload2 m=1 value=100p footprint=1206 device="ceramic capacitor"}
+C {devices/capa.sym} -210 -390 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -210 -420 1 0 {name=pc2 sig_type=std_logic lab=out_routed}
 C {devices/gnd.sym} -210 -360 0 0 {name=lc2 lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
@@ -99,6 +99,8 @@ C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
 * unnecessary. See examples/ringosc/tb_ring.sch for the worked case.
 
 Vgnd VGND 0 0
+
+.param cload=10p
 
 .option reltol=0.01
 .control
