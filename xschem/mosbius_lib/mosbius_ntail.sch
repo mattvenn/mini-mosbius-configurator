@@ -3,17 +3,14 @@ G {}
 K {}
 V {}
 S {}
+F {}
 E {}
-N 60 -80 60 -140 {
-lab=g}
-N -120 -140 280 -140 {
-lab=g}
+N 60 -140 60 -80 {
+lab=#net1}
 N 280 -140 280 -80 {
-lab=g}
+lab=#net1}
 N 100 -140 100 -110 {
-lab=g}
-N 100 -200 100 -110 {
-lab=g}
+lab=#net1}
 N 100 -50 100 20 {
 lab=s}
 N 100 20 320 20 {
@@ -22,6 +19,7 @@ N 320 -50 320 20 {
 lab=s}
 N 320 -200 320 -110 {
 lab=d}
+N 0 -140 280 -140 {lab=#net1}
 C {sky130_fd_pr/nfet3_g5v0d10v5.sym} 80 -80 0 0 {name=M1
 L=1
 W=20
@@ -52,6 +50,6 @@ model=nfet_g5v0d10v5
 body=s
 spiceprefix=X
 }
-C {devices/lab_pin.sym} -120 -140 0 1 {name=p1 lab=g}
-C {devices/lab_pin.sym} 200 20 0 1 {name=p2 lab=s}
-C {devices/iopin.sym} 320 -200 0 1 {name=p3 lab=d}
+C {devices/lab_pin.sym} 0 -140 2 1 {name=p1 lab=g}
+C {devices/lab_pin.sym} 320 20 0 1 {name=p2 lab=s}
+C {devices/iopin.sym} 320 -200 2 1 {name=p3 lab=d}
