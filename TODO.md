@@ -61,3 +61,6 @@ computes the number
   so the latch itself is switching; it is the delay measure that is mis-set up
 
 - pre-existing, same before and after the rshunt -> Vgnd change (2026-08-24)
+
+13 - there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
