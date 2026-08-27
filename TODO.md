@@ -24,32 +24,13 @@ Traceback (most recent call last):
   File "<frozen runpy>", line 88, in _run_code
   File "/Users/mattvenn/asic/mini-mosbius-configurator/mosbius/cli.py", line 197, in <module>
 
-11 .github/workflows/spice-regression.yml checks the inverter (trise_drawn/trise_routed
-   within 25% of examples/inverter/README.md's reference numbers), once a month plus
-   workflow_dispatch. Still to add: the ring oscillator's frequency within bounds.
 
-12 tb_diffamp: all four gain_* measures report failed even though ngspice
-computes the number
-
-- log shows `meas tran gain_drawn_pos param=7.761175e+00 failed!` -- the value
-  is right there, the measure just also sets a failure status
-
-- affects gain_drawn_pos, gain_drawn_neg, gain_routed_pos, gain_routed_neg
-
-- looks like ngspice's `.meas ... PARAM=` returning a result but flagging
-  failure; the vout_* measures it derives from all succeed
-
-- pre-existing, not caused by the rshunt -> Vgnd change: the same four measures
-  fail identically in runs before and after it (the computed values shift in the
-  last digits, as every measure in every deck does) (2026-08-24), and
-  unchanged by the 100pF -> 10pF load change (2026-08-27)
-
-13 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+11 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
-14 make it easy for people to submit designs to the examples
+12 make it easy for people to submit designs to the examples
 
-14 document what VDPWR is actually for. Nowhere says that the FETs a user
+13 document what VDPWR is actually for. Nowhere says that the FETs a user
 draws never see 1.8V: every analog device in the submodule (nmos_prog,
 pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
 VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only

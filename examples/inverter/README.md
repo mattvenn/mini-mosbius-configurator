@@ -152,7 +152,8 @@ same reason, so copying it to your own directory keeps working.
 
 ### Stimulus and ground
 
-`Vin` pulses `ua1` from 3.3V down to 0 at t=10ns, shared by both
+`Vin` pulses `in` (the chip's `ua1`) from 3.3V down to 0 at t=10ns,
+shared by both
 instances. The *input* falls, so the inverter's output *rises* -- which is
 why both measurements are `RISE` edges on `out_drawn`/`out_routed` while
 the thing driving them is a falling edge. Everything above this section
@@ -211,7 +212,7 @@ simulating a comparison with nothing on one side.
 `build/tb_inverter.spice` is then a complete, self-contained deck --
 `.control` already has a real `tran`, two `.meas` rise-time measurements
 (`trise_drawn`, `trise_routed`), and `wrdata` output for
-`ua1`/`out_drawn`/`out_routed`.
+`in`/`out_drawn`/`out_routed`.
 
 ### What running it shows
 
@@ -332,3 +333,16 @@ needed a higher-RAM machine and OOMed at ~1.9GB on the usual dev host.
 That is no longer true and has been removed: it runs here repeatedly,
 in well under a minute. The full-matrix decks in `tools/` that hit that
 ceiling are much larger than what `mosbius simulate` emits for one design.
+
+## Testbench net names
+
+`tb_inverter.sch` names a net for what it does, not for which package pin it
+sits on -- the schematic already shows you the pin. A net **shared**
+between the two instances carries no suffix, because it is physically one
+net: `in`, driven by one `Vin` for both. A net that differs per instance carries `_drawn` or
+`_routed`: `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
+name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
+after.
+
+So the suffix tells you something real at a glance: no suffix means one
+net feeding both halves, a suffix means one per half.

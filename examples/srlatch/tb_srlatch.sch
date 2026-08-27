@@ -21,8 +21,8 @@ xlabmag=1.0
 ylabmag=1.0
 node="out_drawn
 out_routed
-ua1
-ua2"
+set
+reset"
 color="12 14 11 18"
 dataset=-1
 unitx=1
@@ -34,7 +34,7 @@ T {SR latch
 x1 as drawn - ideal wires, no switch matrix
 x2 as routed on the chip including analog mux and pads 
 
-ua1=SET, ua2=RESET} -640 -730 0 0 0.5 0.5 {}
+set=SET, reset=RESET} -640 -730 0 0 0.5 0.5 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/srlatch/srlatch.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -42,8 +42,8 @@ schematic=srlatch_routed
 spice_sym_def="tcleval([mosbius_routed_include build/srlatch_routed.spice])"
 tclcommand="textwindow [file normalize build/srlatch_routed.spice]"}
 C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=ua1}
-C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=ua2}
+C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=set}
+C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=reset}
 C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=out_drawn}
 C {devices/lab_wire.sym} -550 -80 0 0 {name=p9 sig_type=std_logic lab=ua4_drawn}
 C {devices/lab_wire.sym} -550 -40 0 0 {name=p10 sig_type=std_logic lab=ua5_drawn}
@@ -51,8 +51,8 @@ C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
 C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=ua1}
-C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=ua2}
+C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=set}
+C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=reset}
 C {devices/lab_wire.sym} -160 -120 0 0 {name=p8b sig_type=std_logic lab=out_routed}
 C {devices/lab_wire.sym} -160 -80 0 0 {name=p9b sig_type=std_logic lab=ua4_routed}
 C {devices/lab_wire.sym} -160 -40 0 0 {name=p10b sig_type=std_logic lab=ua5_routed}
@@ -69,10 +69,10 @@ C {devices/isource.sym} -240 170 2 1 {name=Ibias value=100u}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=Ibias}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
 C {devices/vsource.sym} -130 160 0 0 {name=Vset value="PULSE(0 3.3 60n 1n 1n 40n 1000n)"}
-C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=ua1}
+C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=set}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
 C {devices/vsource.sym} -30 160 0 0 {name=Vreset value="PULSE(0 3.3 220n 1n 1n 40n 1000n)"}
-C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=ua2}
+C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=reset}
 C {devices/gnd.sym} -30 190 0 0 {name=lvin2 lab=VGND}
 C {devices/capa.sym} -320 -410 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
@@ -94,10 +94,10 @@ Vgnd VGND 0 0
   meas tran qr_after_set FIND v(out_routed) AT=110n
   meas tran qd_after_reset FIND v(out_drawn) AT=280n
   meas tran qr_after_reset FIND v(out_routed) AT=280n
-  meas tran treset_drawn TRIG v(ua2) VAL=1.65 RISE=1 TARG v(out_drawn) VAL=1.65 FALL=1
-  meas tran treset_routed TRIG v(ua2) VAL=1.65 RISE=1 TARG v(out_routed) VAL=1.65 FALL=1
-  wrdata srlatch_tb_ua1.txt v(ua1)
-  wrdata srlatch_tb_ua2.txt v(ua2)
+  meas tran treset_drawn TRIG v(reset) VAL=1.65 RISE=1 TARG v(out_drawn) VAL=1.65 FALL=1
+  meas tran treset_routed TRIG v(reset) VAL=1.65 RISE=1 TARG v(out_routed) VAL=1.65 FALL=1
+  wrdata srlatch_tb_set.txt v(set)
+  wrdata srlatch_tb_reset.txt v(reset)
   wrdata srlatch_tb_out_drawn.txt v(out_drawn)
   wrdata srlatch_tb_out_routed.txt v(out_routed)
   write tb_srlatch.raw

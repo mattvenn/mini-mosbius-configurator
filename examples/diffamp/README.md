@@ -227,22 +227,88 @@ of load, held identical on both instances so the only difference between
 "What the two load capacitors are" section explains why they are equal,
 why the routed one is not 0, and why the value matters.
 
-It matters more here than anywhere else in this project. The load sits
-directly on the amplifier's output, so it sets the gain the testbench
-measures. Re-run 2026-08-27 at 10pF:
+Here it does not affect the gain at all, only how long you have to wait
+for it. That is worth stating plainly, because an earlier version of this
+section said the opposite.
 
-| | `out` base | `+40mV` step | `-40mV` step | gain + | gain - |
+## Step response and settling
+
+The output of this amplifier is a high-impedance node -- roughly 20
+MOhm -- so `cload` alone gives the step response a time constant of about
+**200 ns** as drawn and about **470 ns** as routed, where the bond pad
+adds ~5pF on top of `cload` and the switch matrix adds series resistance.
+Five time constants is 2.4us, which is why `tb_diffamp.sch` holds each
+input level for 2.5us and samples 5ns before the end of the plateau:
+
+```
+Vinp  PWL(0 1.5  999n 1.5  1000n 1.54  3499n 1.54  3500n 1.46  5999n 1.46  6000n 1.5)
+tran 5n 6.5u
+```
+
+Measured 2026-08-27, at `cload=10p`:
+
+| | `out` base | after `+40mV` | after `-40mV` | gain + | gain - |
 |---|---|---|---|---|---|
-| as drawn | 2.147V | 2.457V | 2.044V | 7.8 V/V | 2.6 V/V |
-| as routed | 2.175V | 2.308V | 2.174V | 3.3 V/V | 0.03 V/V |
+| as drawn | 2.147 V | 2.949 V | 1.306 V | 20.06 V/V | 21.02 V/V |
+| as routed | 2.175 V | 2.981 V | 1.331 V | 20.16 V/V | 21.09 V/V |
 
-At the 100pF this testbench used previously, `gain_drawn_pos` was 0.96
-V/V -- the amplifier was loaded until it had essentially no gain left,
-and the measurement said more about the capacitor than the circuit. The
-`~21.3 V/V` in the steps table above is the unloaded figure, so 10pF is
-still real loading; the point is that it is now a load you could actually
-have on a bench rather than one that swamps the result.
+**The two agree to within 0.5%, and that is the expected answer.** At DC
+no current flows into a capacitor, so the pad's and the switch matrix's
+series resistance drop no voltage at all: everything the routed model adds
+is resistance and capacitance, and neither changes a settled gain. Both
+also match the `~21.3 V/V` unloaded figure in the steps table above. So
+the switch matrix costs this circuit **bandwidth, not gain** -- the exact
+mirror of `examples/inverter/`, where a fast edge is dominated by the pad.
 
-Both `gain_*` measures still report `failed` while printing a computed
-number -- an ngspice `.meas ... PARAM=` quirk, unrelated to the load, and
-still open in `TODO.md`.
+The ~5% difference between the positive and negative gains appears
+identically in both branches, which makes it a real property of the
+amplifier -- its swing is not symmetric about the operating point -- and
+not a measurement artifact.
+
+### Why the earlier numbers here were wrong
+
+This section previously reported 7.8 and 2.6 V/V as drawn and 3.3 and 0.03
+V/V as routed, and explained them as the load crushing the gain. Every one
+of those numbers was a sample taken before the output had arrived. The
+plateaus were 100 ns against a 200-470 ns time constant, so the `FIND`
+measurements caught the response less than half way up, and the routed
+branch -- being the slower of the two -- looked like a far worse
+amplifier when it is an equally good one that takes longer. The
+`0.96 V/V` recorded at the older 100pF load was the same error, worse.
+
+The tell was visible in the raw file without re-running anything:
+`out_drawn` read 2.313 V half way through the plateau and 2.457 V at the
+end, and never returned to its baseline afterwards. A measurement that
+still moves while you take it is not a measurement of a settled quantity.
+
+### The `gain_*` measures used to fail
+
+All four reported `failed` while printing a plausible number. The cause
+was not an ngspice quirk, as `TODO.md` recorded for a while: `PARAM=` is a
+feature of the `.measure` netlist card, not of the `meas` command inside a
+`.control` block. ngspice substituted the vector values first and then
+tried to parse `param=7.761175e+00` as a function name, which is why the
+computed value appeared in the failure message and made the failure look
+cosmetic.
+
+The fix is the idiom `tb_ring.sch` already used for frequency:
+
+```
+let gain_drawn_pos = (vout_drawn_pos - vout_drawn_base)/0.04
+print gain_drawn_pos
+```
+
+`vout_*` are real `meas` results, so they are already vectors in scope.
+
+## Testbench net names
+
+`tb_diffamp.sch` names a net for what it does, not for which package pin it
+sits on -- the schematic already shows you the pin. A net **shared**
+between the two instances carries no suffix, because it is physically one
+net: `inp` and `inm`. A net that differs per instance carries `_drawn` or
+`_routed`: `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
+name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
+after.
+
+So the suffix tells you something real at a glance: no suffix means one
+net feeding both halves, a suffix means one per half.

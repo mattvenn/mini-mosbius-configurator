@@ -62,7 +62,7 @@ schematic=ring_routed
 spice_sym_def="tcleval([mosbius_routed_include build/ring_routed.spice])"
 tclcommand="textwindow [file normalize build/ring_routed.spice]"}
 C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=ua1_drawn}
+C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=loop2_drawn}
 C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=loop_drawn}
 C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=out_drawn}
 C {devices/lab_wire.sym} -550 -80 0 0 {name=p9 sig_type=std_logic lab=ua4_drawn}
@@ -71,7 +71,7 @@ C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
 C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=ua1_routed}
+C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=loop2_routed}
 C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=loop_routed}
 C {devices/lab_wire.sym} -160 -120 0 0 {name=p8b sig_type=std_logic lab=out_routed}
 C {devices/lab_wire.sym} -160 -80 0 0 {name=p9b sig_type=std_logic lab=ua4_routed}

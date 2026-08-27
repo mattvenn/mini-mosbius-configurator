@@ -6,8 +6,8 @@ S {}
 F {}
 E {}
 B 2 180 -180 980 220 {flags=graph
-y1=-0.0034
-y2=3.3
+y1=1.4
+y2=2.5
 ypos1=0
 ypos2=2
 divy=5
@@ -20,19 +20,21 @@ subdivx=1
 xlabmag=1.0
 ylabmag=1.0
 node="out_drawn
-out_routed"
-color="12 14"
+out_routed
+inp
+inm"
+color="12 14 4 10"
 dataset=-1
 unitx=1
 logx=0
 logy=0
 }
-T {The same differential amplifier twice: x1 as drawn (ideal wires, no switch matrix)} -530 -680 0 0 0.25 0.25 {}
-T {and x2 as routed onto the real chip. Both are mini_mosbius.sym --} -530 -650 0 0 0.25 0.25 {}
-T {schematic= is what says which one an instance stands for.} -530 -620 0 0 0.25 0.25 {}
-T {ua1=inp, ua2=inm (shared, drive both branches identically), ua4=out} -530 -590 0 0 0.25 0.25 {}
-T {(out_drawn/out_routed here, one per branch, per examples/diffamp/README.md).} -530 -560 0 0 0.25 0.25 {}
-T {x2 needs build/diffamp_routed.spice, which is generated -- ctrl-click -generate routed spice-, then Netlist again.} -530 -530 0 0 0.25 0.25 {}
+T {Differential amplifier
+ 
+x1 as drawn - ideal wires, no switch matrix
+x2 as routed on the chip including analog mux and pads 
+
+inp/inm = inputs (shared), ua4=OUT} -640 -730 0 0 0.5 0.5 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/diffamp/diffamp.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -40,8 +42,8 @@ schematic=diffamp_routed
 spice_sym_def="tcleval([mosbius_routed_include build/diffamp_routed.spice])"
 tclcommand="textwindow [file normalize build/diffamp_routed.spice]"}
 C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=ua1}
-C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=ua2}
+C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=inp}
+C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=inm}
 C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=ua3_drawn}
 C {devices/lab_wire.sym} -550 -80 0 0 {name=p9 sig_type=std_logic lab=out_drawn}
 C {devices/lab_wire.sym} -550 -40 0 0 {name=p10 sig_type=std_logic lab=ua5_drawn}
@@ -49,8 +51,8 @@ C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
 C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=ua1}
-C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=ua2}
+C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=inp}
+C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=inm}
 C {devices/lab_wire.sym} -160 -120 0 0 {name=p8b sig_type=std_logic lab=ua3_routed}
 C {devices/lab_wire.sym} -160 -80 0 0 {name=p9b sig_type=std_logic lab=out_routed}
 C {devices/lab_wire.sym} -160 -40 0 0 {name=p10b sig_type=std_logic lab=ua5_routed}
@@ -66,44 +68,20 @@ C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
 C {devices/isource.sym} -240 170 2 1 {name=Ibias value=100u}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=Ibias}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
-C {devices/vsource.sym} -130 160 0 0 {name=Vinp value="PWL(0 1.5 49n 1.5 50n 1.54 149n 1.54 150n 1.46 249n 1.46 250n 1.5)"}
-C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=ua1}
+C {devices/vsource.sym} -130 160 0 0 {name=Vinp value="PWL(0 1.5 999n 1.5 1000n 1.54 3499n 1.54 3500n 1.46 5999n 1.46 6000n 1.5)"}
+C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=inp}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
 C {devices/vsource.sym} -30 160 0 0 {name=Vinm value=1.5}
-C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=ua2}
+C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=inm}
 C {devices/gnd.sym} -30 190 0 0 {name=lvin2 lab=VGND}
-C {devices/capa.sym} -300 -390 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -300 -420 1 0 {name=pc1 sig_type=std_logic lab=out_drawn}
-C {devices/gnd.sym} -300 -360 0 0 {name=lc1 lab=VGND}
-C {devices/capa.sym} -210 -390 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -210 -420 1 0 {name=pc2 sig_type=std_logic lab=out_routed}
-C {devices/gnd.sym} -210 -360 0 0 {name=lc2 lab=VGND}
+C {devices/capa.sym} -320 -410 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
+C {devices/gnd.sym} -320 -380 0 0 {name=lc1 lab=VGND}
+C {devices/capa.sym} -140 -410 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -140 -440 2 0 {name=pc2 sig_type=std_logic lab=out_routed}
+C {devices/gnd.sym} -140 -380 0 0 {name=lc2 lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
-C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
-* Differential step response of the same diff amp as drawn (out_drawn, x1)
-* and as routed onto the real chip (out_routed, x2). inm (ua2) is a fixed
-* 1.5V common-mode bias; inp (ua1) steps +40mV at t=50n, then -40mV at
-* t=150n, back to 1.5V at t=250n -- a simplified single-step version of
-* examples/diffamp/README.md's own 13-level +-2/5/10/20/40mV sweep (that
-* sweep was generated by a script, not hand-typed, per the README's own
-* closing note). Unlike every other example here, ibias is not incidental:
-* the tail bank needs the 100uA forced by the shared Ibias source above to
-* be biased into its normal operating region at all (README's own point).
-* gain_*_pos/neg are (delta out)/(delta in) sampled 95ns into each
-* plateau -- compare against the README's unloaded ~21.3 V/V: the Cload
-* above (10pF, the same probe load used everywhere else in this
-* project) is heavier than that measurement's own bare-output setup, so a
-* lower number here is loading, not a discrepancy to chase.
-* Vgnd is what gives ngspice its node 0. xschem emits ground as a named
-* global net (VGND, plus .GLOBAL VGND), never as SPICE node 0, so without
-* it nothing in this deck connects to 0 and the whole circuit floats.
-* .option rshunt used to hide that by strapping every node to 0 through a
-* huge resistor -- solvable, but the absolute level was then set only by
-* the balance of those shunt currents, so any current with no DC return
-* path dragged the entire circuit thousands of volts away from 0 with the
-* real signals riding on top. Ground it properly instead; rshunt is then
-* unnecessary. See examples/ringosc/tb_ring.sch for the worked case.
-
+C {devices/code_shown.sym} 140 -810 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
 
 .param cload=10p
@@ -111,18 +89,19 @@ Vgnd VGND 0 0
 .option reltol=0.01
 .control
   save all
-  tran 1n 300n
-  meas tran vout_drawn_base FIND v(out_drawn) AT=45n
-  meas tran vout_drawn_pos FIND v(out_drawn) AT=145n
-  meas tran vout_drawn_neg FIND v(out_drawn) AT=245n
-  meas tran gain_drawn_pos PARAM='(vout_drawn_pos-vout_drawn_base)/0.04'
-  meas tran gain_drawn_neg PARAM='(vout_drawn_base-vout_drawn_neg)/0.04'
-  meas tran vout_routed_base FIND v(out_routed) AT=45n
-  meas tran vout_routed_pos FIND v(out_routed) AT=145n
-  meas tran vout_routed_neg FIND v(out_routed) AT=245n
-  meas tran gain_routed_pos PARAM='(vout_routed_pos-vout_routed_base)/0.04'
-  meas tran gain_routed_neg PARAM='(vout_routed_base-vout_routed_neg)/0.04'
-  wrdata diffamp_tb_ua1.txt v(ua1)
+  tran 5n 6.5u
+  meas tran vout_drawn_base FIND v(out_drawn) AT=995n
+  meas tran vout_drawn_pos FIND v(out_drawn) AT=3495n
+  meas tran vout_drawn_neg FIND v(out_drawn) AT=5995n
+  meas tran vout_routed_base FIND v(out_routed) AT=995n
+  meas tran vout_routed_pos FIND v(out_routed) AT=3495n
+  meas tran vout_routed_neg FIND v(out_routed) AT=5995n
+  let gain_drawn_pos  = (vout_drawn_pos - vout_drawn_base)/0.04
+  let gain_drawn_neg  = (vout_drawn_base - vout_drawn_neg)/0.04
+  let gain_routed_pos = (vout_routed_pos - vout_routed_base)/0.04
+  let gain_routed_neg = (vout_routed_base - vout_routed_neg)/0.04
+  print gain_drawn_pos gain_drawn_neg gain_routed_pos gain_routed_neg
+  wrdata diffamp_tb_inp.txt v(inp)
   wrdata diffamp_tb_out_drawn.txt v(out_drawn)
   wrdata diffamp_tb_out_routed.txt v(out_routed)
   write tb_diffamp.raw

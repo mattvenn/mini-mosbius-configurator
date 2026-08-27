@@ -424,3 +424,16 @@ about -277kV with the real signals riding on top. Every node reading
 properly fixes that at the source, and `rshunt` then merely costs solve
 time -- measured 1m54 without it against 2m40 with, same answer to 7
 digits. Every testbench in this project now carries the `Vgnd` line.
+
+## Testbench net names
+
+`tb_ring.sch` names a net for what it does, not for which package pin it
+sits on -- the schematic already shows you the pin. A net **shared**
+between the two instances carries no suffix, because it is physically one
+net: nothing -- the ring free-runs, so it has no shared stimulus. A net that differs per instance carries `_drawn` or
+`_routed`: `loop_drawn`/`loop_routed`, `loop2_drawn`/`loop2_routed` and `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
+name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
+after.
+
+So the suffix tells you something real at a glance: no suffix means one
+net feeding both halves, a suffix means one per half.

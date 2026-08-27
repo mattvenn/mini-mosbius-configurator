@@ -21,7 +21,7 @@ xlabmag=1.0
 ylabmag=1.0
 node="out_drawn
 out_routed
-ua1"
+in"
 color="12 14 10"
 dataset=-1
 unitx=1
@@ -33,7 +33,7 @@ T {CMOS inverter
 x1 as drawn - ideal wires, no switch matrix
 x2 as routed on the chip including analog mux and pads 
 
-ua1=IN, ua2=OUT} -640 -730 0 0 0.5 0.5 {}
+in=IN, ua2=OUT} -640 -730 0 0 0.5 0.5 {}
 C {mini_mosbius.sym} -450 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/inverter/inverter.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
@@ -41,7 +41,7 @@ schematic=inverter_routed
 spice_sym_def="tcleval([mosbius_routed_include build/inverter_routed.spice])"
 tclcommand="textwindow [file normalize build/inverter_routed.spice]"}
 C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=ua1}
+C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=in}
 C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=out_drawn}
 C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=ua3_drawn}
 C {devices/lab_wire.sym} -550 -80 0 0 {name=p9 sig_type=std_logic lab=ua4_drawn}
@@ -50,7 +50,7 @@ C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
 C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=Ibias}
-C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=ua1}
+C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=in}
 C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=out_routed}
 C {devices/lab_wire.sym} -160 -120 0 0 {name=p8b sig_type=std_logic lab=ua3_routed}
 C {devices/lab_wire.sym} -160 -80 0 0 {name=p9b sig_type=std_logic lab=ua4_routed}
@@ -68,7 +68,7 @@ C {devices/isource.sym} -240 170 2 1 {name=Ibias value=100u}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=Ibias}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
 C {devices/vsource.sym} -130 160 0 0 {name=Vin value="PULSE(3.3 0 10n 1n 1n 250n 500n)"}
-C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=ua1}
+C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=in}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
 C {devices/capa.sym} -320 -410 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
@@ -89,7 +89,7 @@ Vgnd VGND 0 0
   tran 1n 500n
   meas tran trise_drawn TRIG v(out_drawn) VAL=0.33 RISE=1 TARG v(out_drawn) VAL=2.97 RISE=1
   meas tran trise_routed TRIG v(out_routed) VAL=0.33 RISE=1 TARG v(out_routed) VAL=2.97 RISE=1
-  wrdata inverter_tb_ua1.txt v(ua1)
+  wrdata inverter_tb_in.txt v(in)
   wrdata inverter_tb_out_drawn.txt v(out_drawn)
   wrdata inverter_tb_out_routed.txt v(out_routed)
   write tb_inverter.raw

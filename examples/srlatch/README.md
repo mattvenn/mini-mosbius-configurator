@@ -270,3 +270,15 @@ first measurement. `tb_ring.sch` has the same symmetry problem and solves it
 with current-pulse kicks instead; see that README's "How `tb_ring.sch` is
 set up".
 
+## Testbench net names
+
+`tb_srlatch.sch` names a net for what it does, not for which package pin it
+sits on -- the schematic already shows you the pin. A net **shared**
+between the two instances carries no suffix, because it is physically one
+net: `set` and `reset`. A net that differs per instance carries `_drawn` or
+`_routed`: `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
+name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
+after.
+
+So the suffix tells you something real at a glance: no suffix means one
+net feeding both halves, a suffix means one per half.
