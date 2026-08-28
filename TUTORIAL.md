@@ -10,7 +10,8 @@ If you just want the finished files, `examples/inverter/` has them already
 -- open `examples/inverter/inverter.sch` in xschem to see where this
 tutorial ends up. `examples/srlatch/` has a second, slightly harder worked
 example (a settable/resettable latch) once you're comfortable with this
-one.
+one, and [`examples/README.md`](examples/README.md) is the reference to
+come back to once you are drawing your own circuits.
 
 ## 0. What you're working with
 
@@ -160,30 +161,22 @@ within about a second.
 
 `mosbius_nmos`/`mosbius_pmos` netlist to the *same real sky130 transistor
 sizing* as the actual hardware block, just without the switch-matrix
-overhead in between -- so simulating your `my_inverter.sch` directly (before
-routing) gives the "as drawn" result: what the circuit does electrically,
-with parasitics from the real switch matrix left out. `examples/inverter/`
-has a full worked simulation with a plot and an explanation of what that
-comparison does and doesn't tell you.
+overhead in between -- so simulating your `my_inverter.sch` directly, before
+routing, gives the "as drawn" result.
 
-To go further and simulate your design **as routed** -- through the real
-switch matrix, with its parasitics and the chip's pads and analog mux --
-copy `xschem/mosbius_lib/tb_template.sch` next to your design and replace
-`my_design.sch` and `my_design_routed` throughout it with your own names.
-It gives you the standard side-by-side: `x1` is your design as drawn, `x2`
-is the same design as routed, both driven by one stimulus, with
-`out_drawn` and `out_routed` to compare. Ctrl-click **generate routed
-spice** on the sheet to build the file `x2` needs, then press Netlist
-again. Add your own `.meas` lines to the `.control` block; the template
-deliberately ships without any, since what is worth measuring depends on
-your circuit.
+To also simulate it **as routed** -- through the real switch matrix, with
+its parasitics, pads and analog mux -- copy
+`xschem/mosbius_lib/tb_template.sch` next to your design, replace
+`my_design.sch` and `my_design_routed` throughout with your own names,
+ctrl-click **generate routed spice** on the sheet, and press Netlist again.
+Add your own `.meas` lines to the `.control` block; the template ships
+without any, since what is worth measuring depends on your circuit.
 
-Both output load capacitors are `'cload'`, set by `.param cload=10p` --
-one scope probe's worth. Keep them equal: that is what makes the only
-difference between `out_drawn` and `out_routed` the chip itself.
-`examples/README.md`'s "Capacitive loading" explains why, and why the
-value matters more than it looks -- along with the gotchas and the
-drawn/routed/silicon vocabulary shared by all four examples.
+That is the whole recipe. What the two branches mean, why both load
+capacitors are `'cload'` and must stay equal, and what the comparison does
+and doesn't tell you are in
+[`examples/README.md`](examples/README.md); `examples/inverter/` is the
+same testbench worked through with numbers and a plot.
 
 ## 6. Upload it (needs a physical demoboard)
 
@@ -207,6 +200,10 @@ happened, why, what to try next.
 
 ## Where to go next
 
+- [`examples/README.md`](examples/README.md) -- the background all four
+  worked examples share: as drawn vs as routed vs measured on silicon, the
+  side-by-side testbench idiom, capacitive loading, and the gotchas that
+  have each cost someone a day. Read this next.
 - `examples/srlatch/` -- the same pipeline for a 6-transistor circuit with
   actual internal state (a latch), including the row-allocation constraint
   that made the first version of that example fail to route (worth reading

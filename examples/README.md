@@ -11,8 +11,10 @@ only what is particular to that circuit.*
 | [`diffamp/`](diffamp/) | Five FETs + tail bank | Drawing a differential pair *as a pair*, with a real tail current. |
 | [`ringosc/`](ringosc/) | Eight FETs | An open investigation, not a polished example: how close the routed model gets to measured silicon. |
 
-`TUTORIAL.md` at the repo root walks the inverter through from a blank
-sheet. This page assumes you have done that once.
+[`TUTORIAL.md`](../TUTORIAL.md) at the repo root walks the inverter
+through from a blank sheet, one instruction at a time. This page is the
+other half: the reference you come back to once you are drawing your own
+circuits, and it assumes you have done that walkthrough once.
 
 ## Three things a number can be
 
@@ -231,6 +233,9 @@ selection for the PDK's binned HV FET models, and every instance then
 fails with "could not find a valid modelname".
 
 ## Building your own
+
+[`TUTORIAL.md`](../TUTORIAL.md) has the click-by-click version of what
+follows; this is the same path at reference speed.
 
 Copy `xschem/mosbius_lib/mini_mosbius.sch` to a new file **in the same
 directory** -- schematics refer to symbols by bare name, so they resolve
