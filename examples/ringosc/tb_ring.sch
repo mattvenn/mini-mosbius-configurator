@@ -146,6 +146,14 @@ Vgnd VGND 0 0
   let freq_routed = 1/period_routed
   print freq_routed
 
+* The buffered output as a waveform, for plotting against the same node
+* measured on silicon -- see tools/plot_ring_comparison.py. Written from
+* each tran separately because the two runs are 15x apart in timebase.
+  wrdata ring_tb_out_routed.txt v(out_routed)
+  setplot tran1
+  wrdata ring_tb_out_drawn.txt v(out_drawn)
+  setplot tran2
+
   write tb_ring.raw tran1.all tran2.all
 .endc
 "}

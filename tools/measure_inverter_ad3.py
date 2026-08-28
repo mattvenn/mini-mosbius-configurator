@@ -9,20 +9,13 @@ repo root, on the host -- not in the container, since it needs USB:
 
     python3 tools/measure_inverter_ad3.py
 
-**Which pads to clip onto is per shuttle, and not guessable.** A design's
-`ua[k]` is not the PCB pad letter: the chip's analog pins are muxed, so
-which internal analog index a project's `ua[k]` lands on depends on where
-that project was placed on that shuttle. The authority is the project
-page, e.g. https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius,
-whose Analog pins table gives `ua` -> PCB pin -> internal index. The
-machine-readable half of it is the shuttle index --
-https://index.tinytapeout.com/ttsky25a.json gives this project
-`analog_pins: [5, 0, 4, 1, 3, 2]`, i.e. design `ua[k]` -> internal index
--- and lining that up against the page's pad column gives index -> pad
-0=C 1=D 2=F 3=G 4=J 5=K, the carrier's six analog pads in letter order.
-That last step is inferred from this one project's table rather than read
-from a Tiny Tapeout spec, so PADS below is written out per shuttle and
-checked against the page rather than computed.
+**Which pads to clip onto is derived, not written down here.** A design's
+`ua[k]` is not a pad letter and the relationship changes with the shuttle,
+so `mosbius/pads.py` composes it from the shuttle index and the board's own
+pad lettering -- see that module for where each half comes from. What this
+script contributes is which pins the *bitstream* uses, since the bench
+state is the configuration in the socket.
+
 """
 
 from __future__ import annotations
@@ -36,29 +29,34 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.model import SwitchConfig  # noqa: E402
+from mosbius.pads import pads_in_use  # noqa: E402
+
 # examples/inverter as the router places it: ua1 in, ua2 out.
 BITSTREAM = "080000004010000001000000000000000040000400000000"
 PROJECT = "tt_um_tnt_mosbius"
-# ttsky25a, from the project page's Analog pins table -- see the docstring.
-# The whole map is here rather than just the pins this script uses, because
-# it is the thing a person at the bench needs and it is per shuttle.
-PADS = {"ibias": "K", "ua1": "C", "ua2": "J", "ua3": "D", "ua4": "G", "ua5": "F"}
+SHUTTLE = "ttsky25a"
 VAPWR = 3.3
 STEP = 0.025
 
 
 def wiring_table() -> str:
-    return (
-        "\n  Wire the Analog Discovery to the demoboard like this:\n\n"
-        "    AD3 lead     demoboard         signal\n"
-        "    ---------    --------------    ------------------------------\n"
-        f"    W1 (yellow)  pad {PADS['ua1']}             inverter input, design ua1\n"
-        f"    1+ (orange)  pad {PADS['ua1']}             the same node, monitors the drive\n"
-        f"    2+ (blue)    pad {PADS['ua2']}             inverter output, design ua2\n"
-        "    1-, 2-, GND  demoboard GND     scope reference -- the AD3's inputs\n"
-        "                                   are differential, so these must be\n"
-        "                                   grounded or every reading is wrong\n"
-    )
+    pads = pads_in_use(SwitchConfig(bits=unpack(BITSTREAM)), SHUTTLE, PROJECT)
+    rows = [
+        ("W1 (yellow)", pads["ua1"], "inverter input, design ua1"),
+        ("1+ (orange)", pads["ua1"], "the same node, monitors the drive"),
+        ("2+ (blue)", pads["ua2"], "inverter output, design ua2"),
+        ("1-, 2-, GND", "GND", "scope reference -- the inputs are differential,"),
+        ("", "", "so these must be grounded or every reading is wrong"),
+    ]
+    out = ["\n  Wire the Analog Discovery to the demoboard like this:\n",
+           "    AD3 lead      pad      signal",
+           "    -----------   -----    ------------------------------------------"]
+    for lead, pad, what in rows:
+        out.append(f"    {lead:<13s} {pad:<8s} {what}")
+    return "\n".join(out) + "\n"
 
 
 def program_chip(port: str | None) -> None:

@@ -60,6 +60,29 @@ rediscovering:
   and nothing works until it is copied there (`sudo cp -R
   /Volumes/WaveForms/dwf.framework /Library/Frameworks/`).
 
+**This chip is an `ss` part, not `tt`, and that closed the last gap
+(2026-08-28).** Both silicon measurements disagreed with the decks in the
+same direction -- the ring 11% slow, the inverter's gain 17% high -- and
+both are explained by the corner: at `ss` the ring lands within 0.3% of
+39.528 MHz measured, the inverter's trip point within 4 mV of 1.599 V and
+its gain within 4.6%. `tools/sweep_corners.sh` re-runs both testbenches at
+tt/fs/sf/ff/ss by rewriting the `.lib` line in the netlist (leaving the
+committed schematics, and so every published number, at `tt`), and
+`tools/compare_corners.py` ranks them against the bench.
+
+**It takes both circuits, and that is the transferable part.** An
+inverter's trip point is a pure NMOS-versus-PMOS strength ratio: `fs` and
+`sf` land 105 mV either side of the measurement while `tt`, `ff` and `ss`
+sit within 6 mV, so it pins symmetry and says nothing about speed. A
+ring's frequency is speed and barely separates `fs` from `tt` (43.47
+against 43.89 MHz), because slowing the PMOS while speeding the NMOS
+roughly cancels around a loop. Either alone leaves half the corner space
+open. This also excluded a reasonable prior -- sky130 silicon is often
+said to sit nearer `fs` than `tt`, and a ring measured slow is what
+fitting a corner to digital speed alone would call `fs` -- by 105 mV of
+trip point, fifty times the measurement's repeatability. One chip is one
+sample; this says nothing about the shuttle.
+
 **Which PCB pad a design's `ua[k]` comes out on is per shuttle, and is
 not derivable from the pin number.** The chip's analog pins are muxed, so
 the internal analog index a project's `ua[k]` lands on depends on where

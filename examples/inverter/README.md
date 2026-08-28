@@ -254,8 +254,22 @@ the same circuit through the matrix moves it to 1.600 V. Silicon says
 first independent evidence that `mosbius simulate`'s model of the switch
 matrix is right rather than merely plausible.
 
-**The gain does not agree as well**, and the gap is real: -14.5 V/V
-routed against -16.9 V/V measured, about 17% low. Both figures are
+**The gain gap is the process corner.** As routed at `tt` gives
+-14.5 V/V against -16.9 V/V measured, about 17% low -- but this chip is
+not a `tt` part. At `ss` the same deck gives -16.13 V/V, a 4.6% error, and
+`ss` simultaneously puts the ring oscillator within 0.3% of its measured
+frequency; see `examples/ringosc/README.md` for the full corner table and
+why it takes both circuits to establish that. This example contributes the
+half of the evidence that pins the *symmetry*: the trip point is a pure
+NMOS-versus-PMOS strength ratio, so `fs` and `sf` land 105 mV either side
+of the measurement while `tt`, `ff` and `ss` all sit within 6 mV of it.
+Reproduce with `sh tools/sweep_corners.sh` and
+`python3 tools/compare_corners.py`.
+
+The figures in the table above stay at `tt`, deliberately: it is the
+corner the committed testbenches use and the one CI asserts, and quoting a
+per-chip corner as the example's headline would bake one sample's silicon
+into the reference numbers. Both figures are
 least-squares fits over +/-50 mV around each curve's own trip point,
 which matters -- a peak slope read off the steepest pair of points
 depends on how finely you swept (the same silicon gives -17.5 V/V at

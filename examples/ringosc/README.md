@@ -4,11 +4,15 @@
 testbench idiom, capacitive loading, the common gotchas -- is in
 [`../README.md`](../README.md).*
 
-**Status: open investigation, not a finished example.** Unlike
-`examples/inverter/` and `examples/srlatch/`, nothing here is a polished
-tutorial artifact -- this is a working note on a specific gap-closing
-exercise, kept so it can be picked back up later without re-deriving
-everything from scratch. `ring.sch` and `tb_ring.sch` are both committed
+**Status: measured on silicon 2026-08-28, and still a working note
+rather than a polished tutorial artifact.** The headline result is in --
+this circuit runs at 39.528 MHz on a real chip against 43.89 MHz as
+routed and 2.083 GHz as drawn, see "What the committed schematic measures
+now, and on silicon" -- but the surrounding text is still the record of a
+gap-closing exercise, kept so it can be picked back up without
+re-deriving everything, rather than something written for a newcomer to
+read top to bottom. Sections below marked as history describe decks that
+predate `mosbius simulate`. `ring.sch` and `tb_ring.sch` are both committed
 and both run: the testbench takes about two minutes in the
 IIC-OSIC-TOOLS container. (An earlier version of this note said it OOMed
 and needed a higher-RAM machine. That was the hand-built full-matrix deck
@@ -190,7 +194,10 @@ This writes `build/ring_measured_routed.spice`, a self-contained
 `.subckt ring_measured_routed` with the same 9-pin port list as
 `ring.sch`'s own routed output -- point a copy of the testbench's `x2`
 instance at it for the number directly comparable to the ~30MHz silicon
-measurement.
+measurement. Note that ~30MHz is *tnt's* measurement of the unbuffered
+circuit, not this project's 39.528 MHz measurement of the buffered one --
+different circuits, different benches, and only the second one is
+reproducible from this repo.
 
 Two things to change in that copy, because the measured bitstream is the
 unbuffered circuit: its loop nodes are `ua[1]`, `ua[2]` and `ua[4]`, so
@@ -221,38 +228,144 @@ last combination is what `mosbius simulate` emits now, so the middle row
 is history rather than something you can reproduce from the current tool;
 it is kept because the size of each step is the actual result here.
 
-### What the committed schematic measures now
+### What the committed schematic measures now, and on silicon
 
-`ring.sch` is no longer that circuit -- it has the buffer, and one of its
-three loop nodes is an internal net. Running `tb_ring.sch` as committed,
-measured on the loop nodes:
+`ring.sch` is the buffered circuit -- three loop stages plus a fourth
+inverter driving `ua3` -- with one of its three loop nodes an internal
+net. As of 2026-08-28 all three columns exist for it: the two simulated
+ones from `tb_ring.sch` (`.meas` on the loop nodes), and a real
+measurement on a ttsky25a chip with an Analog Discovery 3 on `ua3`.
 
-```
-freq_drawn  = 2.083 GHz    (period 480.2 ps)
-freq_routed = 43.89 MHz    (period 22.78 ns)
-```
+![spectra as drawn, as routed and on silicon](ring_three_ways.png)
 
-`freq_drawn` sits below the 2.45GHz in the table because the loop now
-carries the buffer's gate capacitance, which the unbuffered version did
-not have. `freq_routed` is ~1.46x the ~30MHz silicon figure, but that
-figure is of a *different* circuit -- unbuffered, all three loop nodes on
-pins -- so the two are not directly comparable. This circuit has never
-been measured on silicon.
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| frequency | 2.083 GHz | **43.89 MHz** | **39.528 MHz** |
+| against silicon | x53 too fast | +11% | -- |
 
-**The experiment worth running.** Route the same eight devices with every
-loop node on a package pin, and compare against this one, where `net1` is
-internal. Same devices, same widths, same topology, same tail ties, same
-observation point on `ua3` -- only one bond pad's worth of bus row
-differs. Two bitstreams, one board, a frequency counter. That would test
-the pad and mux model directly, which nothing in this project currently
-does: `examples/inverter/README.md`'s conclusion that the bond pad
-dominates rests on simulation alone.
+Reproduce the simulated columns with `sh tools/check_ring_sim.sh` inside
+the container, the measured one with `python3 tools/measure_ring_ad3.py`
+on the host, and the figure with `python3 tools/plot_ring_comparison.py`.
 
-The simulated ratio for that pair has **not** been measured soundly yet.
-An earlier attempt gave 1.7x, but it was measured on `out_routed`, which
-is the one node that does not reliably cross the trigger level -- see
-above. Redo it with the measures on the loop nodes before quoting a
-number.
+**This is the result the example was built for.** Drawing the circuit and
+simulating it ideally is wrong by a factor of fifty-three. The same
+circuit through the real configured switch matrix is wrong by eleven
+percent. Nothing about the design changed between those two numbers --
+only whether the switches it actually runs on are in the model.
+
+**Reading the figure.** Two panels on two timebases, the same split
+`tb_ring.sch` already makes with its two `tran` runs: as drawn is a
+factor of 53 away and gets its own axis, while as routed and silicon are
+close enough to overlay -- and once overlaid, an 11% period difference is
+something you watch drift apart across 50 ns rather than a number you
+take on trust.
+
+The measured trace is *folded*, not raw: each sample's time is taken
+modulo the period and plotted against the remainder, so every cycle is
+drawn on top of every other -- what a scope shows with persistence on and
+a trigger every cycle. This is necessary because 100 MS/s is only 2.5
+samples per period at 40 MHz, so a direct plot is an aliased zigzag;
+across hundreds of cycles each one lands at a different phase and together
+they fill the period in. What is drawn is real samples at their true
+phases, no interpolation and no averaging. It needs the frequency to
+about a part per million, so the script refines it with a zoom-DFT before
+folding.
+
+**How wide the folded band comes out is a measurement in itself.** Fold
+more cycles and the period fills in better, but a free-running ring has
+nothing holding its frequency, so a longer window stacks more of its own
+wander into one period. On this chip, band width at mid-level:
+
+| cycles folded | window | band width |
+|---|---|---|
+| 200 | 5.0 us | 786 ps (3.1% of a period) |
+| 1000 | 25.3 us | 840 ps (3.3%) |
+| 6474 | 163.8 us | 2280 ps (9.0%) |
+
+The refitted frequency moves by under 10^-5 across those windows, so the
+band is the oscillator wandering, not the estimate being wrong. The ~790
+ps floor at short windows is short-term cycle-to-cycle jitter, and it is
+not instrument noise: at the trace's ~0.13 V/ns slope the AD3's ~2 mV of
+noise is worth 15 ps. The figure folds 300 cycles, which keeps the trace
+thin while still putting ~750 samples across the period.
+
+Frequency is the *only* quantity worth quoting here. The captured 0.78 V
+pk-pk is the leads rolling off at 40 MHz, not the chip's swing, so the
+figure scales the measured trace into the routed one's amplitude purely so
+both fit the panel. The frequency itself is solid: an interpolated FFT
+peak and a zero-crossing count agree to 1 kHz and repeat within 3 kHz
+across five captures.
+
+**Where the remaining 11% went: the process corner.** The decks all run
+`tt`, and this chip is not `tt`. Re-running both testbenches at every
+corner (`sh tools/sweep_corners.sh`, then `python3
+tools/compare_corners.py`) and comparing against the bench:
+
+| corner | ring as routed | vs silicon | inverter trip point | inverter gain |
+|---|---|---|---|---|
+| tt | 43.894 MHz | +11.0% | 1.600 V (+0.9 mV) | -14.49 (-14.3%) |
+| fs | 43.466 MHz | +10.0% | 1.705 V (+105.9 mV) | -14.55 (-13.9%) |
+| sf | 44.582 MHz | +12.8% | 1.495 V (-104.1 mV) | -14.35 (-15.1%) |
+| ff | 48.612 MHz | +23.0% | 1.605 V (+5.9 mV) | -13.14 (-22.3%) |
+| **ss** | **39.636 MHz** | **+0.3%** | **1.595 V (-4.1 mV)** | **-16.13 (-4.6%)** |
+
+At `ss` the ring lands within 0.3%, the inverter's trip point within 4 mV
+and its gain within 4.6% -- three independent quantities, one corner. So
+`mosbius simulate`'s model of the matrix was not 11% wrong; the deck was
+being asked about a faster chip than the one on the bench.
+
+**Neither circuit could have established that alone**, which is the
+methodological point worth keeping. An inverter's trip point is a pure
+NMOS-versus-PMOS strength ratio: it separates the asymmetric corners
+sharply (fs and sf land 105 mV either side of tt) and says nothing about
+absolute speed, since tt, ff and ss agree within 6 mV. A ring's frequency
+is absolute speed and barely distinguishes fs from tt -- 43.47 against
+43.89 MHz -- because slowing the PMOS while speeding the NMOS roughly
+cancels around a loop. The pair pins the corner; either one on its own
+leaves half the space open.
+
+That also settles a plausible hypothesis in the negative. sky130 silicon
+is often said to sit nearer `fs` than `tt`, and a ring measured slow is
+exactly what someone fitting a corner to digital speed alone would call
+`fs`. On this chip `fs` is excluded by 105 mV of trip point, which is
+fifty times the measurement's own repeatability. One chip is one sample
+and this says nothing about the shuttle as a whole -- but for this part,
+on these three observables, it is slow-symmetric rather than
+fast-NMOS/slow-PMOS.
+
+The remaining candidates for the last fraction of a percent are the ones
+no measurement here separates: temperature, the demoboard's actual `ibias`
+(`tt.analog_current_source` is `None` on this firmware, though every stage
+here has its shared source rail-tied, which shorts the tail bank out), and
+the probe -- `cprobe` defaults to a 10x probe's 10 pF while the AD3
+actually used is 24 pF.
+
+### The measurement that nearly did not happen
+
+The first attempt read a dead circuit: `ua1` sat at 0 V, `ua3` sat at a
+steady 2.85 V, and the spectrum was empty. Nothing was broken. Two
+Analog Discovery leads -- W1 and channel 1 -- were still clipped to
+`ua1` from a previous measurement, and `ua1` is a loop node. Unclipping
+them started a 39.5 MHz oscillator.
+
+That is the warning at the top of this file ("a load inside a feedback
+path is not a probe model") arriving as an experiment rather than an
+argument, and it is worth knowing what it looks like from the bench:
+not an obvious failure, but plausible, stable DC levels that invite you
+to go and debug your bitstream. The buffer exists precisely so that
+`ua3` can be probed instead -- and on `ua3` the same instrument that
+killed the oscillator measures it to a kilohertz.
+
+**Still unmeasured on silicon.** The pads-versus-internal-net experiment
+below: route the same eight devices with every loop node on a package
+pin and compare against this one, where `net1` is internal. Same
+devices, same widths, same topology, same observation point on `ua3` --
+one bond pad's worth of bus row differing. Now that a frequency
+measurement takes one command, this is two bitstreams and two runs of
+`tools/measure_ring_ad3.py` with its `BITSTREAM` changed. It would test
+the pad and mux model directly, which nothing here does yet:
+`examples/inverter/README.md`'s conclusion that the bond pad dominates
+still rests on simulation alone.
 
 ## Reproducing this
 
