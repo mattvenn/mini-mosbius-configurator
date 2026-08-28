@@ -1,5 +1,9 @@
 # Example: single-stage differential amplifier
 
+*Shared background for all four examples -- as drawn vs as routed, the
+testbench idiom, capacitive loading, the common gotchas -- is in
+[`../README.md`](../README.md).*
+
 Five transistors: an NMOS differential pair (`XM1`/`XM2`) biased by a real
 tail current bank (`XT1`), loaded by a diode-connected PMOS current mirror
 (`XM3`/`XM4`). This is the first design in the repo to draw a differential
@@ -220,16 +224,10 @@ build it with a short loop over `[0, 2, 5, 10, 20, 40, 0, -2, -5, -10,
 
 ## Load capacitors in `tb_diffamp.sch`
 
-`Cload_drawn` and `Cload_routed` are both `'cload'`, with
-`.param cload=10p` in the sheet's ngspice block -- one scope probe's worth
-of load, held identical on both instances so the only difference between
-`out_drawn` and `out_routed` is the chip. `examples/inverter/README.md`'s
-"What the two load capacitors are" section explains why they are equal,
-why the routed one is not 0, and why the value matters.
-
-Here it does not affect the gain at all, only how long you have to wait
-for it. That is worth stating plainly, because an earlier version of this
-section said the opposite.
+The usual pair, both `'cload'` with `.param cload=10p` -- see
+[`../README.md`](../README.md). Here the load does not affect the gain
+at all, only how long you have to wait for it. That is worth stating
+plainly, because an earlier version of this section said the opposite.
 
 ## Step response and settling
 
@@ -302,13 +300,6 @@ print gain_drawn_pos
 
 ## Testbench net names
 
-`tb_diffamp.sch` names a net for what it does, not for which package pin it
-sits on -- the schematic already shows you the pin. A net **shared**
-between the two instances carries no suffix, because it is physically one
-net: `inp` and `inm`. A net that differs per instance carries `_drawn` or
-`_routed`: `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
-name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
-after.
-
-So the suffix tells you something real at a glance: no suffix means one
-net feeding both halves, a suffix means one per half.
+`tb_diffamp.sch` follows the shared convention -- no suffix for a net shared
+between the two instances, `_drawn`/`_routed` for one that differs per
+instance. See [`../README.md`](../README.md).

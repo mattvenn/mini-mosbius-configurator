@@ -1,5 +1,9 @@
 # Example: CMOS inverter
 
+*Shared background for all four examples -- as drawn vs as routed, the
+testbench idiom, capacitive loading, the common gotchas -- is in
+[`../README.md`](../README.md).*
+
 The simplest circuit that exercises the whole pipeline: two transistors,
 gates tied together as the input, drains tied together as the output. This
 is also [the first circuit tnt built](https://www.tinytapeout.com/news/mini-mosbius/)
@@ -263,62 +267,17 @@ switch-matrix-dominated (ring oscillator, no external load, no pad in the
 signal path between stages) and pad-and-load-dominated (this inverter,
 driving a real package pin into a probe).
 
-### What the two load capacitors are
+### The load capacitors
 
-`tb_inverter.sch` hangs one capacitor on each output, `Cload_drawn` and
-`Cload_routed`, both `'cload'`, with `.param cload=10p` in the sheet's
-ngspice block. Same value on both, deliberately, and the reasoning is
-worth spelling out because two identical caps side by side invite the
-wrong reading.
+`Cload_drawn` and `Cload_routed` are both `'cload'`, with `.param cload=10p`
+in the sheet's ngspice block. Why they are equal, why the routed one is not
+zero, and why the value moves the conclusion as much as it does are in
+[`../README.md`](../README.md) -- the 100pF-vs-10pF table above is the
+worked case that section is built on.
 
-**The cap is the bench, not the chip.** It stands for the scope probe and
-the PCB trace you would measure through -- a 10x probe is around 10pF.
-It is a *controlled variable*: held identical on both instances so that
-the only difference between `out_drawn` and `out_routed` is the chip
-itself. That is what makes subtracting one from the other mean anything.
+### Runtime
 
-What each side contains, then:
-
-| | contains |
-|---|---|
-| `x1`, as drawn | two FETs, ideal wires, probe straight on the drain |
-| `x2`, as routed | switch matrix + row coupling + bus-wire capacitance + `pad_model` (2p board, 1 ohm + 1nH package, 3p pad, the analog mux gate on plus 15 deselected ones), probe outside the pad |
-
-The difference between the two numbers is therefore exactly everything the
-chip inserts between the transistor drain and the package pin.
-
-The probe lands on a different node in each -- on the drain in `x1`,
-outside the pad in `x2`. That asymmetry is correct: it is the same point
-on a real bench, and `x1` has no pad for it to sit outside of. `x1`'s
-missing pad is part of what is being measured, so it must not be
-compensated for by inflating `Cload_drawn`.
-
-**Why `Cload_routed` is not 0**, even though `pad_model` already carries
-board and pad capacitance of its own: 0 would mean measuring with no probe
-attached, and `out_routed` would then be a node nobody could observe. The
-2pF `pad_model` holds at its pin node is package and board, not a probe.
-The small overlap between that 2pF and the 10pF probe figure is a rounding
-error next to getting the concept right.
-
-**Why not per-instance estimates** -- `Cload_drawn` carrying
-probe + PCB + pad + package because its model has none of that, and
-`Cload_routed` carrying probe only because `pad_model` has the rest? Each
-number would be a better standalone prediction of the bench, but the
-difference between them would mean nothing, because you would have
-deliberately compensated the drawn side for the effect the example exists
-to show.
-
-`tb_diffamp.sch` and `tb_srlatch.sch` use the same parameter and the same
-value for the same reasons. `tb_ring.sch` deliberately has no load caps at
-all: its observed node is the oscillator's own feedback node rather than
-an output pad, so a cap there changes the circuit instead of modelling a
-probe -- 100pF stops the drawn ring oscillating outright, and even 1pF
-drags it from 2.5GHz to 1.5GHz. That is the same lesson from the other
-end. Both examples are missing capacitance in the as-drawn model; the ring
-shows it plainly, and the inverter used to bury it under a load ten times
-heavier than the effect.
-
-**Runtime.** About 35s in the IIC-OSIC-TOOLS container, of which ~13s is
+About 35s in the IIC-OSIC-TOOLS container, of which ~13s is
 sky130 library parsing and ~20s is building the circuit and solving the DC
 operating point -- the transient itself is about a second. The `.option`
 line sets `reltol=0.01` rather than ngspice's `1e-3` default, which is what
@@ -336,13 +295,6 @@ ceiling are much larger than what `mosbius simulate` emits for one design.
 
 ## Testbench net names
 
-`tb_inverter.sch` names a net for what it does, not for which package pin it
-sits on -- the schematic already shows you the pin. A net **shared**
-between the two instances carries no suffix, because it is physically one
-net: `in`, driven by one `Vin` for both. A net that differs per instance carries `_drawn` or
-`_routed`: `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
-name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
-after.
-
-So the suffix tells you something real at a glance: no suffix means one
-net feeding both halves, a suffix means one per half.
+`tb_inverter.sch` follows the shared convention -- no suffix for a net shared
+between the two instances, `_drawn`/`_routed` for one that differs per
+instance. See [`../README.md`](../README.md).

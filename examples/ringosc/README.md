@@ -1,5 +1,9 @@
 # Investigation: ring oscillator (as drawn vs as routed vs real silicon)
 
+*Shared background for all four examples -- as drawn vs as routed, the
+testbench idiom, capacitive loading, the common gotchas -- is in
+[`../README.md`](../README.md).*
+
 **Status: open investigation, not a finished example.** Unlike
 `examples/inverter/` and `examples/srlatch/`, nothing here is a polished
 tutorial artifact -- this is a working note on a specific gap-closing
@@ -376,8 +380,8 @@ The sheet's ngspice block is bare; the reasoning behind it lives here.
 `'cload'` with `.param cload=10p`, one scope probe's worth, held equal on
 both instances so the only difference between `out_drawn` and `out_routed`
 is the chip -- the same convention as every other testbench here, and
-`examples/inverter/README.md`'s "What the two load capacitors are"
-explains why they are equal and why the routed one is not zero. There are
+[`../README.md`](../README.md)'s "Capacitive loading" explains why they are
+equal and why the routed one is not zero. There are
 no capacitors on the loop nodes, for the reason given at the top of this
 file: a cap inside the feedback path changes the oscillator rather than
 measuring it. The buffer is what makes a probe load meaningful here at
@@ -427,13 +431,6 @@ digits. Every testbench in this project now carries the `Vgnd` line.
 
 ## Testbench net names
 
-`tb_ring.sch` names a net for what it does, not for which package pin it
-sits on -- the schematic already shows you the pin. A net **shared**
-between the two instances carries no suffix, because it is physically one
-net: nothing -- the ring free-runs, so it has no shared stimulus. A net that differs per instance carries `_drawn` or
-`_routed`: `loop_drawn`/`loop_routed`, `loop2_drawn`/`loop2_routed` and `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
-name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
-after.
-
-So the suffix tells you something real at a glance: no suffix means one
-net feeding both halves, a suffix means one per half.
+`tb_ring.sch` follows the shared convention -- no suffix for a net shared
+between the two instances, `_drawn`/`_routed` for one that differs per
+instance. See [`../README.md`](../README.md).

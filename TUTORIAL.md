@@ -181,8 +181,9 @@ your circuit.
 Both output load capacitors are `'cload'`, set by `.param cload=10p` --
 one scope probe's worth. Keep them equal: that is what makes the only
 difference between `out_drawn` and `out_routed` the chip itself.
-`examples/inverter/README.md`'s "What the two load capacitors are"
-explains why, and why the value matters more than it looks.
+`examples/README.md`'s "Capacitive loading" explains why, and why the
+value matters more than it looks -- along with the gotchas and the
+drawn/routed/silicon vocabulary shared by all four examples.
 
 ## 6. Upload it (needs a physical demoboard)
 

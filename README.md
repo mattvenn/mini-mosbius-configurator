@@ -53,8 +53,9 @@ git submodule update --init   # first time only
 # it), wire up mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/
 # mosbius_ota/mosbius_ntail/mosbius_ptail devices from mosbius_lib to the
 # ports (ibias, ua1..ua5, VAPWR, VDPWR, VGND). See examples/inverter/,
-# examples/srlatch/ and examples/diffamp/ for worked circuits, or follow
-# TUTORIAL.md end to end.
+# examples/srlatch/ and examples/diffamp/ for worked circuits (see
+# examples/README.md for the background they share), or follow TUTORIAL.md
+# end to end.
 
 # Netlist it: press xschem's Netlist button. It writes build/your_design.spice
 # -- the repo-root xschemrc sets that up, so launch xschem from the top of

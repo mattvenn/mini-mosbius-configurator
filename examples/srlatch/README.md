@@ -1,5 +1,9 @@
 # Example: SR latch
 
+*Shared background for all four examples -- as drawn vs as routed, the
+testbench idiom, capacitive loading, the common gotchas -- is in
+[`../README.md`](../README.md).*
+
 Six transistors: two cross-coupled inverters holding state (`XM1`-`XM4`)
 plus two independent pull-down transistors (`XM5`, `XM6`) that force the
 state. This reproduces [the second circuit tnt built](https://www.tinytapeout.com/news/mini-mosbius/)
@@ -209,12 +213,9 @@ property (a pulse forces a state that then persists after the pulse ends).
 
 ## Load capacitors in `tb_srlatch.sch`
 
-`Cload_drawn` and `Cload_routed` are both `'cload'`, with
-`.param cload=10p` in the sheet's ngspice block -- one scope probe's worth
-of load, held identical on both instances so the only difference between
-`out_drawn` and `out_routed` is the chip. `examples/inverter/README.md`'s
-"What the two load capacitors are" section explains why they are equal,
-why the routed one is not 0, and why the value matters.
+The usual pair, both `'cload'` with `.param cload=10p` -- see
+[`../README.md`](../README.md) for why they are equal and why the value
+matters.
 
 Dropping it from 100pF to 10pF fixed a measurement that had never worked.
 At 100pF, `treset_drawn`/`treset_routed` both reported
@@ -272,13 +273,6 @@ set up".
 
 ## Testbench net names
 
-`tb_srlatch.sch` names a net for what it does, not for which package pin it
-sits on -- the schematic already shows you the pin. A net **shared**
-between the two instances carries no suffix, because it is physically one
-net: `set` and `reset`. A net that differs per instance carries `_drawn` or
-`_routed`: `out_drawn`/`out_routed`. Package pins this design does not use keep their pin
-name (`ua5_drawn`, `ua5_routed`) since they have no role to name them
-after.
-
-So the suffix tells you something real at a glance: no suffix means one
-net feeding both halves, a suffix means one per half.
+`tb_srlatch.sch` follows the shared convention -- no suffix for a net shared
+between the two instances, `_drawn`/`_routed` for one that differs per
+instance. See [`../README.md`](../README.md).
