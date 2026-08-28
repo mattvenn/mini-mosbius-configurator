@@ -527,10 +527,16 @@ These were all got wrong once. The sources that look authoritative are not.
   `extra` pins are not pin boxes. What works is `type=noconn`, which marks
   a net as deliberately left alone. `xschem/mosbius_lib/mosbius_implicit_port.sym`
   is our own symbol of that type, named and drawn to say the accurate
-  thing, placed on all eleven such nets across the six device schematics.
-  It emits one comment line (`* implicit port ibias`) and changes nothing
-  electrical -- verified by diffing the netlists, and by every bitstream
-  and measured current being unchanged.
+  thing, placed on all ten such nets across the six device schematics
+  (`mosbius_bias` bp; `mosbius_nsink` and `mosbius_psource` ibias and b;
+  `mosbius_ota` ibias; `mosbius_ntail` and `mosbius_ptail` g and s). A net
+  needs one when it is drawn on the canvas *and* its only way out is
+  `extra`, which is why `mosbius_nmos.sch`/`mosbius_pmos.sch` need none
+  despite their symbols carrying `extra="b"`: they hand the bulk to the
+  PDK's 3-terminal FET as the `body=` parameter, so `b` is never a net on
+  those sheets at all. It emits one comment line (`* implicit port ibias`)
+  and changes nothing electrical -- verified by diffing the netlists, and
+  by every bitstream and measured current being unchanged.
 - **xschem prints its ERC report only when the run contains at least one
   Error.** Warnings alone produce nothing at all, which is why silencing
   the errors above also removed the `open net: ua1/ua4/ua5/VDPWR` lines a
