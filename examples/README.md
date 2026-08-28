@@ -210,23 +210,18 @@ through a PMOS diode. One reference per chip, two gate nodes, one per
 polarity.
 
 The design sheets model that directly. `mini_mosbius.sch` -- and so every
-design copied from it -- carries a three-transistor **bias generator**
-sized from the chip's own schematics: an NMOS reference (L=1 W=10 nf=2),
-a 1:1 NMOS copy, and a PMOS diode (L=1 W=30 nf=4). It is part of the
-silicon rather than part of your circuit, which is why it sits off to one
-side of the sheet with nothing wired to it by hand.
+design copied from it -- carries one **`mosbius_bias`** block wired to the
+`ibias` pin. Inside it are the chip's three transistors at the sizes its
+own schematics use: an NMOS reference (L=1 W=10 nf=2), a 1:1 NMOS copy,
+and a PMOS diode (L=1 W=30 nf=4). It is part of the silicon rather than
+part of your circuit, which is why it is one block off to one side with a
+single wire to the pin, and why `ibias_p` never appears on your sheet --
+the block makes it, and `mosbius_psource`/`mosbius_ptail` find it by name.
 
-**Keep exactly one.** Two generators would halve the reference current;
-none leaves `ibias` with no DC path at all, which does not simulate.
-Nothing else about it needs your attention -- the device symbols find it
-by net name.
-
-Newer sheets carry it as a symbol, and you will meet both forms: instead
-of three drawn transistors they place one `mosbius_bias` block, wired to
-the `ibias` pin, with the same three devices inside it. The netlist is
-equivalent either way. `mosbius route` counts them and refuses a design
-with none or two (`B1`), whichever form they are in. The four examples
-above still draw them; rolling them over is tracked in `TODO.md`.
+**Keep exactly one.** Two generators halve the reference current between
+them, so every `ratio=` and `tail=` on the sheet comes out at half; none
+leaves every mirror gate wherever the DC solver puts it. `mosbius route`
+counts them and refuses a design with none or two (`B1`).
 
 What that buys you is that the settings mean what they say: `ratio=N` on a
 `mosbius_nsink`/`mosbius_psource` is N x `ibias`, and `tail=N` on a

@@ -473,12 +473,12 @@ These were all got wrong once. The sources that look authoritative are not.
   ordinary `ibias` iopin. `ibias_p` and the two rails come in on `extra`,
   so `ibias_p` is a plain net of the design's subcircuit: made by the
   block, picked up by `mosbius_psource`/`mosbius_ptail` through their
-  templates, never drawn. Exactly one per design, enforced by check.py's
-  **B1**, which counts the hand-drawn form too (an NMOS with gate and
-  drain both on `ibias`) so the two forms can coexist while TODO.md's
-  rollout is pending -- `examples/currentsource/` and `examples/otabuf/`
-  use the symbol, `mini_mosbius.sch` and the four older examples still
-  draw it. Getting the count wrong is quiet in both directions: two
+  templates, never drawn. Every design sheet in the repo uses it, and
+  `mini_mosbius.sch` carries one so a copied template already has it.
+  Exactly one per design, enforced by check.py's **B1**, which also counts
+  the older hand-drawn form (an NMOS with gate and drain both on `ibias`)
+  so a sheet predating 2026-08-28 still passes. Getting the count wrong is
+  quiet in both directions: two
   references halve the current between them (measured -99 uA a leg where
   -200 uA was right), none leaves every mirror gate wherever the solver
   puts it.

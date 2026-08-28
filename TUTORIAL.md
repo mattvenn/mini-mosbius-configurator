@@ -45,12 +45,13 @@ placed -- those are the fixed pins from Sec 0 above, and the file's own
 on-canvas instructions say the same thing: wire your circuit to them,
 there's nothing else to wire to.
 
-Off to one side there are also three transistors labelled `Mbias_ref`,
-`Mbias_copy` and `Mbias_p`. Those are not yours to wire: they are the
-chip's own bias generator, which turns the current on the `ibias` pin
-into the reference every current mirror, tail bank and the OTA copies.
-Leave them alone and leave exactly one copy of them on the sheet. The
-short version of why is in
+Off to one side there is also a block labelled **chip bias generator**,
+with one wire running to the `ibias` pin. That is not yours to edit: it is
+the chip's own bias section, which turns the current on that pin into the
+reference every current mirror, tail bank and the OTA copies. Leave it
+alone, and leave exactly one on the sheet -- the router refuses a design
+with none or two. Descend into it if you want to see the three
+transistors. The short version of why is in
 [`examples/README.md`](examples/README.md)'s "The bias reference".
 
 A CMOS inverter is two transistors: an NMOS and a PMOS, gates tied together
