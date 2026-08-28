@@ -68,9 +68,9 @@ C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
 C {devices/isource.sym} -240 170 2 1 {name=Ibias_drawn value="'ibias_amps'"}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=ibias_drawn}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
-C {devices/isource.sym} -240 300 2 1 {name=Ibias_routed value="'ibias_amps'"}
-C {devices/lab_pin.sym} -240 270 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
-C {devices/gnd.sym} -240 330 0 0 {name=l3b lab=VGND}
+C {devices/isource.sym} -550 170 2 1 {name=Ibias_routed value="'ibias_amps'"}
+C {devices/lab_pin.sym} -550 140 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
+C {devices/gnd.sym} -550 200 0 0 {name=l3b lab=VGND}
 C {devices/vsource.sym} -130 160 0 0 {name=Vinp value="PWL(0 1.5 999n 1.5 1000n 1.54 3499n 1.54 3500n 1.46 5999n 1.46 6000n 1.5)"}
 C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=inp}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
