@@ -39,7 +39,10 @@ import ad3  # noqa: E402
 # examples/inverter as the router places it: ua1 in, ua2 out.
 BITSTREAM = "080000004010000001000000000000000040000400000000"
 PROJECT = "tt_um_tnt_mosbius"
-PADS = {"ua1": "C", "ua2": "J", "ibias": "K"}          # ttsky25a, see docstring
+# ttsky25a, from the project page's Analog pins table -- see the docstring.
+# The whole map is here rather than just the pins this script uses, because
+# it is the thing a person at the bench needs and it is per shuttle.
+PADS = {"ibias": "K", "ua1": "C", "ua2": "J", "ua3": "D", "ua4": "G", "ua5": "F"}
 VAPWR = 3.3
 STEP = 0.025
 
@@ -94,10 +97,14 @@ def report(points: list[tuple[float, float]]) -> None:
     print(f"  VOL (input {vin[-1]:+.3f} V)   {vout[-1]:+.4f} V")
     print(f"  switching threshold      {vin[crossing]:.3f} V   (output = input)")
     print(f"  peak gain                {gain:.1f} V/V at {at:.3f} V")
-    print("\n  Levels carry the AD3's own uncalibrated offset, which is tens of mV\n"
-          "  per channel; run the WaveForms calibration if you need them absolute.\n"
-          "  The threshold and gain are differences on one channel, so they do not\n"
-          "  depend on that offset.")
+    print("\n  An uncalibrated Analog Discovery carries tens of mV of offset per\n"
+          "  channel, so run WaveForms' calibration (Settings -> Device Manager ->\n"
+          "  Calibrate) before trusting any of this. The gain survives it -- it is a\n"
+          "  ratio of differences, one per channel, so offsets cancel -- but the\n"
+          "  levels and the switching threshold do not: the threshold is where\n"
+          "  channel 2 crosses channel 1, so it moves by the *difference* of the two\n"
+          "  offsets. On this unit calibration moved it 44 mV, from 1.555 to\n"
+          "  1.599 V, and 1.599 V is what the as-routed deck predicts.")
 
 
 def main() -> None:
