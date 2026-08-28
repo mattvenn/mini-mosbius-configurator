@@ -1,22 +1,22 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/ringosc: netlists it, routes it,
-# builds the routed subcircuit, runs the real tb_ring.sch testbench through
-# ngspice, and checks freq_drawn/freq_routed land near the reference
-# measurements in examples/ringosc/README.md via check_ring_sim.py. This is
-# what .github/workflows/spice-regression.yml runs once a month, alongside
-# the inverter, diff amp, SR latch, OTA follower and current source
-# checks.
+# Monthly regression check for examples/otabuf: netlists it, routes it,
+# builds the routed subcircuit, runs the real tb_otabuf.sch testbench
+# through ngspice, and checks the follower's offsets and slew rates land
+# near the reference measurements in examples/otabuf/README.md via
+# check_otabuf_sim.py. This is what
+# .github/workflows/spice-regression.yml runs once a month, alongside the
+# inverter, ring, diff amp, SR latch and current source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from
 # the repo root:
 #
 #   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-#       --skip bash -lc 'sh tools/check_ring_sim.sh'
+#       --skip bash -lc 'sh tools/check_otabuf_sim.sh'
 #
 # Budget a couple of minutes: sky130A's model library takes 1-2 minutes to
-# parse whatever the circuit is, and this deck runs two transients (the
-# branches oscillate ~40x apart, so neither analysis suits both).
+# parse whatever the circuit is, and this deck then runs a 15us transient
+# over both branches, about 36s of it.
 set -e
 
 # Netlist one schematic and check what came out, rather than trusting
@@ -27,10 +27,9 @@ set -e
 # mirror or a tail bank: the `extra` mechanism that keeps body and bias
 # connections off the sheet is invisible to xschem's connectivity check,
 # so it called those nets undriven. Under `set -e` that stopped these
-# scripts before they reached ngspice -- the diff amp job could never
-# have passed. mosbius_implicit_port markers settled the messages
-# themselves (2026-08-28); checking the output rather than the exit code
-# stays, because it is what actually matters.
+# scripts before they reached ngspice. mosbius_implicit_port markers
+# settled the messages themselves (2026-08-28); checking the output rather
+# than the exit code stays, because it is what actually matters.
 #
 # What is worth checking is the netlist itself: that it was written, and
 # that the symbol library was actually on the path. Launch xschem from
@@ -56,15 +55,15 @@ netlist_schematic() {
 cd "$(dirname "$0")/.."
 mkdir -p build
 
-echo "== netlisting, routing and building examples/ringosc/ring.sch"
-sh tools/regenerate_routed.sh examples/ringosc/ring.sch
+echo "== netlisting, routing and building examples/otabuf/otabuf.sch"
+sh tools/regenerate_routed.sh examples/otabuf/otabuf.sch
 
-echo "== netlisting examples/ringosc/tb_ring.sch"
-netlist_schematic examples/ringosc/tb_ring.sch
+echo "== netlisting examples/otabuf/tb_otabuf.sch"
+netlist_schematic examples/otabuf/tb_otabuf.sch
 
 echo "== running ngspice"
 cp .spiceinit build/.spiceinit
-( cd build && ngspice -b tb_ring.spice > ngspice_tb_ring.log 2>&1 ) \
-    || { echo "ngspice exited non-zero -- tail of build/ngspice_tb_ring.log:"; tail -40 build/ngspice_tb_ring.log; exit 1; }
+( cd build && ngspice -b tb_otabuf.spice > ngspice_tb_otabuf.log 2>&1 ) \
+    || { echo "ngspice exited non-zero -- tail of build/ngspice_tb_otabuf.log:"; tail -40 build/ngspice_tb_otabuf.log; exit 1; }
 
-python3 tools/check_ring_sim.py build/ngspice_tb_ring.log
+python3 tools/check_otabuf_sim.py build/ngspice_tb_otabuf.log

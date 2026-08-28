@@ -10,7 +10,7 @@ capacitors in tb_srlatch.sch"), last measured 2026-08-27 at cprobe=10p (with rpr
 
 Run by tools/check_srlatch_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the
-inverter, ring and diff amp checks.
+inverter, ring, diff amp, OTA follower and current source checks.
 
 What this one guards that the others cannot is *state*. The inverter, the
 ring and the diff amp are all memoryless: drive them the same way twice

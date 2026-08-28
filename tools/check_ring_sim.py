@@ -7,9 +7,9 @@ freq_routed=43.89MHz, last measured 2026-08-27.
 
 Run by tools/check_ring_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the
-inverter, diff amp and SR latch checks.
+inverter, diff amp, SR latch, OTA follower and current source checks.
 
-All four examples guard different things, which is why all four run. The
+All six examples guard different things, which is why all six run. The
 inverter is pad-and-load-dominated: at 10pF its result barely moves if the
 switch matrix's own parasitics are wrong. The ring is
 switch-matrix-dominated -- row coupling (~43fF/switch) and bus-wire

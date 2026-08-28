@@ -14,7 +14,7 @@ correction".
 
 Run by tools/check_diffamp_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the
-inverter, ring and SR latch checks.
+inverter, ring, SR latch, OTA follower and current source checks.
 
 Each example guards something the others cannot. The inverter is
 pad-and-load dominated and the ring is switch-matrix dominated, but both

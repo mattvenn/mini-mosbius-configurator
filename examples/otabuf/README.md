@@ -1,9 +1,13 @@
 # Example: OTA unity-gain follower
 
-**Work in progress -- not yet listed in `examples/README.md`.** It runs
-end to end now: draw, netlist, route, simulate both branches. Building it
-turned up two router bugs, both since fixed; they are written up below
-because the symptoms are worth recognising.
+*Shared background for all six examples -- as drawn vs as routed, the
+testbench idiom, the probe model, the common gotchas -- is in
+[`../README.md`](../README.md).*
+
+The only example that uses `mosbius_ota` at all, and the only one that
+closes a feedback loop through the switch matrix. Building it turned up
+two router bugs, both since fixed; they are written up below because the
+symptoms are worth recognising.
 
 One device:
 
@@ -15,9 +19,8 @@ Pin order is `inp inm outp outm`. So `inp` is the input on `ua1`, `outm`
 is the output on `ua2`, and `inm` is tied to that same `ua2` -- the
 feedback that makes this a follower. `outp` is brought out on `ua3`.
 
-This is the first example to use `mosbius_ota` at all: five transistors
-and a tail bank in one symbol, the only hardware block nothing else here
-exercises.
+`mosbius_ota` is five transistors and a tail bank in one symbol -- the
+one hardware block nothing else here exercises.
 
 ## Which output is the output
 
@@ -169,8 +172,8 @@ series resistance matters.
 2.0 V:
 
 ```
-sr_drawn  = 42.9 V/us
-sr_routed = 15.4 V/us
+slew_rate_drawn  = 42.9 V/us
+slew_rate_routed = 15.4 V/us
 ```
 
 As drawn, that is the textbook answer to within 7%: the tail bank at

@@ -5,7 +5,8 @@
 # through ngspice, and checks trise_drawn/trise_routed land near the
 # reference measurements in examples/inverter/README.md via
 # check_inverter_sim.py. This is what
-# .github/workflows/spice-regression.yml runs once a month.
+# .github/workflows/spice-regression.yml runs once a month, alongside the
+# ring, diff amp, SR latch, OTA follower and current source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from
 # the repo root:

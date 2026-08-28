@@ -10,7 +10,8 @@ today.
 
 Run by tools/check_inverter_sim.sh (the full netlist/route/simulate/ngspice
 pipeline), which .github/workflows/spice-regression.yml runs once a month
-alongside the ring, diff amp and SR latch checks.
+alongside the ring, diff amp, SR latch, OTA follower and current source
+checks.
 
 The +-5% band is set by what actually varies: reltol=0.01 keeps repeat
 runs stable to well under 0.1%, so the noise floor is far below this and

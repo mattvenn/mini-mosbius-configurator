@@ -6,7 +6,7 @@
 # the reference measurements in examples/diffamp/README.md via
 # check_diffamp_sim.py. This is what
 # .github/workflows/spice-regression.yml runs once a month, alongside the
-# inverter, ring and SR latch checks.
+# inverter, ring, SR latch, OTA follower and current source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from
 # the repo root:

@@ -1,6 +1,6 @@
 # Working with the examples
 
-*Four circuits share one workflow, one testbench idiom, and one set of
+*Six circuits share one workflow, one testbench idiom, and one set of
 traps. This page is the common ground; each example's own README covers
 only what is particular to that circuit.*
 
@@ -9,6 +9,8 @@ only what is particular to that circuit.*
 | [`inverter/`](inverter/) | Two FETs | The whole pipeline end to end, and the sharpest as-drawn/as-routed comparison. Start here. |
 | [`srlatch/`](srlatch/) | Six FETs | State, plus a routing constraint that bites: which devices can take diff-pair halves. |
 | [`diffamp/`](diffamp/) | Five FETs + tail bank | Drawing a differential pair *as a pair*, with a real tail current. |
+| [`currentsource/`](currentsource/) | Two mirror legs | `ibias` itself: what `ratio=` buys, and an I-V curve with a real compliance limit. The only example that measures a current. |
+| [`otabuf/`](otabuf/) | OTA: five FETs + tail bank | A feedback loop closed through the switch matrix, and the only example that uses `mosbius_ota`. |
 | [`ringosc/`](ringosc/) | Eight FETs | An open investigation, not a polished example: how close the routed model gets to measured silicon. |
 
 [`TUTORIAL.md`](../TUTORIAL.md) at the repo root walks the inverter
@@ -50,7 +52,7 @@ vocabulary: `out_drawn`/`out_routed`, `trise_drawn`/`trise_routed`.
 
 ## The side-by-side testbench
 
-All four testbenches have the same shape, and `xschem/mosbius_lib/tb_template.sch`
+All six testbenches have the same shape, and `xschem/mosbius_lib/tb_template.sch`
 is that shape with the circuit-specific parts removed. Two instances of
 one symbol -- `mini_mosbius.sym`, the chip as a nine-pin block, which is
 identical for every design -- differing only in what each stands for:
@@ -61,7 +63,10 @@ identical for every design -- differing only in what each stands for:
 | `x2` | `<name>_routed` (+ `spice_sym_def`) | `.subckt <name>_routed` | the same design **as routed** |
 
 One stimulus and one set of rails feed both, so the only difference
-between `out_drawn` and `out_routed` is the chip. This is the same
+between `out_drawn` and `out_routed` is the chip. The current source's
+sheet varies most -- it reads currents through ammeters rather than a
+voltage at a probe, so it carries no probe model at all -- and it is
+still this same pair of instances off one stimulus. This is the same
 `spice_sym_def` swap-in used to compare a schematic against a post-layout
 extraction; here the "extraction" is `mosbius simulate`'s output.
 
@@ -181,7 +186,12 @@ into a probe. The ring oscillator is switch-matrix-dominated: its stages
 drive each other, with no pad between them. The diff amp is neither --
 its gain is unchanged to within 0.5% between drawn and routed, because at
 DC no current flows into a capacitor and series resistance drops no
-voltage, so the matrix costs it **bandwidth, not gain**.
+voltage, so the matrix costs it **bandwidth, not gain**. The current
+source and the OTA follower make that same point on two more DC
+quantities and from opposite ends: the mirror's output current is within
+1.3% of the drawn value and the follower's offset within about 5 mV,
+while the follower's slew rate -- a rate, not a level -- comes out 2.78x
+slower, the same factor the inverter's rise time gives at the same load.
 
 **A load inside a feedback path is not a probe model.** `tb_ring.sch`
 deliberately has no capacitor on its loop nodes: 100pF there stops the

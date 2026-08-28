@@ -6,7 +6,8 @@
 # near the reference measurements in examples/srlatch/README.md via
 # check_srlatch_sim.py. This is what
 # .github/workflows/spice-regression.yml runs once a month, alongside the
-# inverter, ring and differential amplifier checks.
+# inverter, ring, differential amplifier, OTA follower and current
+# source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from
 # the repo root:

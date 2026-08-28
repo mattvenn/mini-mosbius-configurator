@@ -1,6 +1,6 @@
 # Investigation: ring oscillator (as drawn vs as routed vs real silicon)
 
-*Shared background for all four examples -- as drawn vs as routed, the
+*Shared background for all six examples -- as drawn vs as routed, the
 testbench idiom, capacitive loading, the common gotchas -- is in
 [`../README.md`](../README.md).*
 
