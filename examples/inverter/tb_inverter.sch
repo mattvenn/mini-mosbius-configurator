@@ -67,9 +67,9 @@ C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
 C {devices/isource.sym} -240 170 2 1 {name=Ibias_drawn value="'ibias_amps'"}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=ibias_drawn}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
-C {devices/isource.sym} -240 300 2 1 {name=Ibias_routed value="'ibias_amps'"}
-C {devices/lab_pin.sym} -240 270 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
-C {devices/gnd.sym} -240 330 0 0 {name=l3b lab=VGND}
+C {devices/isource.sym} -560 170 2 1 {name=Ibias_routed value="'ibias_amps'"}
+C {devices/lab_pin.sym} -560 140 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
+C {devices/gnd.sym} -560 200 0 0 {name=l3b lab=VGND}
 C {devices/vsource.sym} -130 160 0 0 {name=Vin value="PULSE(3.3 0 10n 1n 1n 250n 500n)"}
 C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=in}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
@@ -86,7 +86,7 @@ C {devices/res.sym} 40 -410 0 0 {name=Rprobe_routed value="'rprobe'" footprint=1
 C {devices/lab_pin.sym} 40 -440 2 0 {name=pr_routed sig_type=std_logic lab=out_routed}
 C {devices/gnd.sym} 40 -380 0 0 {name=lr_routed lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
-C {devices/code_shown.sym} 130 -660 0 0 {name=NGSPICE only_toplevel=true value="
+C {devices/code_shown.sym} 160 -880 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
 
 .param ibias_amps=100u
