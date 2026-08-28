@@ -6,8 +6,8 @@ S {}
 F {}
 E {}
 B 2 180 -180 980 220 {flags=graph
-y1=-0.1
-y2=3.4
+y1=0.011
+y2=3.1
 ypos1=0
 ypos2=2
 divy=5
@@ -37,22 +37,22 @@ in = input (shared), ua2 = output (outm, fed back to inm),
 ua3 = outp, the OTA-s diode-connected mirror node.
 
 The 1u..11u ramp is the input range sweep; the step at 13u is
-the slew rate measurement.} -640 -860 0 0 0.5 0.5 {}
-C {mini_mosbius.sym} -450 -120 0 0 {name=x1
+the slew rate measurement.} -620 -830 0 0 0.5 0.5 {}
+C {mini_mosbius.sym} -480 -120 0 0 {name=x1
 schematic="tcleval([file normalize examples/otabuf/otabuf.sch])"}
 C {mini_mosbius.sym} -60 -120 0 0 {name=x2
 schematic=otabuf_routed
 spice_sym_def="tcleval([mosbius_routed_include build/otabuf_routed.spice])"
 tclcommand="textwindow [file normalize build/otabuf_routed.spice]"}
-C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=ibias_drawn}
-C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=in}
-C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=out_drawn}
-C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=mirror_drawn}
-C {devices/lab_wire.sym} -550 -80 0 0 {name=p9 sig_type=std_logic lab=ua4_drawn}
-C {devices/lab_wire.sym} -550 -40 0 0 {name=p10 sig_type=std_logic lab=ua5_drawn}
-C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
-C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
-C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
+C {devices/lab_pin.sym} -380 -40 2 0 {name=p1 sig_type=std_logic lab=ibias_drawn}
+C {devices/lab_wire.sym} -580 -200 0 0 {name=p6 sig_type=std_logic lab=in}
+C {devices/lab_wire.sym} -580 -160 0 0 {name=p7 sig_type=std_logic lab=out_drawn}
+C {devices/lab_wire.sym} -580 -120 0 0 {name=p8 sig_type=std_logic lab=mirror_drawn}
+C {devices/lab_wire.sym} -580 -80 0 0 {name=p9 sig_type=std_logic lab=ua4_drawn}
+C {devices/lab_wire.sym} -580 -40 0 0 {name=p10 sig_type=std_logic lab=ua5_drawn}
+C {devices/lab_pin.sym} -380 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
+C {devices/lab_pin.sym} -380 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
+C {devices/lab_pin.sym} -380 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
 C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=ibias_routed}
 C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=in}
 C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=out_routed}
@@ -62,53 +62,38 @@ C {devices/lab_wire.sym} -160 -40 0 0 {name=p10b sig_type=std_logic lab=ua5_rout
 C {devices/lab_pin.sym} 40 -220 2 0 {name=pv1b sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} 40 -160 2 0 {name=pv2b sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} 40 -100 2 0 {name=pv3b sig_type=std_logic lab=VGND}
-C {devices/vsource.sym} -440 170 0 0 {name=VAPWR value=3.3}
-C {devices/lab_pin.sym} -440 140 1 0 {name=pva sig_type=std_logic lab=VAPWR}
-C {devices/gnd.sym} -440 200 0 0 {name=l1 lab=VGND}
-C {devices/vsource.sym} -340 170 0 0 {name=VDPWR value=1.8}
-C {devices/lab_pin.sym} -340 140 1 0 {name=pvd sig_type=std_logic lab=VDPWR}
-C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
-C {devices/isource.sym} -240 170 2 1 {name=Ibias_drawn value="'ibias_amps'"}
-C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=ibias_drawn}
-C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
-C {devices/isource.sym} -240 300 2 1 {name=Ibias_routed value="'ibias_amps'"}
-C {devices/lab_pin.sym} -240 270 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
-C {devices/gnd.sym} -240 330 0 0 {name=l3b lab=VGND}
-C {devices/vsource.sym} -130 160 0 0 {name=Vin value="PWL(0 0.2 1u 0.2 11u 3.1 11.001u 1.0 13u 1.0 13.001u 2.3 15u 2.3)"}
-C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=in}
-C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
-C {devices/capa.sym} -320 -410 0 0 {name=Cprobe_drawn m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
-C {devices/gnd.sym} -320 -380 0 0 {name=lc1 lab=VGND}
-C {devices/res.sym} -260 -410 0 0 {name=Rprobe_drawn value="'rprobe'" footprint=1206 device=resistor m=1}
-C {devices/lab_pin.sym} -260 -440 2 0 {name=pr_drawn sig_type=std_logic lab=out_drawn}
-C {devices/gnd.sym} -260 -380 0 0 {name=lr_drawn lab=VGND}
-C {devices/capa.sym} -140 -410 0 0 {name=Cprobe_routed m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
-C {devices/lab_pin.sym} -140 -440 2 0 {name=pc2 sig_type=std_logic lab=out_routed}
-C {devices/gnd.sym} -140 -380 0 0 {name=lc2 lab=VGND}
-C {devices/res.sym} -80 -410 0 0 {name=Rprobe_routed value="'rprobe'" footprint=1206 device=resistor m=1}
-C {devices/lab_pin.sym} -80 -440 2 0 {name=pr_routed sig_type=std_logic lab=out_routed}
-C {devices/gnd.sym} -80 -380 0 0 {name=lr_routed lab=VGND}
+C {devices/vsource.sym} -560 250 0 0 {name=VAPWR value=3.3}
+C {devices/lab_pin.sym} -560 220 1 0 {name=pva sig_type=std_logic lab=VAPWR}
+C {devices/gnd.sym} -560 280 0 0 {name=l1 lab=VGND}
+C {devices/vsource.sym} -460 250 0 0 {name=VDPWR value=1.8}
+C {devices/lab_pin.sym} -460 220 1 0 {name=pvd sig_type=std_logic lab=VDPWR}
+C {devices/gnd.sym} -460 280 0 0 {name=l2 lab=VGND}
+C {devices/isource.sym} -360 250 2 1 {name=Ibias_drawn value="'ibias_amps'"}
+C {devices/lab_pin.sym} -360 220 1 0 {name=p4 sig_type=std_logic lab=ibias_drawn}
+C {devices/gnd.sym} -360 280 0 0 {name=l3 lab=VGND}
+C {devices/isource.sym} -220 250 2 1 {name=Ibias_routed value="'ibias_amps'"}
+C {devices/lab_pin.sym} -220 220 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
+C {devices/gnd.sym} -220 280 0 0 {name=l3b lab=VGND}
+C {devices/vsource.sym} -90 250 0 0 {name=Vin value="PWL(0 0.2 1u 0.2 11u 3.1 11.001u 1.0 13u 1.0 13.001u 2.3 15u 2.3)"}
+C {devices/lab_pin.sym} -90 220 1 0 {name=pin1 sig_type=std_logic lab=in}
+C {devices/gnd.sym} -90 280 0 0 {name=lvin lab=VGND}
+C {devices/capa.sym} -350 -420 0 0 {name=Cprobe_drawn m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -350 -450 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
+C {devices/gnd.sym} -350 -390 0 0 {name=lc1 lab=VGND}
+C {devices/res.sym} -230 -420 0 0 {name=Rprobe_drawn value="'rprobe'" footprint=1206 device=resistor m=1}
+C {devices/lab_pin.sym} -230 -450 2 0 {name=pr_drawn sig_type=std_logic lab=out_drawn}
+C {devices/gnd.sym} -230 -390 0 0 {name=lr_drawn lab=VGND}
+C {devices/capa.sym} -80 -420 0 0 {name=Cprobe_routed m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
+C {devices/lab_pin.sym} -80 -450 2 0 {name=pc2 sig_type=std_logic lab=out_routed}
+C {devices/gnd.sym} -80 -390 0 0 {name=lc2 lab=VGND}
+C {devices/res.sym} 30 -420 0 0 {name=Rprobe_routed value="'rprobe'" footprint=1206 device=resistor m=1}
+C {devices/lab_pin.sym} 30 -450 2 0 {name=pr_routed sig_type=std_logic lab=out_routed}
+C {devices/gnd.sym} 30 -390 0 0 {name=lr_routed lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
-C {devices/code_shown.sym} 140 -860 0 0 {name=NGSPICE only_toplevel=true value="
+C {devices/code_shown.sym} 420 -990 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
 
 .param ibias_amps=100u
-
-* Your meter is part of the circuit, so it is modelled here, in the
-* testbench, where the rest of the bench lives -- never inside the design
-* block, and never in the generated <name>_routed.spice, because which
-* instrument you own is a fact about your bench and not about the chip.
-* Set these to what you actually measure with:
-*    10x passive probe     rprobe=10meg   cprobe=10p    (the default)
-*    Analog Discovery 3    rprobe=1meg    cprobe=24p
-*    1x passive probe      rprobe=1meg    cprobe=100p
-* The default is a 10x probe because that is the commonest instrument and
-* every published number in these READMEs was measured with it. This
-* repo's own silicon comparisons use the AD3 line instead, and say so.
-* Resistance is the cheap half here: none of these examples drives a node
-* stiffer than ~50 kOhm, so even 1 MOhm costs a couple of percent, while
-* the capacitance is what sets every rise time on the sheet.
 .param rprobe=10meg
 .param cprobe=10p
 
@@ -137,9 +122,9 @@ Vgnd VGND 0 0
   meas tran t2_drawn  WHEN v(out_drawn)=2.0  RISE=1 TD=13u
   meas tran t1_routed WHEN v(out_routed)=1.3 RISE=1 TD=13u
   meas tran t2_routed WHEN v(out_routed)=2.0 RISE=1 TD=13u
-  let sr_drawn  = 0.7/(t2_drawn - t1_drawn)
-  let sr_routed = 0.7/(t2_routed - t1_routed)
-  print sr_drawn sr_routed
+  let slew_rate_drawn  = 0.7/(t2_drawn - t1_drawn)
+  let slew_rate_routed = 0.7/(t2_routed - t1_routed)
+  print slew_rate_drawn slew_rate_routed
   wrdata otabuf_tb.txt v(in) v(out_drawn) v(out_routed)
   write tb_otabuf.raw
 

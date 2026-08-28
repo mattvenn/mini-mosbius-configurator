@@ -3,23 +3,22 @@ G {}
 K {}
 V {}
 S {}
+F {}
 E {}
 N 100 -370 100 -110 {
 lab=outp}
 N 320 -370 320 -110 {
 lab=outm}
 N 100 -50 320 -50 {
-lab=tail}
+lab=#net1}
 N 320 -50 320 -20 {
-lab=tail}
+lab=#net1}
 N 320 -20 600 -20 {
-lab=tail}
-N 600 -20 600 -290 {
-lab=tail}
+lab=#net1}
+N 600 -290 600 -20 {
+lab=#net1}
 N 550 -290 600 -290 {
-lab=tail}
-N 300 -250 510 -250 {
-lab=ibias}
+lab=#net1}
 N 100 -430 320 -430 {
 lab=bp}
 N 60 -400 60 -370 {
@@ -28,6 +27,8 @@ N 60 -370 280 -370 {
 lab=outp}
 N 280 -400 280 -370 {
 lab=outp}
+N 190 -470 190 -430 {lab=bp}
+N 400 -300 430 -300 {lab=ibias}
 C {sky130_fd_pr/nfet3_g5v0d10v5.sym} 80 -80 0 0 {name=M3
 L=0.5
 W=40
@@ -89,10 +90,10 @@ body=bp
 spiceprefix=X
 }
 C {mosbius_nsink.sym} 550 -250 0 0 {name=Mtail ratio="tail" b=bn}
-C {devices/ipin.sym} 60 -80 0 1 {name=p1 lab=inp}
-C {devices/ipin.sym} 280 -80 0 1 {name=p2 lab=inm}
+C {devices/ipin.sym} 60 -80 2 1 {name=p1 lab=inp}
+C {devices/ipin.sym} 280 -80 2 1 {name=p2 lab=inm}
 C {devices/iopin.sym} 100 -200 0 1 {name=p3 lab=outp}
 C {devices/iopin.sym} 320 -200 0 1 {name=p4 lab=outm}
-C {devices/lab_pin.sym} 300 -250 0 1 {name=p5 lab=ibias}
-C {devices/lab_pin.sym} 200 -430 0 1 {name=p7 lab=bp}
-C {mosbius_implicit_port.sym} 400 -250 0 0 {name=e1 lab=ibias}
+C {devices/lab_pin.sym} 400 -300 2 1 {name=p5 lab=ibias}
+C {devices/lab_pin.sym} 190 -470 0 1 {name=p7 lab=bp}
+C {mosbius_implicit_port.sym} 430 -300 0 0 {name=e1 lab=ibias}
