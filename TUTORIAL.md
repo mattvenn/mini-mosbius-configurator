@@ -207,6 +207,37 @@ real hardware bring-up. If something doesn't work, `mosbius program`'s
 errors are written the same way every other error in this tool is: what
 happened, why, what to try next.
 
+## 7. Find the pins on the board
+
+Nothing on the demoboard is labelled `ua2`, and the letters are not fixed:
+a design's `ua[k]` comes out on whichever analog pad its project's
+placement on that shuttle puts it on. `program` prints the table when it
+finishes, and you can ask for it again at any time:
+
+```bash
+python3 -m mosbius.cli pads build/your_design.mosbius.json
+```
+
+```
+Pads in use -- tt_um_tnt_mosbius on ttsky25a
+
+  PCB pad   design pin   what this configuration puts on it
+  -------   ----------   ----------------------------------
+  C         ua1          nmos_a gate, pmos_a gate
+  J         ua2          nmos_a drain, pmos_a drain
+```
+
+Only the pins this bitstream actually wires up are listed -- the bench
+state is the configuration in the socket, not everything the chip has --
+and `ibias` appears only when some device really draws on the bias
+reference. Ground every instrument to a GND pin on the demoboard; the
+analog pads carry the signal only.
+
+The pad letters come from that shuttle's index
+(https://index.tinytapeout.com/ttsky25a.json), cached under `build/`. On a
+bench with no internet, save that file as `build/shuttle_<shuttle>.json`
+and it works offline; `--shuttle` and `--project` cover a different chip.
+
 ## Where to go next
 
 - [`examples/README.md`](examples/README.md) -- the background all four

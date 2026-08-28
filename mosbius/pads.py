@@ -40,8 +40,14 @@ from pathlib import Path
 
 from mosbius.decode import decode
 from mosbius.model import SwitchConfig
+from mosbius.route import TERMINAL_WORD
 
 PAD_LETTERS = "CDFGJK"
+# What is in the socket unless someone says otherwise: this project's macro,
+# on the shuttle it was taped out with. Kept here rather than in the CLI so
+# `mosbius program` and `mosbius pads` cannot drift apart.
+DEFAULT_PROJECT = "tt_um_tnt_mosbius"
+DEFAULT_SHUTTLE = "ttsky25a"
 INDEX_URL = "https://index.tinytapeout.com/{shuttle}.json"
 CACHE_DIR = Path("build")
 
@@ -127,13 +133,94 @@ def pads_in_use(config: SwitchConfig, shuttle: str, macro: str) -> dict[str, str
         if net.name.startswith("ua[")
         and any(node.startswith("xpt_") for node in net.nodes)
     }
-    for device in decoded.devices:
-        if device.name.startswith(("nsink", "psource", "ota")):
-            wanted.add("ibias")
-        elif "diffpair" in device.name:
-            tied = any(v for k, v in device.settings.items() if k.startswith("shared_source"))
-            if not tied and device.settings.get("tail"):
-                wanted.add("ibias")
+    if _bias_users(decoded):
+        wanted.add("ibias")
 
     pads = pad_map(shuttle, macro)
     return {name: pad for name, pad in pads.items() if name in wanted}
+
+
+def _bias_users(decoded) -> list[str]:
+    """The devices in a decoded design that actually draw on the bias
+    reference, so `ibias` is only called for when something needs it.
+
+    A mirror or the OTA always draws. A differential pair draws only if
+    its shared source is left off the rail, since tying it to a rail
+    shorts the tail bank out (CLAUDE.md's R3 note).
+    """
+    users = []
+    for device in decoded.devices:
+        if device.name.startswith(("nsink", "psource", "ota")):
+            users.append(device.name)
+        elif "diffpair" in device.name:
+            tied = any(v for k, v in device.settings.items() if k.startswith("shared_source"))
+            if not tied and device.settings.get("tail"):
+                users.append(device.name)
+    return users
+
+
+def _pin_name(net: str) -> str:
+    """decode() names a pin net `ua[3]`; a pad map keys it `ua3`."""
+    return f"ua{net[3:-1]}" if net.startswith("ua[") else net
+
+
+def format_pad_table(config: SwitchConfig, shuttle: str, macro: str) -> str:
+    """The bench table: which PCB pad to clip onto, for every pin this
+    configuration actually connects, and what is on it.
+
+    This is the answer to "the bitstream is loaded, now where do I put the
+    probe?", and it cannot be answered from the schematic alone: the
+    schematic says `ua2`, and nothing on the board is labelled that way.
+    """
+    decoded = decode(config)
+    in_use = pads_in_use(config, shuttle, macro)
+    everything = pad_map(shuttle, macro)
+
+    on_pin: dict[str, list[str]] = {}
+    for device in decoded.devices:
+        for terminal, net in device.terminals.items():
+            pin = _pin_name(net)
+            if pin in in_use:
+                on_pin.setdefault(pin, []).append(
+                    f"{device.name} {TERMINAL_WORD.get(terminal, terminal)}"
+                )
+    if "ibias" in in_use:
+        # Both halves of one differential pair draw through the same tail,
+        # so naming the pair once reads as what it is.
+        users = list(dict.fromkeys(d.rstrip("+-") for d in _bias_users(decoded)))
+        drawn_by = ", ".join(users) if users else "the bias reference"
+        on_pin["ibias"] = [
+            f"bias current in, {decoded.ibias * 1e6:.1f} uA -- drawn by {drawn_by}"
+        ]
+
+    def order(name: str) -> tuple[int, str]:
+        # ua1..ua5 in the order the design names them; ibias last, since it
+        # is bench setup rather than a signal to look at.
+        return (1, "") if name == "ibias" else (0, name)
+
+    lines = [f"Pads in use -- {macro} on {shuttle}", ""]
+    lines.append("  PCB pad   design pin   what this configuration puts on it")
+    lines.append("  -------   ----------   ----------------------------------")
+    for pin in sorted(in_use, key=order):
+        what = ", ".join(on_pin.get(pin, [])) or "connected, but no device terminal on it"
+        lines.append(f"  {in_use[pin]:<9s} {pin:<12s} {what}")
+    if not in_use:
+        lines.append("  (none -- this configuration connects nothing to a package pin)")
+
+    idle = sorted(
+        (pad, pin) for pin, pad in everything.items() if pin not in in_use
+    )
+    lines.append("")
+    if idle:
+        which = ", ".join(f"{pad} ({pin})" for pad, pin in idle)
+        lines.append(f"  Nothing is on the other analog pads: {which}.")
+    lines += [
+        "  Ground every instrument to a GND pin on the demoboard -- the analog",
+        "  pads carry the signal only, and a floating reference makes every",
+        "  reading wrong.",
+        "",
+        f"  These letters are for {macro} as placed on {shuttle}. The same design",
+        "  on another shuttle comes out on other pads, so this table is derived",
+        "  from that shuttle's index every time rather than remembered.",
+    ]
+    return "\n".join(lines)

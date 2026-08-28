@@ -19,6 +19,12 @@ from mosbius.check import SafetyReport, check, check_design, check_routing, merg
 from mosbius.decode import decode, format_summary
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig
 from mosbius.netlist import NetlistError, StaleNetlistError, check_netlist_fresh, parse_netlist
+from mosbius.pads import (
+    DEFAULT_PROJECT,
+    DEFAULT_SHUTTLE,
+    PadLookupError,
+    format_pad_table,
+)
 from mosbius.program import ProgramError, program
 from mosbius.route import (
     RouteError,
@@ -123,6 +129,20 @@ def cmd_decode(args: argparse.Namespace) -> int:
         print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
         return 1
     print(format_summary(decode(config)))
+    return 0
+
+
+def cmd_pads(args: argparse.Namespace) -> int:
+    try:
+        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
+    except (ArgumentError, BitstreamError) as e:
+        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        return 1
+    try:
+        print(format_pad_table(config, args.shuttle, args.project))
+    except PadLookupError as e:
+        print(f"CAN'T WORK OUT THE PADS\n\n  {e}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -232,6 +252,22 @@ def cmd_program(args: argparse.Namespace) -> int:
         print(str(e), file=sys.stderr)
         return 1
     print(f"OK -- uploaded to {args.project}" + (" (verified)" if result.get("verify_ok") else ""))
+    # The upload is only half of what someone at the bench needs: the
+    # other half is where to put the probe, and the schematic cannot say
+    # it (nothing on the board is labelled "ua2"). The board reports its
+    # own shuttle where it can, since that is the thing the pad letters
+    # depend on; --shuttle covers the case where it cannot.
+    print()
+    shuttle = args.shuttle or result.get("shuttle") or DEFAULT_SHUTTLE
+    try:
+        print(format_pad_table(config, shuttle, args.project))
+    except PadLookupError as e:
+        # The bits are on the chip either way -- this must not read as a
+        # failed upload, so it is a note rather than an error.
+        print(
+            f"  (uploaded fine, but the pad table needs the shuttle index)\n\n  {e}",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -242,10 +278,24 @@ def build_parser() -> argparse.ArgumentParser:
     def add_ibias(p):
         p.add_argument("--ibias", type=float, default=DEFAULT_IBIAS, help="bias current in amps (default: 100uA)")
 
+    def add_board(p, *, shuttle_default=DEFAULT_SHUTTLE):
+        p.add_argument("--project", default=DEFAULT_PROJECT, help=f"project macro name (default: {DEFAULT_PROJECT})")
+        p.add_argument(
+            "--shuttle", default=shuttle_default,
+            help="shuttle the chip came from -- decides which pad each ua[k] is on"
+                 + (f" (default: {shuttle_default})" if shuttle_default else " (default: whatever the board reports)"),
+        )
+
     p = sub.add_parser("decode", help="show the circuit a 48-hex-char bitstream configures")
     p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
     add_ibias(p)
     p.set_defaults(func=cmd_decode)
+
+    p = sub.add_parser("pads", help="which PCB pad each connected pin comes out on, for a loaded bitstream")
+    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
+    add_ibias(p)
+    add_board(p)
+    p.set_defaults(func=cmd_pads)
 
     p = sub.add_parser("check", help="run the safety checker (SPEC.md Sec 3.1) against a bitstream")
     p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
@@ -273,7 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("program", help="upload a bitstream to real hardware (SPEC.md Sec 3.5, M4)")
     p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
     add_ibias(p)
-    p.add_argument("--project", default="tt_um_tnt_mosbius")
+    add_board(p, shuttle_default=None)
     p.add_argument("--force", action="store_true", help="upload even if check() finds an error")
     p.add_argument("--no-reset", action="store_true", help="skip the known-state reset before shifting")
     p.add_argument("--verify", action="store_true", help="shift the bits back out and compare")

@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from mosbius import pads
 from mosbius.cli import main
 
 INVERTER_NETLIST = """
@@ -20,6 +21,19 @@ pfeta_1 ua1 ua2 VAPWR VAPWR mosbius_pmos w=1
 """
 
 INVERTER_BITSTREAM = "080000004010000001000000000000000040000400000000"
+
+
+@pytest.fixture(autouse=True)
+def offline_shuttle_index(tmp_path, monkeypatch):
+    """No test here may reach the network. `program` and `pads` both print
+    the pad table, which needs the shuttle index, so every test in this
+    file gets a cached one -- the same file a bench with no internet saves
+    by hand (mosbius/pads.py).
+    """
+    monkeypatch.setattr(pads, "CACHE_DIR", tmp_path)
+    (tmp_path / "shuttle_ttsky25a.json").write_text(json.dumps(
+        {"projects": [{"macro": "tt_um_tnt_mosbius", "analog_pins": [5, 0, 4, 1, 3, 2]}]}
+    ))
 
 
 def test_decode_prints_devices(capsys):
@@ -150,6 +164,50 @@ def test_program_passes_no_reset_and_verify_flags(capsys):
     assert kwargs["verify"] is True
     assert kwargs["force"] is True
     assert kwargs["port"] == "/dev/ttyACM0"
+
+
+def test_pads_prints_the_bench_wiring_table(capsys):
+    rc = main(["pads", INVERTER_BITSTREAM])
+    out = capsys.readouterr().out
+    assert rc == 0
+    # the inverter wires ua1 and ua2, which this placement puts on C and J
+    assert "C" in out and "ua1" in out
+    assert "J" in out and "ua2" in out
+    # and it says what is on each, in the words the schematic used
+    assert "gate" in out and "drain" in out
+
+
+def test_pads_explains_an_unknown_project_rather_than_tracebacking(capsys):
+    rc = main(["pads", INVERTER_BITSTREAM, "--project", "tt_um_not_here"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "not in the ttsky25a shuttle index" in err
+
+
+def test_program_prints_the_pad_table_after_uploading(capsys):
+    """The upload is only half of what someone at the bench needs -- the
+    other half is where to put the probe.
+    """
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {"ok": True, "verify_ok": None, "shuttle": "ttsky25a"}
+        rc = main(["program", INVERTER_BITSTREAM])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "OK -- uploaded" in out
+    assert "Pads in use" in out and "ua1" in out
+
+
+def test_program_still_succeeds_when_the_pad_table_cannot_be_built(capsys):
+    """The bits are on the chip either way: a missing shuttle index is a
+    note, not a failed upload.
+    """
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {"ok": True, "verify_ok": None, "shuttle": "tt_next"}
+        rc = main(["program", INVERTER_BITSTREAM])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "OK -- uploaded" in captured.out
+    assert "uploaded fine" in captured.err
 
 
 def test_no_subcommand_is_an_argparse_error():

@@ -68,6 +68,11 @@ python3 -m mosbius.cli route build/your_design.spice \
 
 # Upload it to a connected TT demoboard (needs mpremote: pip install mpremote):
 python3 -m mosbius.cli program <the bitstream printed above>
+
+# ...which finishes by printing the bench wiring table: which PCB pad each
+# connected pin comes out on, and what the configuration put there. Ask for
+# it on its own any time with:
+python3 -m mosbius.cli pads build/your_design.mosbius.json
 ```
 
 `mosbius watch build/your_design.spice` re-runs
@@ -88,8 +93,9 @@ xschem, instead of re-running the netlist/route/check cycle by hand.
 | Parser | `mosbius/netlist.py` | xschem-netlisted SPICE -> `MosbiusDesign` (the in-memory circuit request). |
 | Router | `mosbius/route.py` | The forward path's hard part: allocates your devices onto real switch-matrix positions, assigns nets to bus rows, and emits the bitstream. Includes sticky routing (SPEC.md Sec 3.2b) -- an unchanged design reuses its exact prior routing instead of re-solving. |
 | Watcher | `mosbius/watch.py` | Polls a netlist file and re-runs route+check on every change. |
+| Bench wiring | `mosbius/pads.py` | Which PCB pad to clip a probe onto, per pin, per shuttle -- composed from the shuttle index and the board's pad lettering rather than hard-coded, since a design's `ua[k]` moves with its placement. |
 | Hardware upload | `mosbius/program.py` | Shifts the 192 bits onto a TT demoboard via `mpremote`, with the safety checker as a mandatory pre-upload gate. |
-| CLI | `mosbius/cli.py` | `decode` / `check` / `route` / `watch` / `program` subcommands wrapping all of the above. |
+| CLI | `mosbius/cli.py` | `decode` / `check` / `route` / `simulate` / `watch` / `program` / `pads` subcommands wrapping all of the above. |
 
 ## Running the test suite
 

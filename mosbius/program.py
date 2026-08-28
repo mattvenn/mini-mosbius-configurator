@@ -37,6 +37,7 @@ from pathlib import Path
 
 from mosbius.check import SafetyReport, check
 from mosbius.model import SwitchConfig
+from mosbius.pads import DEFAULT_PROJECT
 
 # AnalogCurrentSource.level is documented upstream as "0 - 0xffff, ...
 # up to ~250 uA" -- approximate, not a calibrated figure. Treat this
@@ -144,6 +145,16 @@ try:
         result["verify_ok"] = (captured_str == BITS)
         result["captured"] = captured_str
 
+    # Which pad each ua[k] comes out on depends on where this project sits
+    # on the shuttle, so the shuttle is worth reporting back rather than
+    # assuming host-side. Guarded on its own: the SDK's attribute name for
+    # it is not something to bet a working upload on.
+    for attr in ("run", "name", "shuttle"):
+        value = getattr(tt.shuttle, attr, None)
+        if isinstance(value, str) and value:
+            result["shuttle"] = value
+            break
+
     result["ok"] = True
 except Exception as e:
     result["error"] = str(e)
@@ -192,7 +203,7 @@ def _run_mpremote(script: str, *, port: str | None) -> dict:
 def program(
     config: SwitchConfig,
     *,
-    project: str = "tt_um_tnt_mosbius",
+    project: str = DEFAULT_PROJECT,
     force: bool = False,
     reset: bool = True,
     verify: bool = False,

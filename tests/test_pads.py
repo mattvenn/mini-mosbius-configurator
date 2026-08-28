@@ -77,3 +77,37 @@ def test_index_beyond_the_boards_pads_is_refused(cached_index):
     cached_index([{"macro": "tt_um_wide", "analog_pins": [0, 1, 2, 3, 4, 9]}])
     with pytest.raises(pads.PadLookupError, match="analog index 9"):
         pads.pad_map("ttsky25a", "tt_um_wide")
+
+
+def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_index):
+    cached_index([TNT_MOSBIUS])
+    table = pads.format_pad_table(
+        SwitchConfig(bits=unpack(INVERTER)), "ttsky25a", "tt_um_tnt_mosbius"
+    )
+    lines = [line.split() for line in table.splitlines() if line.startswith("  C ")]
+    assert lines and lines[0][:2] == ["C", "ua1"]
+    assert "nmos_a gate" in table and "pmos_a drain" in table
+    # the pads this configuration does not use are worth saying too, so
+    # nobody probes a pin that is connected to nothing
+    assert "Nothing is on the other analog pads" in table
+    assert "G (ua4)" in table
+
+
+def test_pad_table_shows_the_bias_pad_only_when_something_draws_on_it(cached_index):
+    """`ibias` is bench setup rather than a signal, and a design that draws
+    no bias current does not need it wired at all."""
+    cached_index([TNT_MOSBIUS])
+    table = pads.format_pad_table(
+        SwitchConfig(bits=unpack(INVERTER)), "ttsky25a", "tt_um_tnt_mosbius"
+    )
+    assert "bias current in" not in table
+
+    # examples/diffamp: a pair floating off the rail draws its tail current
+    biased = pads.format_pad_table(
+        SwitchConfig.from_bitstream("00100000c020004820000000004821000000000000000030"),
+        "ttsky25a", "tt_um_tnt_mosbius",
+    )
+    assert "K         ibias" in biased
+    assert "bias current in, 100.0 uA -- drawn by ndiffpair" in biased
+    # one pair, named once -- not both halves of it
+    assert "ndiffpair+, ndiffpair-" not in biased
