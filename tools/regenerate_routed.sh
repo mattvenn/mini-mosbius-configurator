@@ -31,10 +31,13 @@ fi
 name=$(basename "$sch" .sch)
 
 echo "== netlisting $sch"
-# xschem exits non-zero (10, observed) on any sheet using the mosbius_*
-# symbols that carry `extra` body/bias pins -- its connectivity check
-# cannot see those, so it counts them as issues -- while writing a
-# perfectly good netlist. Check what came out instead of the exit code.
+# Check what came out rather than xschem's exit code. It is a count of
+# ERC messages, and this library used to produce them on every design:
+# the `extra` mechanism that keeps body and bias connections off your
+# sheet is invisible to xschem's connectivity check, so it called those
+# nets undriven. mosbius_implicit_port markers settled that (2026-08-28)
+# and the count is 0 today -- but a netlist that was written and is
+# wrong, or not written at all, is what actually matters here.
 xschem -n -q "$sch" || true
 if [ ! -f "build/$name.spice" ]; then
     echo "xschem wrote no netlist for $sch (expected build/$name.spice)" >&2

@@ -1,0 +1,48 @@
+v {xschem version=3.4.8RC file_version=1.2
+*
+* Marks a net that leaves this block through the symbol's `extra`
+* attribute rather than through a drawn pin.
+*
+* Put one on `ibias`, on a body tie, or on either of a tail bank's
+* implicit gate/source nets. It emits a comment and nothing else -- no
+* device, no port, no change to any connection.
+*
+* What it is for. `extra` puts a net on the instance line and in the
+* .subckt port list without giving the symbol a pin box, which is how
+* this library keeps bias and body connections off your schematic. Those
+* ports are invisible to xschem's connectivity check, so inside a device
+* schematic a net like `ibias` looks like a transistor gate with nothing
+* feeding it, and every netlist reports
+*
+*     Error: undriven node: ibias
+*     Warning: open net: b
+*
+* on a design that is perfectly correct. The error is alarming and wrong:
+* the port is in the .subckt line, and examples/currentsource/ measures
+* its mirror at exactly ratio x ibias.
+*
+* Why this shape of fix. xschem has no switch for it -- the binary has
+* only erc_open_net_is_error and erc_shorted_output_is_error, and neither
+* covers the undriven case, which is hard-coded as an error. A label
+* declared dir=out or dir=inout does not count as a driver (both tried).
+* A real ipin/iopin makes xschem reject the schematic instead, since
+* `extra` pins are not pin boxes. What does work is `type=noconn`, which
+* tells the checker a net is deliberately left alone -- so this symbol
+* borrows that type while saying the accurate thing on the sheet and in
+* the netlist. Verified 2026-08-28: the reporting stops and the netlist
+* gains one comment line per marker.
+}
+G {}
+K {type=noconn
+format="* implicit port @lab"
+template="name=e1 lab=xxx"
+}
+V {}
+S {}
+E {}
+B 5 -1.25 -1.25 1.25 1.25 {name=p dir=inout}
+L 4 0 0 12 0 {}
+L 4 12 -5 12 5 {}
+L 4 16 -3 16 3 {}
+T {@lab} 21 -5 0 0 0.2 0.2 {}
+T {implicit port} 0 6 0 0 0.15 0.15 {}

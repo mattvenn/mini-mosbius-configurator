@@ -98,6 +98,11 @@ class MosbiusDesign:
     """
 
     devices: list[DeviceRequest]
+    # How many bias generators the sheet carries. Not a device request --
+    # the router never places it, since the chip's bias section is fixed
+    # hardware -- but the count has to be exactly one, so check.py needs
+    # it. See _count_bias_generators().
+    bias_generators: int = 0
 
     def nets(self) -> set[str]:
         return {net for dev in self.devices for net in dev.terminals.values()}
@@ -117,6 +122,41 @@ _INSTANCE_RE = re.compile(
     r"(?P<props>(?:\s+\w+=\S+)*)\s*$"
 )
 _PROP_RE = re.compile(r"(\w+)=(\S+)")
+
+# The chip's bias generator, in the two forms a sheet can carry it: a
+# mosbius_bias symbol, or the three transistors drawn by hand (which is
+# what mini_mosbius.sch and the older examples still do). Both are
+# recognised by the one device that has to be unique -- the reference
+# diode, an NMOS with its drain and gate both on `ibias`. Everything else
+# in the generator is a copy of that, and copies may be duplicated
+# harmlessly.
+_BIAS_BLOCK_RE = re.compile(r"^\s*\S+\s+.*\bmosbius_bias\s*$")
+_BIAS_DIODE_RE = re.compile(
+    r"^\s*\S+\s+(?P<d>\S+)\s+(?P<g>\S+)\s+\S+\s+\S+\s+sky130_fd_pr__nfet"
+)
+
+
+def _count_bias_generators(lines: list[str]) -> int:
+    """How many bias references the design block contains.
+
+    `ibias` (pin ua[0]) is a current input, and the chip turns it into the
+    gate voltage every mirror leg, tail bank and the OTA tail copies. That
+    conversion happens exactly once per chip. Two references halve the
+    reference current between them -- two diodes in parallel on one node,
+    measured at -99 uA a leg where -200 uA was right -- and none leaves
+    every mirror gate whereever the solver puts it.
+    """
+    count = 0
+    for line in lines:
+        if line.strip().startswith(("*", ".")):
+            continue
+        if _BIAS_BLOCK_RE.match(line):
+            count += 1
+            continue
+        m = _BIAS_DIODE_RE.match(line)
+        if m and m.group("d") == m.group("g") == "ibias":
+            count += 1
+    return count
 
 
 class StaleNetlistError(ValueError):
@@ -245,8 +285,9 @@ def parse_netlist(text: str) -> MosbiusDesign:
             "  `python3 -m mosbius.cli simulate <this file>`."
         )
 
+    block = _design_block(text)
     devices: list[DeviceRequest] = []
-    for line in _design_block(text):
+    for line in block:
         if line.strip().startswith(("*", ".")):
             continue
         m = _INSTANCE_RE.match(line)
@@ -276,4 +317,6 @@ def parse_netlist(text: str) -> MosbiusDesign:
             "(SPEC.md Sec 3.4), not raw sky130 transistors -- the router only "
             "understands those seven."
         )
-    return MosbiusDesign(devices=devices)
+    return MosbiusDesign(
+        devices=devices, bias_generators=_count_bias_generators(block),
+    )

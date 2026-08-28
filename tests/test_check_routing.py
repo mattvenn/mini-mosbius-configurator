@@ -218,7 +218,10 @@ XM5 ua1  net1 VGND  VGND  mosbius_nmos w=1 tail=6
 XM6 ua2  ua3  VGND  VGND  mosbius_nmos w=1
 """
 
-OTA = "x1 ua1 ua4 ua2 ua5 ibias VGND VAPWR mosbius_ota tail=6\n"
+# The bias generator is on every real design sheet, and check.py's B1
+# requires it of anything that copies the reference -- the OTA's tail does.
+OTA = ("x1 ua1 ua4 ua2 ua5 ibias VGND VAPWR mosbius_ota tail=6\n"
+       "XBIAS ibias ibias_p VGND VAPWR mosbius_bias\n")
 
 
 def test_a_tail_on_a_diff_pair_half_is_reported_not_dropped():

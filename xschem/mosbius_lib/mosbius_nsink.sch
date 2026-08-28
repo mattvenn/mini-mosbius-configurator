@@ -32,3 +32,5 @@ spiceprefix=X
 C {devices/lab_pin.sym} -120 -140 0 1 {name=p1 lab=ibias}
 C {devices/lab_pin.sym} 200 20 0 1 {name=p2 lab=b}
 C {devices/iopin.sym} 320 -200 0 1 {name=p3 lab=out}
+C {mosbius_implicit_port.sym} 0 -140 0 0 {name=e1 lab=ibias}
+C {mosbius_implicit_port.sym} 260 20 0 0 {name=e2 lab=b}

@@ -17,7 +17,16 @@ from mosbius.cli import main
 from mosbius.netlist import parse_netlist
 
 
-def design(*lines: str):
+# Every real design sheet carries exactly one bias generator -- it is on
+# mini_mosbius.sch, and check.py's B1 requires it of any design using a
+# mirror, tail bank or the OTA. These fixtures are about other things, so
+# the helper supplies one; pass bias=False to test its absence.
+BIAS_GENERATOR = "XBIAS ibias ibias_p VGND VAPWR mosbius_bias"
+
+
+def design(*lines: str, bias: bool = True):
+    if bias:
+        lines = lines + (BIAS_GENERATOR,)
     return parse_netlist("\n".join(lines) + "\n")
 
 
@@ -308,3 +317,51 @@ def test_route_refuses_a_malformed_tail_before_routing(tmp_path, capsys):
     err = capsys.readouterr().err
     assert rc == 1
     assert "D3" in err or "doesn't declare a pair" in err
+
+
+# ---------------------------------------------------------------------------
+# B1: exactly one bias generator. `ibias` is a current input, and the chip
+# turns it into the gate voltage every mirror leg, tail bank and the OTA
+# tail copies -- once per chip. Two references halve the current between
+# them; none leaves every mirror gate wherever the solver puts it.
+# ---------------------------------------------------------------------------
+
+MIRROR = "XI2 ua3 ibias VGND mosbius_nsink ratio=2"
+
+
+def test_one_bias_generator_is_what_a_design_wants():
+    assert check_design(design(MIRROR)).findings == []
+
+
+def test_a_design_with_no_bias_generator_is_an_error():
+    report = check_design(design(MIRROR, bias=False))
+    (finding,) = report.findings
+    assert finding.code == "B1"
+    assert report.has_errors
+    assert "mosbius_nsink" in finding.message
+    assert "mosbius_bias" in finding.message
+
+
+def test_two_bias_generators_are_an_error_that_says_why():
+    report = check_design(parse_netlist(
+        "\n".join((MIRROR, BIAS_GENERATOR, BIAS_GENERATOR.replace("XBIAS", "XB2"))) + "\n"
+    ))
+    (finding,) = report.findings
+    assert finding.code == "B1"
+    assert "2 bias generators" in finding.message
+    assert "half" in finding.message
+
+
+def test_a_design_with_nothing_to_bias_needs_no_generator():
+    # An inverter copies no reference, so an absent generator is not a fault.
+    assert check_design(design("m1 ua1 ua2 VGND VGND mosbius_nmos w=1",
+                               bias=False)).findings == []
+
+
+def test_the_hand_drawn_generator_counts_too():
+    # mini_mosbius.sch and the older examples draw the three transistors
+    # instead of placing mosbius_bias; the reference diode is the one that
+    # has to be unique, so that is what is counted.
+    drawn = ("XMbias_ref ibias ibias VGND VGND sky130_fd_pr__nfet_g5v0d10v5 "
+             "L=1 W=10 nf=2")
+    assert check_design(design(MIRROR, drawn, bias=False)).findings == []

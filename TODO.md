@@ -34,3 +34,25 @@ draw, and exists so the matrix can be told what to be. Belongs in
 TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
 
 14. check all the mosbius library symbols for cleanup
+
+15. roll the mosbius_bias symbol out to the rest of the library.
+`xschem/mosbius_lib/mosbius_bias.sym`/`.sch` is the chip's bias generator
+-- three transistors behind one block -- so a design sheet carries it as a
+single symbol wired to an ordinary `ibias` iopin instead of three raw FETs
+and nine labels. `examples/currentsource/` and `examples/otabuf/` use it;
+`mini_mosbius.sch` and the four older examples still draw the generator.
+Same netlist either way -- verified, the currents and the bitstreams do
+not move -- so this is a readability change, not a correctness one, which
+is why it was not done in the same pass. check.py's B1 already counts
+both forms, so the two can coexist safely.
+
+Doing it means: in `mini_mosbius.sch`, `examples/inverter/inverter.sch`,
+`inverter_w4.sch`, `examples/srlatch/srlatch.sch`,
+`examples/ringosc/ring.sch` and `examples/diffamp/diffamp.sch`, delete the
+three `Mbias_*` devices, their nine `pbias*` labels and the seven
+explanatory text lines, place one `mosbius_bias` and wire it to the
+`ibias` iopin; re-netlist and confirm every bitstream and every regression
+number is unchanged; then update `examples/README.md`'s "The bias
+reference" and `TUTORIAL.md`'s step 1, which both describe the drawn form.
+
+16 - new example - current starved ring osc

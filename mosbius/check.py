@@ -1133,10 +1133,64 @@ def check_routing(routed) -> SafetyReport:
     )
 
 
+# Devices that copy the chip's bias reference, and so need one to exist.
+# Every mirror leg, both tail banks and the OTA tail gate on it.
+BIAS_REFERENCED_KINDS = ("nsink", "psource", "ntail", "ptail", "ota")
+
+
+def _check_b1_bias_generator(design: MosbiusDesign) -> list[Finding]:
+    """Exactly one bias generator per design, and only when one is needed.
+
+    `ibias` (pin ua[0]) is a current input; the chip turns it into the
+    gate voltage every mirror leg, tail bank and the OTA tail copies, and
+    that conversion happens once per chip. Getting the count wrong is
+    quiet and expensive in both directions, which is why this is an error
+    rather than a warning: two references halve the current between them
+    (measured -99 uA a leg where -200 uA was right), and none leaves every
+    mirror gate wherever the DC solver happens to put it.
+    """
+    users = sorted({d.kind for d in design.devices if d.kind in BIAS_REFERENCED_KINDS})
+    count = design.bias_generators
+    if count == 1 or (count == 0 and not users):
+        return []
+
+    drew = _join_and([f"mosbius_{k}" for k in users])
+    if count == 0:
+        message = _wrap(
+            "IMPOSSIBLE -- ", "this design has no bias generator on the sheet",
+            f"You drew {drew}, and every one of those copies the chip's bias "
+            f"reference: they are mirror legs and tail banks, and what sets "
+            f"their current is the voltage that reference makes out of the "
+            f"ibias pin.",
+            "Nothing on this sheet makes it, so in simulation their gates sit "
+            "wherever the DC solver leaves them and the currents mean nothing. "
+            "On silicon the reference is always there, so this is a gap in the "
+            "drawing rather than something the chip could do.",
+            "To fix: place one mosbius_bias from xschem/mosbius_lib and wire it "
+            "to the ibias pin. examples/currentsource/ has it done. Copying a "
+            "fresh mini_mosbius.sch also gets you one.",
+        )
+    else:
+        message = _wrap(
+            "IMPOSSIBLE -- ", f"this design has {count} bias generators, and "
+            f"needs exactly one",
+            "They sit in parallel on the ibias pin, so they share the current "
+            "the demoboard sends: two references make half the reference "
+            "current each, and every mirror, tail bank and OTA tail on the "
+            "sheet comes out at half of what its ratio= or tail= asks for.",
+            "The chip has one, feeding everything. To fix: delete all but one "
+            "mosbius_bias (or, on an older sheet, all but one drawn "
+            "reference diode -- the NMOS with its gate and drain both on "
+            "ibias).",
+        )
+    return [Finding(code="B1", severity=ERROR, message=message)]
+
+
 def check_design(design: MosbiusDesign) -> SafetyReport:
     """Run the netlist-level checks against `design`, before routing."""
     return SafetyReport(
-        findings=_check_d1_source_on_wrong_rail(design)
+        findings=_check_b1_bias_generator(design)
+        + _check_d1_source_on_wrong_rail(design)
         + _check_d2_drain_and_source_swapped(design)
         + _check_d3_tail_wrong_arity(design)
         + _check_d4_tail_on_rail(design)

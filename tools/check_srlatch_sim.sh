@@ -21,13 +21,15 @@ set -e
 # Netlist one schematic and check what came out, rather than trusting
 # xschem's exit code.
 #
-# xschem exits non-zero (10, observed) on any sheet that instantiates
-# mosbius_nsink/mosbius_psource/mosbius_ntail/mosbius_ptail/mosbius_ota,
-# while writing a perfectly good netlist. Those symbols supply their body
-# and bias connections through xschem's `extra` attribute, which its
-# connectivity check cannot see (CLAUDE.md, "Useful facts"), so it counts
-# them as issues. Under `set -e` that stopped these scripts before they
-# reached ngspice -- the diff amp job could never have passed.
+# xschem's exit code is a count of ERC messages, not a verdict on the
+# netlist. This library used to produce them on every design that used a
+# mirror or a tail bank: the `extra` mechanism that keeps body and bias
+# connections off the sheet is invisible to xschem's connectivity check,
+# so it called those nets undriven. Under `set -e` that stopped these
+# scripts before they reached ngspice -- the diff amp job could never
+# have passed. mosbius_implicit_port markers settled the messages
+# themselves (2026-08-28); checking the output rather than the exit code
+# stays, because it is what actually matters.
 #
 # What is worth checking is the netlist itself: that it was written, and
 # that the symbol library was actually on the path. Launch xschem from

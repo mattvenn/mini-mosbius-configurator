@@ -33,6 +33,17 @@ v {xschem version=3.4.8RC file_version=1.2
 * chip's one reference current N ways: two mosbius_nsink at ratio=2
 * measured -99 uA each where -200 uA was right.
 *
+* Drawn as what it is: one transistor with a fixed gate. The gate and the
+* rail end are terminated, not open stubs -- they are supplied through
+* `extra` and there is no pin box on either, so there is nothing to wire
+* and nothing a wire could silently miss. Only the drain has a pin.
+*
+* It is deliberately not an ideal-current-source circle any more. This is
+* a mirror leg: its current droops with output voltage (about 12 uA/V,
+* ~85 kOhm) and collapses as the drain approaches its rail. A current
+* source glyph promises behaviour the hardware does not have; see
+* examples/currentsource/ for the measured I-V curve.
+*
 * The pin-box (B) record below is declared in netlist pin order, which
 * is also the .subckt port order -- extra pins are appended, in the
 * order `extra` lists them. mosbius/netlist.py's DEVICE_PINS holds a
@@ -47,17 +58,21 @@ extra="g s"
 V {}
 S {}
 E {}
-L 4 0 -40 0 -15 {}
-L 4 0 15 0 25 {}
-L 4 -10 25 10 25 {}
-L 4 -6 30 6 30 {}
-L 4 -2 35 2 35 {}
-A 4 0 0 15 270 360 {}
-P 4 7 0 -7.5 0 2.5 2.5 2.5 0 10 -2.5 2.5 0 2.5 0 -7.5 {fill=true}
-B 5 -2.5 -42.5 2.5 -37.5 {name=d dir=inout}
+L 4 -15 -30 -15 30 {}
+L 4 -15 -20 0 -20 {}
+L 4 0 -30 0 -20 {}
+L 4 0 -35 0 -30 {}
+L 4 -12 -35 12 -35 {}
+L 4 -15 20 0 20 {}
+L 4 0 20 0 30 {}
+L 4 0 30 0 40 {}
+L 4 -25 -15 -25 15 {}
+L 4 -40 0 -32.5 0 {}
+A 4 -28.75 0 3.75 270 360 {}
+P 4 5 -43 -3 -37 -3 -37 3 -43 3 -43 -3 {fill=true}
+B 5 -2.5 37.5 2.5 42.5 {name=d dir=inout}
 T {@name} 24 -17 0 0 0.2 0.2 {}
 T {tail=@tail} 24 1 0 0 0.15 0.15 {}
-T {ibias_p} -34 -17 0 0 0.13 0.13 {}
-T {@g} -30 -3 0 0 0.13 0.13 {layer=1}
-T {@s} 14 26 0 0 0.13 0.13 {layer=1}
-T {@#0:net_name} 6 -52 0 0 0.15 0.15 {layer=15 hide=instance}
+T {@g} -67 -8 0 0 0.26 0.26 {layer=1}
+T {@s} 14 -46 0 0 0.26 0.26 {layer=1}
+T {@#0:net_name} 6 44 0 0 0.15 0.15 {layer=15 hide=instance}

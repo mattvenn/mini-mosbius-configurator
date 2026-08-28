@@ -1,0 +1,70 @@
+v {xschem version=3.4.8RC file_version=1.2
+*
+* The chip's bias generator. Place exactly one on a design sheet and wire
+* its pin to the `ibias` port; everything else it needs is implicit.
+*
+* `ibias` (pin ua[0]) is a *current* input. Something has to turn it into
+* the gate voltage that every mirror leg, differential-pair tail bank and
+* the OTA tail copies, and the chip does it with three transistors:
+*
+*   Mbias_ref   NMOS diode on ibias      mirror_n.sch M1  (L=1 W=10 nf=2)
+*   Mbias_copy  1:1 copy -> ibias_p      mirror_n.sch M2  (iout_fixed)
+*   Mbias_p     PMOS diode on ibias_p    mirror_p.sch M4  (L=1 W=30 nf=4)
+*
+* Those are the sizes the submodule's own schematics use, so the model has
+* the chip's bias section device for device, shared by every leg the way
+* silicon shares it.
+*
+* Drawn as the diode-connected reference itself -- the device that turns
+* the pin's current into a voltage, and the only one of the three that
+* has to be unique. The other two, the 1:1 copy and the PMOS diode that
+* makes ibias_p, are inside; descend into the symbol to see all three.
+*
+* Deliberately not a current-source circle: nothing here sources a
+* current. Current is pushed *in* at the pin, and what comes out is two
+* gate voltages.
+*
+* Only `ibias` is drawn. `ibias_p` and the two rails come through the
+* `extra` mechanism below, the same way a FET's body tie does: they are
+* on the instance line and in the .subckt port list, and there is nothing
+* to wire. `ibias_p` is then an ordinary net of your design's subcircuit,
+* created here and picked up by mosbius_psource/mosbius_ptail through
+* their own templates.
+*
+* Exactly one per design. Two halve the reference current between them --
+* two diodes in parallel on one node -- and none leaves every mirror
+* gate at whatever the solver invents. mosbius/check.py enforces this.
+*
+* Two of the three do nothing in a design with no PMOS mirror and no PMOS
+* tail. That is correct rather than wasteful: the chip has them whatever
+* you draw, and so does `mosbius simulate`'s routed netlist.
+}
+G {}
+K {type=subcircuit
+format="@spiceprefix@name @pinlist @ibias_p @bn @bp @symname"
+template="name=BIAS ibias_p=ibias_p bn=VGND bp=VAPWR spiceprefix=X"
+extra="ibias_p bn bp"
+}
+V {}
+S {}
+F {}
+E {}
+L 4 -15 -30 -15 30 {}
+L 4 -15 -20 0 -20 {}
+L 4 0 -30 0 -20 {}
+L 4 0 -40 0 -30 {}
+L 4 -15 20 0 20 {}
+L 4 0 20 0 30 {}
+L 4 -10 30 10 30 {}
+L 4 -6 34 6 34 {}
+L 4 -2 38 2 38 {}
+L 4 -25 -15 -25 15 {}
+L 4 -40 0 -25 0 {}
+L 4 -40 -35 -40 0 {}
+L 4 -40 -35 0 -35 {}
+B 5 -2.5 -42.5 2.5 -37.5 {name=ibias dir=inout}
+T {@name} 22 -20 0 0 0.26 0.26 {}
+T {chip bias generator} 22 -2 0 0 0.2 0.2 {}
+T {+ 1:1 copy and PMOS diode} 22 12 0 0 0.15 0.15 {}
+T {@ibias_p} 22 26 0 0 0.2 0.2 {layer=1}
+T {@bn} -46 44 0 0 0.26 0.26 {layer=1}
