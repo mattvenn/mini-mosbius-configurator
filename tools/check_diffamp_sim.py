@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/diffamp/tb_diffamp.sch
 against the reference measurements in examples/diffamp/README.md ("Step
-response and settling"), last measured 2026-08-28 at cload=10p:
+response and settling"), last measured 2026-08-28 at cprobe=10p (with rprobe=10meg):
 
     as drawn   base 1.985V   +40mV -> 2.714V   -40mV -> 1.222V
     as routed  base 2.020V   +40mV -> 2.771V   -40mV -> 1.228V

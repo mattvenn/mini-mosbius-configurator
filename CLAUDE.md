@@ -13,6 +13,86 @@ anything. Do not re-derive facts that are already marked VERIFIED there.
 Status: M0-M4 complete and tested, M5 (docs + examples) in progress. See §5 for
 the milestone plan.
 
+**M4 has run on real silicon (2026-08-28), and the first measurement is
+in.** A TTDBv3 [3.2] demoboard with a ttsky25a chip, driven from the
+host: `mosbius program ... --verify` loaded `examples/inverter`'s
+bitstream and the readback matched, which is SPEC.md Sec 8.4's exit
+criterion met. Then an Analog Discovery 3 measured the transfer curve of
+that inverter through the real switch matrix. Against the same circuit
+simulated: threshold 1.555 V measured, 1.600 V as routed, 1.495 V as
+drawn -- so the routed model moves the threshold in the right direction
+and most of the way, which is the first independent evidence the switch
+matrix model is right. Peak gain -17.6 V/V measured at 25 mV steps and
+-20.7 V/V at 4 mV steps (the transition is only ~220 mV wide, so the step
+size matters), against -15.4 V/V as routed. Absolute levels agreed too,
+but only to the AD3's uncalibrated ~45 mV of channel offset, which is
+larger than the ~1.3 mV the deck says a 1 MOhm probe droops VOH -- so a
+level difference in that range is not evidence of anything until the
+instrument is calibrated. `tools/measure_inverter_ad3.py` reproduces the
+measurement, `tools/ad3.py` is the SDK wrapper.
+
+Three things that cost time on the way there, all fixed, none worth
+rediscovering:
+
+- **The bitstream was fine; `mpremote` was the problem.** It soft-resets
+  the board to get a clean REPL, and a soft reset does not clear the
+  RP2350's GPIO, so ttboard's boot-time carrier detection reads pins that
+  are still driven, decides no chip carrier is present, skips the chip
+  ROM, and leaves the shuttle as `unknown` -- an index with no projects
+  in it, so `tt.shuttle.has('tt_um_tnt_mosbius')` is False with the chip
+  sitting right there. `program.py`'s generated script now calls
+  `DemoboardDetect.probe()` *before* anything imports (and so creates)
+  the `DemoBoard` singleton. Order matters: probing after the singleton
+  exists does not help.
+- **The AD3's scope range is a peak-to-peak span, not a maximum.**
+  `FDwfAnalogInChannelRangeSet(h, ch, 5.0)` is +/-2.5 V about the channel
+  offset. A 3.3 V rail measured that way reads back a steady, confident
+  2.591 V -- the clipping ceiling -- with no error reported anywhere, and
+  a whole afternoon went into explaining a supply that was never low. The
+  tell is that clipped samples are *perfectly* flat: sd exactly 0.000 mV
+  over thousands of points is a railed ADC, never a quiet signal.
+  `tools/ad3.py` centres the 5 V span on 1.65 V for chip signals and puts
+  every capture through `check_clipping()`.
+- **On macOS the WaveForms cask alone does not give you the SDK.** The
+  app carries a private copy of `dwf.framework`, so the GUI finds the
+  device while every script reports 0 devices and `Adept NOK`. The DMG
+  ships a second, standalone `dwf.framework` for `/Library/Frameworks`,
+  and nothing works until it is copied there (`sudo cp -R
+  /Volumes/WaveForms/dwf.framework /Library/Frameworks/`).
+
+**Which PCB pad a design's `ua[k]` comes out on is per shuttle, and is
+not derivable from the pin number.** The chip's analog pins are muxed, so
+the internal analog index a project's `ua[k]` lands on depends on where
+that project sits on that shuttle: for `tt_um_tnt_mosbius` on ttsky25a
+the project page's Analog pins table gives ua0-ua5 -> pads K, C, J, D, G,
+F. The machine-readable half is the shuttle index
+(https://index.tinytapeout.com/ttsky25a.json), whose `analog_pins:
+[5, 0, 4, 1, 3, 2]` is ua -> internal index; lining that up against the
+page gives index -> pad 0=C 1=D 2=F 3=G 4=J 5=K, the carrier's analog
+pads in letter order. That last step is inferred from one project's table
+rather than read from a Tiny Tapeout spec, so `tools/` writes the mapping
+out per shuttle rather than computing it. Telling a user to "connect to
+ua1" is useless -- nothing on the board is labelled that way.
+
+**The meter is in the testbench now, as `rprobe`/`cprobe` (2026-08-28).**
+Each `tb_*.sch` carries `Rprobe_drawn`/`Cprobe_drawn` and
+`Rprobe_routed`/`Cprobe_routed` -- the old `Cload_*`/`cload` names are
+gone -- defaulting to a 10x passive probe (`rprobe=10meg cprobe=10p`),
+with an Analog Discovery (`1meg`/`24p`) and a 1x probe (`1meg`/`100p`)
+named in the sheet's own comment. This is the mirror image of the pad
+decision: pads are baked into the generated deck because every user has
+them, while nobody has the same probe, so the instrument is a parameter
+and it lives at Level 2 with the rest of the bench -- never in the design
+block, never in `<name>_routed.spice`. The default stayed at 10 pF so
+every published number holds; resistance is the cheap half anyway (no
+example here drives a node stiffer than ~50 kOhm), but without it an
+output is a perfect open circuit and VOH sits exactly on the rail, so the
+sheet cannot reproduce a bench measurement of a level at all.
+`tb_inverter.sch` also gained a `dc Vin 0 3.3 0.005` sweep, which is what
+the silicon comparison above is against. And a units error went with it:
+`examples/README.md` called the diff amp's output "a ~20 MOhm node"
+alongside its own 200 ns at 10 pF, which is 20 kOhm.
+
 `TODO.md` holds deferred work. It is renumbered from 1 whenever items are
 removed, so a `TODO.md` §number goes stale the moment anything above it
 closes -- cite one only in `TODO.md` itself, and describe the item in
@@ -142,7 +222,7 @@ digit. Every design sheet needs exactly one generator: two halve the
 reference, none leaves `ibias` with no DC path, which does not simulate.
 Testbenches now give each instance its own bias source
 (`Ibias_drawn`/`Ibias_routed`, both `'ibias_amps'`) for the same reason
-both load capacitors are `'cload'`.
+both probe capacitors are `'cprobe'`.
 
 Also closed on 2026-08-28: **`xschem -n -q` exits non-zero (10) on any
 sheet using the `extra` body/bias pins** -- its connectivity check cannot
@@ -387,6 +467,55 @@ These were all got wrong once. The sources that look authoritative are not.
   `extra` ports are invisible to its connectivity check -- the same is true
   of a drawn `ibias`, verified 2026-08-22: it routed clean with no warning
   either way, which is exactly why TODO.md made it implicit.
+- **The chip's bias generator is a symbol, `mosbius_bias`.** Three
+  transistors -- `mirror_n.sch` M1 and M2, `mirror_p.sch` M4, at those
+  sizes -- behind one block with a single drawn pin, wired to the design's
+  ordinary `ibias` iopin. `ibias_p` and the two rails come in on `extra`,
+  so `ibias_p` is a plain net of the design's subcircuit: made by the
+  block, picked up by `mosbius_psource`/`mosbius_ptail` through their
+  templates, never drawn. Exactly one per design, enforced by check.py's
+  **B1**, which counts the hand-drawn form too (an NMOS with gate and
+  drain both on `ibias`) so the two forms can coexist while TODO.md's
+  rollout is pending -- `examples/currentsource/` and `examples/otabuf/`
+  use the symbol, `mini_mosbius.sch` and the four older examples still
+  draw it. Getting the count wrong is quiet in both directions: two
+  references halve the current between them (measured -99 uA a leg where
+  -200 uA was right), none leaves every mirror gate wherever the solver
+  puts it.
+- **An xschem symbol can declare a port *and* emit devices** -- a
+  `type=iopin` symbol whose `format` is `*.iopin @lab` followed by
+  instance lines contributes both, verified 2026-08-28 standalone and
+  instantiated, with the port list unchanged and identical measured
+  currents. It was built and then dropped in favour of `mosbius_bias`: it
+  put the generator behind a pin that then looked unlike the other eight,
+  and hid three transistors where nothing on the canvas could be opened to
+  find them. Recorded because the capability is worth knowing about and
+  the experiment need not be repeated.
+- **That blind spot used to make every netlist report errors, and
+  `mosbius_implicit_port` is the fix.** A net reaching only a transistor
+  gate, whose only other connection is an `extra` port the checker cannot
+  see, was reported as `Error: undriven node: ibias`; a net with one
+  connection and an `extra` port as `Warning: open net: b`. Both on
+  designs that were correct. There is no switch for it -- the binary has
+  only `erc_open_net_is_error` and `erc_shorted_output_is_error`, and
+  neither covers the undriven case -- and a label declared `dir=out` or
+  `dir=inout` does not count as a driver (both tried, 2026-08-28), while a
+  real `ipin`/`iopin` makes xschem reject the schematic outright, since
+  `extra` pins are not pin boxes. What works is `type=noconn`, which marks
+  a net as deliberately left alone. `xschem/mosbius_lib/mosbius_implicit_port.sym`
+  is our own symbol of that type, named and drawn to say the accurate
+  thing, placed on all eleven such nets across the six device schematics.
+  It emits one comment line (`* implicit port ibias`) and changes nothing
+  electrical -- verified by diffing the netlists, and by every bitstream
+  and measured current being unchanged.
+- **xschem prints its ERC report only when the run contains at least one
+  Error.** Warnings alone produce nothing at all, which is why silencing
+  the errors above also removed the `open net: ua1/ua4/ua5/VDPWR` lines a
+  design sheet gets for the chip pins it does not use. The exit code is
+  the message count, so `xschem -n -q` on this library's designs went from
+  10 to 0 the same day. Do not read that as "no warnings exist"; read it
+  as "no errors, so nothing was printed". Batch runs are silent either way
+  unless you pass `-l <logfile>`.
 - 192-bit shift chain. Transmit **MSB first** (bit 191 first). 48 hex chars.
 - `enable` (ui[1]) gates all switch outputs combinationally — **must be low
   throughout the shift**, or the chip walks through 192 arbitrary configurations.

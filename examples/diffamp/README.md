@@ -232,26 +232,36 @@ build it with a short loop over `[0, 2, 5, 10, 20, 40, 0, -2, -5, -10,
 
 ## Load capacitors in `tb_diffamp.sch`
 
-The usual pair, both `'cload'` with `.param cload=10p` -- see
+The usual pair, both `'cprobe'` (plus a matching `'rprobe'`) with `.param cprobe=10p` -- see
 [`../README.md`](../README.md). Here the load does not affect the gain
 at all, only how long you have to wait for it. That is worth stating
 plainly, because an earlier version of this section said the opposite.
 
 ## Step response and settling
 
-The output of this amplifier is a high-impedance node -- roughly 20
-MOhm -- so `cload` alone gives the step response a time constant of about
-**200 ns** as drawn and about **470 ns** as routed, where the bond pad
-adds ~5pF on top of `cload` and the switch matrix adds series resistance.
-Five time constants is 2.4us, which is why `tb_diffamp.sch` holds each
-input level for 2.5us and samples 5ns before the end of the plateau:
+The output of this amplifier is a high-impedance node -- roughly **9
+kOhm** as drawn and **15 kOhm** as routed -- so `cprobe` alone gives the
+step response a time constant of about **90 ns** as drawn and **220 ns**
+as routed, where the bond pad adds ~5pF on top of `cprobe` and the switch
+matrix adds series resistance. In 10%-90% terms, the numbers this section
+used to quote, that is about 200 ns and 470 ns. Both were measured off
+`build/diffamp_tb_out_*.txt` on 2026-08-28 by fitting the step; an
+earlier version of this paragraph called the node "roughly 20 MOhm",
+which is three orders out and contradicted its own time constants --
+20 MOhm against 10pF would be 200 *microseconds*. The correction matters
+beyond tidiness: at 20 MOhm a 10 MOhm scope probe would halve the gain,
+while at 15 kOhm it costs 0.1%, which is why the probe model added in
+`tb_diffamp.sch` moved every level here by about 2 mV and nothing more.
+Five routed time constants is 1.1us, and the 10%-90% figure gives 2.4us,
+which is why `tb_diffamp.sch` holds each input level for 2.5us and
+samples 5ns before the end of the plateau:
 
 ```
 Vinp  PWL(0 1.5  999n 1.5  1000n 1.54  3499n 1.54  3500n 1.46  5999n 1.46  6000n 1.5)
 tran 5n 6.5u
 ```
 
-Measured 2026-08-28, at `cload=10p`:
+Measured 2026-08-28, at `cprobe=10p (with rprobe=10meg)`:
 
 | | `out` base | after `+40mV` | after `-40mV` | gain + | gain - |
 |---|---|---|---|---|---|

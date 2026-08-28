@@ -181,7 +181,7 @@ Add your own `.meas` lines to the `.control` block; the template ships
 without any, since what is worth measuring depends on your circuit.
 
 That is the whole recipe. What the two branches mean, why both load
-capacitors are `'cload'` and must stay equal, and what the comparison does
+capacitors are `'cprobe'` and must stay equal, and what the comparison does
 and doesn't tell you are in
 [`examples/README.md`](examples/README.md); `examples/inverter/` is the
 same testbench worked through with numbers and a plot.

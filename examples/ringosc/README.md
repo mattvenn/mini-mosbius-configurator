@@ -39,7 +39,7 @@ a probe capacitance models a probe again -- the same situation as
 which is a real on-chip load rather than an invented one.
 
 **But the buffer cannot drive that load, and that is a result too.** A
-ring stage drives one gate, tens of fF. The buffer drives `cload` plus a
+ring stage drives one gate, tens of fF. The buffer drives `cprobe` plus a
 bond pad -- 15pF, three orders of magnitude more -- with an identical
 `w=4` device. Scaling `examples/inverter/`'s own measurement (a `w=1`
 inverter takes 8.9ns to slew 10pF, so `w=4` takes about 2.2ns), the drawn
@@ -66,7 +66,7 @@ the 1.5V trigger, so the same deck reported 58.3MHz one run and 44.0MHz
 the next with no electrical change. Counted over the whole steady-state
 window, `loop_drawn` crosses 1.5V 74 times with **zero** spread in period,
 `out_drawn` 8 times with +-4.1ps. The `.meas` lines trigger on
-`loop_drawn`/`loop_routed`; `out_drawn`/`out_routed` and their `cload`
+`loop_drawn`/`loop_routed`; `out_drawn`/`out_routed` and their `cprobe`
 stay as the pin view, which is a real answer about driving an external
 load off this chip.
 
@@ -195,7 +195,7 @@ measurement.
 Two things to change in that copy, because the measured bitstream is the
 unbuffered circuit: its loop nodes are `ua[1]`, `ua[2]` and `ua[4]`, so
 `out_routed` has to move to one of those rather than `ua3`, and
-`Cload_routed` has to come off, since observing a loop node means the
+`Cprobe_routed` has to come off, since observing a loop node means the
 probe is back inside the feedback path. That is the comparison being made
 -- the measured silicon had no buffer to hide behind.
 
@@ -376,8 +376,8 @@ because which guesses turned out to matter is the useful part:
 
 The sheet's ngspice block is bare; the reasoning behind it lives here.
 
-**Load capacitors on `ua3` only.** `Cload_drawn`/`Cload_routed` are both
-`'cload'` with `.param cload=10p`, one scope probe's worth, held equal on
+**Load capacitors on `ua3` only.** `Cprobe_drawn`/`Cprobe_routed` are both
+`'cprobe'` with `.param cprobe=10p`, one scope probe's worth, held equal on
 both instances so the only difference between `out_drawn` and `out_routed`
 is the chip -- the same convention as every other testbench here, and
 [`../README.md`](../README.md)'s "Capacitive loading" explains why they are

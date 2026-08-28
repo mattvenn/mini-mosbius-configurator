@@ -220,7 +220,8 @@ simulating a comparison with nothing on one side.
 
 ### What running it shows
 
-Re-measured 2026-08-27 at `cload=10p`, on the routing the router produces
+Re-measured 2026-08-27 at the probe defaults (`cprobe=10p`,
+`rprobe=10meg`), on the routing the router produces
 today (`0800000040100000...`):
 
 ```
@@ -267,11 +268,51 @@ switch-matrix-dominated (ring oscillator, no external load, no pad in the
 signal path between stages) and pad-and-load-dominated (this inverter,
 driving a real package pin into a probe).
 
-### The load capacitors
+### Measured on silicon
 
-`Cload_drawn` and `Cload_routed` are both `'cload'`, with `.param cload=10p`
-in the sheet's ngspice block. Why they are equal, why the routed one is not
-zero, and why the value moves the conclusion as much as it does are in
+This is the first example in the repo with all three numbers, taken
+2026-08-28 on a TTDBv3 [3.2] demoboard carrying a ttsky25a chip, measured
+with an Analog Discovery 3. `tools/measure_inverter_ad3.py` loads the
+bitstream and runs the sweep; the simulated columns come from the
+`dc Vin 0 3.3 0.005` sweep in `tb_inverter.sch`.
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| switching threshold (out = in) | 1.495 V | 1.600 V | **1.555 V** |
+| peak gain | -8.9 V/V | -15.4 V/V | **-17.6 V/V** |
+| VOH | 3.2991 V | 3.2987 V | 3.2986 V |
+
+The threshold is the useful line. As drawn puts it at 1.495 V, the switch
+matrix moves it to 1.600 V, and silicon sits at 1.555 V -- between the
+two and much closer to routed. The matrix is a real effect of roughly the
+right size, measured rather than argued, which is the first independent
+check `mosbius simulate` has had against hardware.
+
+Two cautions about reading the other rows. The gain depends on how finely
+you sweep, because the whole transition is only ~220 mV wide: the same
+silicon reads -17.6 V/V at 25 mV steps and -20.7 V/V at 4 mV steps, so
+compare like with like (the simulated figures above are at 5 mV). And the
+VOH row proves less than it looks: the AD3's channels carry tens of mV of
+uncalibrated offset -- ch1 and ch2 read zero 57 mV apart on this unit --
+while the deck says a 1 MOhm probe droops VOH by only 1.3 mV. Levels at
+that precision need the WaveForms calibration run first. The threshold
+and gain are differences taken on a single channel, so they survive the
+offset; that is why they are the numbers to trust here.
+
+An earlier reading of this measurement claimed a 45 mV droop on VOH and
+turned it into ~13.6 kOhm of switch-path resistance. That was the channel
+offset: the deck puts the whole path -- PMOS on-resistance, crosspoint,
+bus, pad mux -- at a few hundred ohms, which matches the ~300 ohm
+pad-to-pad figure known for this chip, and a few hundred ohms into a
+1 MOhm probe cannot droop anything measurably.
+
+### The probe
+
+`Cprobe_drawn`/`Rprobe_drawn` and `Cprobe_routed`/`Rprobe_routed` are the
+meter, at `.param cprobe=10p` and `.param rprobe=10meg` -- a 10x passive
+probe. Why the two instances must match, why the routed one is not zero,
+why the value moves the conclusion as much as it does, and what to set
+for an Analog Discovery or a 1x probe instead are in
 [`../README.md`](../README.md) -- the 100pF-vs-10pF table above is the
 worked case that section is built on.
 

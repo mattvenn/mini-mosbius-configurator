@@ -97,19 +97,40 @@ C {devices/gnd.sym} -140 200 0 0 {name=lk1 lab=VGND}
 C {devices/isource.sym} -40 170 2 1 {name=Ikickr value="PULSE(0 2m 1n 100p 100p 5n 1)"}
 C {devices/lab_pin.sym} -40 140 1 0 {name=pk2 sig_type=std_logic lab=loop_routed}
 C {devices/gnd.sym} -40 200 0 0 {name=lk2 lab=VGND}
-C {devices/capa.sym} -320 -410 0 0 {name=Cload_drawn m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/capa.sym} -320 -410 0 0 {name=Cprobe_drawn m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -320 -440 2 0 {name=pc1 sig_type=std_logic lab=out_drawn}
 C {devices/gnd.sym} -320 -380 0 0 {name=lc1 lab=VGND}
-C {devices/capa.sym} -140 -410 0 0 {name=Cload_routed m=1 value="'cload'" footprint=1206 device="ceramic capacitor"}
+C {devices/res.sym} -260 -410 0 0 {name=Rprobe_drawn value="'rprobe'" footprint=1206 device=resistor m=1}
+C {devices/lab_pin.sym} -260 -440 2 0 {name=pr_drawn sig_type=std_logic lab=out_drawn}
+C {devices/gnd.sym} -260 -380 0 0 {name=lr_drawn lab=VGND}
+C {devices/capa.sym} -140 -410 0 0 {name=Cprobe_routed m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
 C {devices/lab_pin.sym} -140 -440 2 0 {name=pc2 sig_type=std_logic lab=out_routed}
 C {devices/gnd.sym} -140 -380 0 0 {name=lc2 lab=VGND}
+C {devices/res.sym} -80 -410 0 0 {name=Rprobe_routed value="'rprobe'" footprint=1206 device=resistor m=1}
+C {devices/lab_pin.sym} -80 -440 2 0 {name=pr_routed sig_type=std_logic lab=out_routed}
+C {devices/gnd.sym} -80 -380 0 0 {name=lr_routed lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
 C {devices/code_shown.sym} 160 -690 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
 
 .param ibias_amps=100u
 
-.param cload=10p
+* Your meter is part of the circuit, so it is modelled here, in the
+* testbench, where the rest of the bench lives -- never inside the design
+* block, and never in the generated <name>_routed.spice, because which
+* instrument you own is a fact about your bench and not about the chip.
+* Set these to what you actually measure with:
+*    10x passive probe     rprobe=10meg   cprobe=10p    (the default)
+*    Analog Discovery 3    rprobe=1meg    cprobe=24p
+*    1x passive probe      rprobe=1meg    cprobe=100p
+* The default is a 10x probe because that is the commonest instrument and
+* every published number in these READMEs was measured with it. This
+* repo's own silicon comparisons use the AD3 line instead, and say so.
+* Resistance is the cheap half here: none of these examples drives a node
+* stiffer than ~50 kOhm, so even 1 MOhm costs a couple of percent, while
+* the capacitance is what sets every rise time on the sheet.
+.param rprobe=10meg
+.param cprobe=10p
 
 .option reltol=0.01
 .control

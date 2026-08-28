@@ -88,18 +88,50 @@ role to name them after. So the suffix tells you something real at a
 glance: no suffix means one net feeding both halves, a suffix means one
 per half.
 
-## Capacitive loading
+## The probe
 
-Each testbench hangs one capacitor on each output, `Cload_drawn` and
-`Cload_routed`, both valued `'cload'` with `.param cload=10p` in the
-sheet's ngspice block. That single parameter turns out to be the largest
-lever on the conclusion a reader takes away, so it is worth spelling out.
+Each testbench hangs a **probe model** on each output -- `Cprobe_drawn` /
+`Rprobe_drawn` and `Cprobe_routed` / `Rprobe_routed`, valued `'cprobe'`
+and `'rprobe'`, with `.param cprobe=10p` and `.param rprobe=10meg` in the
+sheet's ngspice block. Those two parameters turn out to be the largest
+lever on the conclusion a reader takes away, so they are worth spelling
+out.
 
-**The capacitor is the bench, not the chip.** It stands for the scope
-probe and PCB trace you would measure through -- a 10x probe is around
-10pF. It is a *controlled variable*, held identical on both instances so
-that the only difference between the two outputs is the chip itself. That
+**The probe is the bench, not the chip**, which is why it is a pair of
+components in the testbench rather than anything the design or
+`mosbius simulate` knows about. Contrast the pads: every user of this
+chip has pads, so they are baked into the generated `<name>_routed.spice`
+and there is no flag to remove them. Nobody has *the same* probe, so the
+instrument is a parameter you set, and the defaults name an instrument
+rather than a round number:
+
+| instrument | `rprobe` | `cprobe` |
+|---|---|---|
+| 10x passive probe (**the default**) | 10meg | 10p |
+| Analog Discovery 3 flywires | 1meg | 24p |
+| 1x passive probe | 1meg | 100p |
+
+Every published number in these READMEs is at the default. This repo's
+own silicon comparisons are taken with an AD3, and say so where they
+appear.
+
+**Capacitance is the half that matters here.** None of these examples
+drives a node stiffer than about 50 kOhm, so swapping 10 MOhm for 1 MOhm
+costs a couple of percent at most, while the capacitance sets every rise
+time on the sheet. The resistor earns its place anyway: without it an
+output is a perfect open circuit, VOH lands exactly on the rail, and the
+sheet cannot reproduce a bench measurement of a level at all.
+
+Both are *controlled variables*, held identical on both instances so that
+the only difference between the two outputs is the chip itself. That
 identity is what makes subtracting one from the other mean anything.
+
+Adding `rprobe` changed no published number: re-run 2026-08-28, all four
+regression checks pass unchanged (inverter 8.90/24.63 ns, SR latch
+18.78/10.94 ns, ring 2.083 GHz/43.89 MHz, diff amp within 2 mV on every
+level). That 2 mV on the diff amp is the whole visible effect of hanging
+10 MOhm on a ~15 kOhm node, and it is the reason the resistor is worth
+having anyway: it is the component that makes a *level* mean something.
 
 What each side then contains:
 
@@ -112,8 +144,8 @@ The probe lands on a different node in each -- on the drain in `x1`,
 outside the pad in `x2`. That asymmetry is correct: it is the same point
 on a real bench, and `x1` has no pad for the probe to sit outside of.
 `x1`'s missing pad is part of what is being measured, so it must not be
-compensated for by inflating `Cload_drawn`. For the same reason
-`Cload_routed` is not zero -- zero would mean measuring with no probe
+compensated for by inflating `Cprobe_drawn`. For the same reason
+`Cprobe_routed` is not zero -- zero would mean measuring with no probe
 attached, leaving `out_routed` a node nobody could observe.
 
 Per-instance estimates (drawn carrying probe + PCB + pad + package,
@@ -158,8 +190,9 @@ drawn ring oscillating outright, and even 1pF drags it from 2.5GHz to
 outside the loop, on a node where it models a probe again.
 
 **Give the circuit time to settle before you measure it.** The diff amp's
-output is a ~20 MOhm node, so 10pF alone gives it a ~200ns time constant
-as drawn and ~470ns as routed. An earlier version of that example held
+output is a ~9 kOhm node as drawn and ~15 kOhm as routed, so 10pF alone
+gives it a time constant of ~90ns and ~220ns respectively -- about 200ns
+and 470ns measured 10%-90%, which is how this was quoted before. An earlier version of that example held
 each input level for 100ns and reported gains between 0.03 and 7.8 V/V,
 all of them samples taken before the output had arrived, and all of them
 made the slower routed branch look like a worse amplifier when it is an
@@ -188,6 +221,13 @@ none leaves `ibias` with no DC path at all, which does not simulate.
 Nothing else about it needs your attention -- the device symbols find it
 by net name.
 
+Newer sheets carry it as a symbol, and you will meet both forms: instead
+of three drawn transistors they place one `mosbius_bias` block, wired to
+the `ibias` pin, with the same three devices inside it. The netlist is
+equivalent either way. `mosbius route` counts them and refuses a design
+with none or two (`B1`), whichever form they are in. The four examples
+above still draw them; rolling them over is tracked in `TODO.md`.
+
 What that buys you is that the settings mean what they say: `ratio=N` on a
 `mosbius_nsink`/`mosbius_psource` is N x `ibias`, and `tail=N` on a
 `mosbius_ntail`/`mosbius_ptail`/`mosbius_ota` is N x `ibias`, which is
@@ -196,7 +236,7 @@ testbench default of 100 uA, `tail=4` is 400 uA.
 
 Two consequences worth knowing. Each instance in a testbench needs **its
 own** bias source: the sheets carry `Ibias_drawn` and `Ibias_routed`, both
-`'ibias_amps'`, for the same reason both load capacitors are `'cload'` --
+`'ibias_amps'`, for the same reason both probe capacitors are `'cprobe'` --
 one source shared between two chips gets divided between them, and the
 split depends on their input impedances, so both branches move. And
 sweeping `ibias_amps` scales every mirror, tail and OTA on the sheet at
@@ -262,6 +302,16 @@ opaquely.
 recognised by name; anything else, `out` included, is an ordinary internal
 net that simulates fine and is unobservable on silicon. Drawing an
 `iopin` on it does not change that.
+
+**A small tag reading "implicit port" is not a loose end.** You will see
+one on `ibias` and on the body ties inside the library's device
+schematics. Those symbols supply their bias and body connections through
+xschem's `extra` attribute rather than as drawn pins, and `extra` ports
+are invisible to xschem's connectivity check -- so without the tag it
+called them undriven and every netlist reported `Error: undriven node:
+ibias` on a design that was perfectly correct. The tag says the net leaves
+the block another way; it emits a comment and nothing else. Leave them
+where they are.
 
 **A differential pair's shared source can carry nothing else.** The two
 halves are wired together in silicon and that node has no switch onto the

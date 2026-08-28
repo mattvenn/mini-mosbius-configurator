@@ -213,7 +213,7 @@ property (a pulse forces a state that then persists after the pulse ends).
 
 ## Load capacitors in `tb_srlatch.sch`
 
-The usual pair, both `'cload'` with `.param cload=10p` -- see
+The usual pair, both `'cprobe'` (plus a matching `'rprobe'`) with `.param cprobe=10p` -- see
 [`../README.md`](../README.md) for why they are equal and why the value
 matters.
 

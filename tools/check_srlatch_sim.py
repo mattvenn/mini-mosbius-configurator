@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/srlatch/tb_srlatch.sch
 against the reference measurements in examples/srlatch/README.md ("Load
-capacitors in tb_srlatch.sch"), last measured 2026-08-27 at cload=10p:
+capacitors in tb_srlatch.sch"), last measured 2026-08-27 at cprobe=10p (with rprobe=10meg):
 
     qd_after_set   =  3.300V     qr_after_set   =  3.110V
     qd_after_reset = -0.0000V    qr_after_reset = -0.0026V
@@ -64,7 +64,7 @@ def _measurement(text: str, name: str, log_path: str) -> float | None:
         f"measurement reported 'failed' rather than a number -- for the "
         f"treset_* pair the known cause of that is a load big enough to "
         f"stretch the reset edge past the measurement window, which prints "
-        f"'trig(TARG) : out of interval' and is what cload=100p used to do "
+        f"'trig(TARG) : out of interval' and is what cprobe=100p used to do "
         f"(see examples/srlatch/README.md). Tail of the log:\n"
         + "\n".join(text.splitlines()[-20:])
     )

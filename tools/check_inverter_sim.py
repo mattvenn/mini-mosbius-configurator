@@ -3,7 +3,9 @@
 """Check an ngspice batch-mode log of examples/inverter/tb_inverter.sch
 against the reference measurements in examples/inverter/README.md
 ("What running it shows"): trise_drawn=8.90ns, trise_routed=24.63ns,
-last measured 2026-08-27 at cload=10p, on the routing the router produces
+last measured 2026-08-28 at the probe defaults rprobe=10meg cprobe=10p
+(a 10x passive probe -- the meter is part of the circuit, so it is
+modelled in the testbench), on the routing the router produces
 today.
 
 Run by tools/check_inverter_sim.sh (the full netlist/route/simulate/ngspice
