@@ -9,6 +9,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  # A separate job per example, not another step, so they fail
+  # independently: each guards something the others cannot, so a break in
+  # one is not evidence about the rest, and a report saying which broke is
+  # worth more than one that stops at the first. The inverter is
+  # pad-and-load dominated; the ring is switch-matrix dominated (row
+  # coupling and bus-wire capacitance are what set its frequency); the diff
+  # amp is the only one that would notice a shifted bias point, since it is
+  # the only analog operating point here rather than a digital edge; and the
+  # SR latch is the only one that stores a value, so it is the only one that
+  # would notice the routed matrix losing a held state.
   inverter:
     runs-on: ubuntu-latest
     steps:
@@ -27,12 +37,6 @@ jobs:
           path: build/ngspice_tb_inverter.log
           if-no-files-found: ignore
 
-  # A separate job, not another step, so the two fail independently: they
-  # guard different halves of the model. The inverter is pad-and-load
-  # dominated, the ring is switch-matrix dominated (row coupling and
-  # bus-wire capacitance are what set its frequency), so a break in one is
-  # not evidence about the other, and a report saying which broke is worth
-  # more than one that stops at the first.
   ringosc:
     runs-on: ubuntu-latest
     steps:
@@ -49,4 +53,40 @@ jobs:
         with:
           name: ringosc-ngspice-log
           path: build/ngspice_tb_ring.log
+          if-no-files-found: ignore
+
+  diffamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Simulate examples/diffamp in IIC-OSIC-TOOLS
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+            --skip bash -lc 'sh tools/check_diffamp_sim.sh'
+
+      - name: Upload ngspice log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diffamp-ngspice-log
+          path: build/ngspice_tb_diffamp.log
+          if-no-files-found: ignore
+
+  srlatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Simulate examples/srlatch in IIC-OSIC-TOOLS
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+            --skip bash -lc 'sh tools/check_srlatch_sim.sh'
+
+      - name: Upload ngspice log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: srlatch-ngspice-log
+          path: build/ngspice_tb_srlatch.log
           if-no-files-found: ignore

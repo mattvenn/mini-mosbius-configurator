@@ -7,15 +7,17 @@ last measured 2026-08-27 at cload=10p, on the routing the router produces
 today.
 
 Run by tools/check_inverter_sim.sh (the full netlist/route/simulate/ngspice
-pipeline), which .github/workflows/spice-regression.yml runs once a month.
+pipeline), which .github/workflows/spice-regression.yml runs once a month
+alongside the ring, diff amp and SR latch checks.
 
 The +-5% band is set by what actually varies: reltol=0.01 keeps repeat
 runs stable to well under 0.1%, so the noise floor is far below this and
 5% is room for a minor ngspice or PDK point release rather than for real
 change. It was +-25% until 2026-08-28, which was wide enough to miss a
 sizeable error in the pad or parasitic models while still passing; the
-matching ring check (tools/check_ring_sim.py) carries the same band and
-the same reasoning.
+other three checks (tools/check_ring_sim.py, tools/check_diffamp_sim.py
+and tools/check_srlatch_sim.py) carry the same band and the same
+reasoning.
 """
 
 from __future__ import annotations

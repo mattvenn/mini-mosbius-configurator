@@ -7,15 +7,16 @@ freq_routed=43.89MHz, last measured 2026-08-27.
 
 Run by tools/check_ring_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the
-inverter check.
+inverter, diff amp and SR latch checks.
 
-The two examples guard different things, which is why both run. The
+All four examples guard different things, which is why all four run. The
 inverter is pad-and-load-dominated: at 10pF its result barely moves if the
 switch matrix's own parasitics are wrong. The ring is
 switch-matrix-dominated -- row coupling (~43fF/switch) and bus-wire
 capacitance (~900fF/row) are what set its frequency -- so a device-library
 rebuild that got those wrong would sail past the inverter check and fail
-here.
+here. The diff amp is the only analog operating point rather than a
+digital edge, and the SR latch the only stored state.
 
 The +-5% band is set by what actually varies. With reltol=0.01 repeat runs
 agree to well under 0.1%, and two different IIC-OSIC-TOOLS containers gave
