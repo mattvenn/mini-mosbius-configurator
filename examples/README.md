@@ -263,6 +263,24 @@ recognised by name; anything else, `out` included, is an ordinary internal
 net that simulates fine and is unobservable on silicon. Drawing an
 `iopin` on it does not change that.
 
+**A differential pair's shared source can carry nothing else.** The two
+halves are wired together in silicon and that node has no switch onto the
+bus, so a third device drawn onto it -- or naming it `ua4` to measure the
+tail on a pin -- cannot be built. The router refuses it now; before
+2026-08-28 it routed clean and silently left the connection out, giving a
+bitstream identical to the one you get without it. What may sit there is
+nothing (with the net named `VGND`/`VAPWR`, which uses the pair's free
+rail tie) or a `mosbius_ntail`/`mosbius_ptail`.
+
+**A pair's tail current has no off state.** The bank's smallest setting is
+one always-on transistor, so the chip sinks 2 x `ibias` -- 200 uA at the
+usual 100 uA -- out of the shared source whatever your schematic says, and
+`decode` shows it as `tail=2`. That is invisible when the source is tied
+to its rail, because the tie shorts the bank out. Left floating on an
+internal net it is real, your as-drawn simulation does not have it, and
+the router warns (`R3`). Draw a tail bank and pick the current, or tie the
+source to the rail.
+
 **Which hardware slot each device gets is the allocator's choice,** and it
 is not stable against unrelated edits. Read the roles from the route
 output rather than assuming.

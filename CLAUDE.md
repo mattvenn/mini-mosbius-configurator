@@ -91,6 +91,32 @@ closing note for the full investigation this shipped from -- reaches
 ring-oscillator bitstream, down from 82x before that investigation
 started.
 
+Closed on 2026-08-28, so don't re-report either: **two silent
+drawn-vs-routed divergences around the differential pair's shared source**,
+found auditing the ideal library against the submodule. (a) That node has
+no crosspoint -- `_collect_touches` drops a half's `s` terminal on purpose
+-- and nothing checked the net was otherwise empty, so a third device
+drawn onto it, or the net named `ua4` to measure the tail on a pin, routed
+clean, said "OK -- no errors or warnings", and produced a bitstream
+byte-identical to the one you get without that connection.
+`_check_shared_source_is_reachable()` now raises a `RouteError` naming
+what else is on the net and what may legitimately be there (nothing plus
+the rail tie, or a `mosbius_ntail`/`mosbius_ptail`). (b) The tail bank has
+no off state -- `diff_n`/`diff_p`/`ota_n` each have one always-on slice
+gated by the bias reference (M8, W=20 against the reference's W=10) -- so
+a pair floating on an internal net sinks 2 x ibias that the as-drawn model
+does not have; `check.py`'s new `R3` says so, and stays quiet when the
+source is rail-tied (the tie shorts the bank out) or a tail is drawn.
+
+The rest of that audit came back clean, so don't redo it: every device
+geometry matches silicon at every setting (nmos/pmos slice totals, mirror
+slaves, both tail banks, the OTA's input pair and PMOS loads, and the
+diff-pair halves -- which is why `w=4` is exactly a half), bodies match
+(NMOS to GND, PMOS to VAPWR), the merged-slice junction parameters come
+out identical to the three real slices (W/nf is constant across them), the
+OTA's real topology is our ideal model under `ctrl_otan_mode[0]`, and all
+18 device-setting bit groups are reachable by the router.
+
 Closed on 2026-08-28, so don't re-derive it: **the ideal library's bias
 reference is now the chip's, and there is exactly one of it per design.**
 Every `mosbius_nsink`/`mosbius_psource`/`mosbius_ntail`/`mosbius_ptail`

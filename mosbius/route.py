@@ -443,6 +443,7 @@ class RoutedDesign:
     # sticky path recomputes them rather than growing the file's schema.
     device_widths: dict[str, DeviceWidth] = field(default_factory=dict)
     device_tails: dict[str, DeviceTail] = field(default_factory=dict)
+    undeclared_tails: tuple[UndeclaredTail, ...] = ()
 
 
 def format_device_roles(routed) -> list[str]:
@@ -944,11 +945,155 @@ def _collect_touches(
     return by_net
 
 
+DIFF_PAIR_ROLES = ("ndiffpair+", "ndiffpair-", "pdiffpair+", "pdiffpair-")
+
+# (diff-pair role -> the tail-bank role that may share its source node, and
+# the symbol a schematic draws to get one).
+PAIR_TAIL_ROLE = {
+    "ndiffpair+": ("ntail", "mosbius_ntail"), "ndiffpair-": ("ntail", "mosbius_ntail"),
+    "pdiffpair+": ("ptail", "mosbius_ptail"), "pdiffpair-": ("ptail", "mosbius_ptail"),
+}
+
+
+def shared_source_net(design: MosbiusDesign, name: str) -> str | None:
+    return next(
+        (d.terminals.get("s") for d in design.devices if d.name == name), None
+    )
+
+
+def _check_shared_source_is_reachable(
+    design: MosbiusDesign, roles: dict[str, str],
+) -> None:
+    """Refuse a design that wires anything else to a differential pair's
+    shared source.
+
+    That node has no switch onto the bus -- the two halves are wired
+    together in silicon (SPEC.md Sec 2.12) -- which is why
+    _collect_touches drops a half's own "s" terminal on purpose. Nothing
+    used to check that the net was otherwise empty, so drawing a third
+    device onto it, or naming it `ua4` to measure the tail on a pin,
+    routed clean, reported "OK -- no errors or warnings", and produced a
+    bitstream byte-identical to the one you get without that connection.
+    The drawn circuit and the routed chip quietly stopped being the same
+    circuit, which is the one failure this tool must never have.
+    """
+    from mosbius.check import _join_and, _wrap  # local: check.py imports this module
+    from mosbius.netlist import IMPLICIT_PINS, PORT_NAMES
+
+    for name, role in sorted(roles.items()):
+        if role not in DIFF_PAIR_ROLES:
+            continue
+        net = shared_source_net(design, name)
+        rail = SOURCE_TIE_RAIL[role]
+        if net is None or net == rail:
+            continue  # the free rail tie: shared with everything, and fine
+
+        tail_role, tail_symbol = PAIR_TAIL_ROLE[role]
+        halves = sorted(
+            d for d, r in roles.items()
+            if r in DIFF_PAIR_ROLES and shared_source_net(design, d) == net
+        )
+        others = []
+        for other in design.devices:
+            for terminal, other_net in sorted(other.terminals.items()):
+                if other_net != net or (other.kind, terminal) in IMPLICIT_PINS:
+                    continue
+                other_role = roles.get(other.name)
+                if other_role in DIFF_PAIR_ROLES and terminal == "s":
+                    continue  # a half of this same pair
+                if other_role == tail_role and terminal == "d":
+                    continue  # the declared tail bank -- exactly what belongs here
+                others.append(f"{other.name}'s {TERMINAL_WORD.get(terminal, terminal)}")
+
+        is_pin = net in PORT_NAMES
+        if not others and not is_pin:
+            continue
+
+        if is_pin:
+            problem = f"'{net}' is a package pin, and this node cannot reach one."
+            if others:
+                problem += f" It also carries {_join_and(others)}."
+        else:
+            problem = f"'{net}' also carries {_join_and(others)}."
+
+        raise RouteError(_wrap(
+            "DOESN'T FIT -- ",
+            f"nothing else can connect to '{net}'",
+            f"{_join_and(halves)} share a source on '{net}', which is what made "
+            f"them the two halves of a differential pair "
+            f"({_join_and([roles[h] for h in halves])}): the chip wires those "
+            f"two sources together in silicon. That shared node has no switch "
+            f"of its own onto the bus (SPEC.md Sec 2.12), so nothing outside "
+            f"the pair can be joined to it -- not another device, and not a "
+            f"package pin.",
+            problem,
+            f"What can go on that node: nothing at all, with the source named "
+            f"{rail} -- the pair then uses its free tie to that rail, which is "
+            f"what a pair of ordinary common-source FETs wants. Or a "
+            f"{tail_symbol}, whose one drawn pin declares the pair's tail "
+            f"current (tail=2, 4, 6 or 8 multiples of ibias); "
+            f"examples/diffamp/ has that end to end.",
+            f"To measure the tail current, measure it where it comes from: "
+            f"ibias feeds every tail bank on the chip, and the demoboard "
+            f"drives that pin.",
+        ))
+
+
+@dataclass(frozen=True)
+class UndeclaredTail:
+    """A differential pair that will get a tail current the schematic never
+    asked for.
+
+    The tail bank has no off state: diff_n.sch/diff_p.sch/ota_n.sch each
+    have one always-on slice gated by the bias reference (M8, W=20 against
+    the reference's W=10), so the smallest the chip can do is 2 x ibias.
+    That is only invisible when the pair's shared source is tied to its
+    rail, which shorts the bank out. Left on a floating internal net, the
+    chip sinks 2 x ibias there and the as-drawn simulation does not.
+    """
+
+    devices: tuple[str, ...]
+    roles: tuple[str, ...]
+    net: str
+    tail_symbol: str
+    rail: str
+
+
+def undeclared_pair_tails(
+    design: MosbiusDesign, roles: dict[str, str],
+) -> tuple[UndeclaredTail, ...]:
+    """Pairs whose shared source is neither tied to a rail nor given a
+    drawn tail bank. A pure function of (design, roles), like
+    device_widths/device_tails, so the sticky path recomputes it.
+    """
+    found: dict[str, UndeclaredTail] = {}
+    for name, role in sorted(roles.items()):
+        if role not in DIFF_PAIR_ROLES:
+            continue
+        net = shared_source_net(design, name)
+        if net is None or net == SOURCE_TIE_RAIL[role] or net in found:
+            continue
+        tail_role, tail_symbol = PAIR_TAIL_ROLE[role]
+        if any(roles.get(d.name) == tail_role and d.terminals.get("d") == net
+               for d in design.devices):
+            continue  # a tail bank is drawn on it: the current is declared
+        halves = tuple(sorted(
+            d for d, r in roles.items()
+            if r in DIFF_PAIR_ROLES and shared_source_net(design, d) == net
+        ))
+        found[net] = UndeclaredTail(
+            devices=halves, roles=tuple(roles[h] for h in halves), net=net,
+            tail_symbol=tail_symbol, rail=SOURCE_TIE_RAIL[role],
+        )
+    return tuple(found.values())
+
+
 def route(design: MosbiusDesign) -> RoutedDesign:
     """Route `design` onto the switch matrix and return the resulting
     SwitchConfig plus a human-readable route table.
     """
     roles = allocate_devices(design)
+    _check_shared_source_is_reachable(design, roles)
     tie_bits, tied_terminals = _apply_free_source_ties(design, roles)
     touches_by_net = _collect_touches(design, roles, tied_terminals)
 
@@ -1152,6 +1297,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
     # is the failure that motivated reporting it at all.
     widths = device_widths(design, roles)
     tails = device_tails(design, roles)
+    undeclared = undeclared_pair_tails(design, roles)
     for dev_name, role in roles.items():
         if role in WIDTH_SETTING:
             pin, step = WIDTH_SETTING[role]
@@ -1198,6 +1344,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         net_rows=net_rows,
         device_widths=widths,
         device_tails=tails,
+        undeclared_tails=undeclared,
     )
 
 
@@ -1307,6 +1454,7 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
                 # matches a design whose w=/ratio=/tail= are unchanged too.
                 device_widths=device_widths(design, roles),
                 device_tails=device_tails(design, roles),
+                undeclared_tails=undeclared_pair_tails(design, roles),
             )
 
     routed = route(design)

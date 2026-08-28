@@ -1062,6 +1062,63 @@ def _check_r2_tail_dropped(device_tails: dict[str, DeviceTail],
     return findings
 
 
+def _render_r3(subjects: list[str], undeclared, ibias: float) -> str:
+    """The R3 explanation: a differential pair that will draw a tail
+    current the schematic never asked for.
+
+    `subjects` are the shared-source nets, so two pairs in one design (the
+    NMOS one and the PMOS one) merge into a single block naming both.
+    """
+    one = undeclared[subjects[0]]
+    nets = _join_and([f"'{s}'" for s in subjects])
+    devices = _join_and(sorted({d for s in subjects for d in undeclared[s].devices}))
+    amps = 2 * ibias * 1e6
+    return _wrap(
+        "WARNING -- ", f"the differential pair on {nets} will draw "
+        f"{amps:.0f} uA you did not ask for",
+        f"{devices} became differential-pair halves, and a pair's tail "
+        f"current bank has no off state. Its smallest setting is one "
+        f"always-on transistor (diff_n.sch M8, W=20 against the bias "
+        f"reference's W=10), so the chip sinks 2 x ibias -- {amps:.0f} uA at "
+        f"the {ibias * 1e6:.0f} uA this configuration uses -- out of "
+        f"{nets}, whatever the schematic says. `mosbius decode` shows it as "
+        f"tail=2.",
+        f"Your as-drawn simulation has no such current in it, so the drawn "
+        f"and routed halves of a testbench will disagree, and disagree more "
+        f"the higher you set ibias.",
+        f"Two ways to make them agree. Draw a {one.tail_symbol} on that "
+        f"node and say which tail current you want (2, 4, 6 or 8 multiples "
+        f"of ibias -- see examples/diffamp/), which puts the same current in "
+        f"both. Or name that net {one.rail}, which closes the pair's free "
+        f"source tie and shorts the tail bank out, leaving two ordinary "
+        f"common-source FETs.",
+    )
+
+
+def _check_r3_undeclared_tail(routed) -> list[Finding]:
+    """A pair drawing the hardware's minimum tail current with nothing in
+    the schematic to say so.
+
+    The rail-tied case is silent because the tie shorts the bank out, and
+    the drawn-tail case is silent because the current is then declared.
+    What is left is a pair floating on an internal net, which is exactly
+    the case where the as-drawn model has no tail device at all.
+    """
+    undeclared = {u.net: u for u in getattr(routed, "undeclared_tails", ())}
+    ibias = routed.config.ibias
+    findings = []
+    for net in sorted(undeclared):
+
+        def render(subjects: list[str], _u=undeclared, _i=ibias) -> str:
+            return _render_r3(subjects, _u, _i)
+
+        findings.append(Finding(
+            code="R3", severity=WARN, message=render([net]),
+            subject=net, merge_key=(), render=render,
+        ))
+    return findings
+
+
 def check_routing(routed) -> SafetyReport:
     """Run the post-routing checks against a RoutedDesign.
 
@@ -1072,6 +1129,7 @@ def check_routing(routed) -> SafetyReport:
     return SafetyReport(
         findings=_check_r1_width_dropped(routed.device_widths, routed.device_roles)
         + _check_r2_tail_dropped(routed.device_tails, routed.device_roles)
+        + _check_r3_undeclared_tail(routed)
     )
 
 

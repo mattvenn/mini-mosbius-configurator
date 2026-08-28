@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from mosbius.check import check
+from mosbius.check import check, check_routing
 from mosbius.decode import decode
 from mosbius.netlist import NetlistError, parse_netlist
 from mosbius.route import RouteError, route
@@ -600,3 +600,73 @@ def test_no_pad_note_when_nothing_is_on_a_pin():
 
     routed = route(parse_netlist(INVERTER_NETLIST.replace("ua1", "nin").replace("ua2", "nout")))
     assert format_pad_note(routed) == []
+
+
+# ---------------------------------------------------------------------------
+# The pair's shared source is not on the switch matrix (SPEC.md Sec 2.12).
+# Anything else drawn onto it used to be dropped in silence: the design
+# routed clean and produced a bitstream identical to the one you get
+# without that connection, so the drawn circuit and the routed chip were
+# not the same circuit.
+# ---------------------------------------------------------------------------
+
+PAIR_ON_INTERNAL_NET = """
+XM1 ua1 ua2 tailnet VGND mosbius_nmos w=4
+XM2 ua2 ua3 tailnet VGND mosbius_nmos w=4
+"""
+
+
+def test_third_device_on_the_shared_source_is_refused():
+    netlist = PAIR_ON_INTERNAL_NET + "XM3 ua1 tailnet VGND VGND mosbius_nmos w=1\n"
+    with pytest.raises(RouteError, match="nothing else can connect to 'tailnet'") as e:
+        route(parse_netlist(netlist))
+    assert "XM3's drain" in str(e.value)
+    assert "mosbius_ntail" in str(e.value)
+
+
+def test_shared_source_on_a_package_pin_is_refused():
+    # The plausible version of the mistake: bring the tail out to measure it.
+    netlist = PAIR_ON_INTERNAL_NET.replace("tailnet", "ua4")
+    with pytest.raises(RouteError, match="nothing else can connect to 'ua4'") as e:
+        route(parse_netlist(netlist))
+    assert "package pin" in str(e.value)
+
+
+def test_a_drawn_tail_bank_may_share_the_source_node():
+    netlist = PAIR_ON_INTERNAL_NET + "XT1 tailnet ibias VGND mosbius_ntail tail=4\n"
+    routed = route(parse_netlist(netlist))
+    assert routed.device_roles["XT1"] == "ntail"
+    assert routed.undeclared_tails == ()
+
+
+def test_a_rail_tied_shared_source_is_left_alone():
+    netlist = PAIR_ON_INTERNAL_NET.replace("tailnet", "VGND")
+    routed = route(parse_netlist(netlist))
+    assert routed.undeclared_tails == ()
+
+
+# ---------------------------------------------------------------------------
+# R3: the tail bank has no off state, so a pair floating on an internal net
+# still sinks 2 x ibias on silicon that the as-drawn model does not have.
+# ---------------------------------------------------------------------------
+
+def test_r3_warns_about_a_tail_current_nobody_asked_for():
+    routed = route(parse_netlist(PAIR_ON_INTERNAL_NET))
+    (undeclared,) = routed.undeclared_tails
+    assert undeclared.net == "tailnet"
+    assert undeclared.devices == ("XM1", "XM2")
+
+    report = check_routing(routed)
+    (finding,) = [f for f in report.findings if f.code == "R3"]
+    assert "200 uA" in finding.message          # 2 x the 100 uA default
+    assert "mosbius_ntail" in finding.message
+    assert not report.has_errors
+
+
+def test_r3_is_silent_when_the_tail_is_declared_or_tied():
+    for netlist in (
+        PAIR_ON_INTERNAL_NET + "XT1 tailnet ibias VGND mosbius_ntail tail=4\n",
+        PAIR_ON_INTERNAL_NET.replace("tailnet", "VGND"),
+    ):
+        report = check_routing(route(parse_netlist(netlist)))
+        assert [f for f in report.findings if f.code == "R3"] == []
