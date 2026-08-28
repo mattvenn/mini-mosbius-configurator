@@ -421,7 +421,7 @@ as a named global net (`VGND`, plus `.GLOBAL VGND`), never as SPICE node
 circuit floats. `.option rshunt` papers over it by strapping every node to
 0 through a huge resistor -- enough to make the matrix solvable, but the
 absolute level is then set only by the balance of those shunt currents.
-That is a real hazard: with `x2` deleted for debugging, the 100uA `Ibias`
+That is a real hazard: with `x2` deleted for debugging, the 100uA bias
 source lost its only DC return path and the entire circuit floated to
 about -277kV with the real signals riding on top. Every node reading
 -277777.xx meant a floating reference, not a broken circuit. Grounding it

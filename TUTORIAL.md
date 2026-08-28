@@ -45,6 +45,14 @@ placed -- those are the fixed pins from Sec 0 above, and the file's own
 on-canvas instructions say the same thing: wire your circuit to them,
 there's nothing else to wire to.
 
+Off to one side there are also three transistors labelled `Mbias_ref`,
+`Mbias_copy` and `Mbias_p`. Those are not yours to wire: they are the
+chip's own bias generator, which turns the current on the `ibias` pin
+into the reference every current mirror, tail bank and the OTA copies.
+Leave them alone and leave exactly one copy of them on the sheet. The
+short version of why is in
+[`examples/README.md`](examples/README.md)'s "The bias reference".
+
 A CMOS inverter is two transistors: an NMOS and a PMOS, gates tied together
 (the input) and drains tied together (the output), NMOS source to VGND,
 PMOS source to VAPWR.

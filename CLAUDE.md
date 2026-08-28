@@ -91,6 +91,41 @@ closing note for the full investigation this shipped from -- reaches
 ring-oscillator bitstream, down from 82x before that investigation
 started.
 
+Closed on 2026-08-28, so don't re-derive it: **the ideal library's bias
+reference is now the chip's, and there is exactly one of it per design.**
+Every `mosbius_nsink`/`mosbius_psource`/`mosbius_ntail`/`mosbius_ptail`
+used to carry its own diode-connected reference on the shared `ibias` net
+as well as its slave leg, so N devices split the one reference current N
+ways (two `mosbius_nsink ratio=2` measured -99 uA each against -200 uA
+right, one alone measured -201 uA), and `mosbius_psource`'s reference was
+a PMOS diode on the NMOS-referenced node -- a lone one delivered 1.65 pA,
+and beside an nsink the two diodes formed a conducting chain across the
+supply (+501/-707 uA where +-200 was right). `mini_mosbius.sch` now
+carries the chip's own generator, three devices sized from the submodule
+(`mirror_n.sch` M1 reference L=1 W=10 nf=2, its 1:1 `iout_fixed` copy M2,
+`mirror_p.sch` M4 diode L=1 W=30 nf=4), the device symbols keep only
+their slaves, and `mosbius_psource.sym` references `ibias_p` -- the node
+`mosbius_ptail.sym`'s template had always named and nothing generated.
+The slave widths were already right against the real reference, so
+`ratio=N` and `tail=N` now both mean N x ibias, as the hardware's 2/4/6/8
+cycler encoding does. Consequences, all verified: `examples/diffamp/`'s
+as-drawn tail doubled to the 400 uA `tail=4` means (gain ~21.3 -> ~19.8
+V/V; its README and `tools/check_diffamp_sim.py` are re-measured), while
+the inverter, SR latch and ring oscillator are unchanged to the last
+digit. Every design sheet needs exactly one generator: two halve the
+reference, none leaves `ibias` with no DC path, which does not simulate.
+Testbenches now give each instance its own bias source
+(`Ibias_drawn`/`Ibias_routed`, both `'ibias_amps'`) for the same reason
+both load capacitors are `'cload'`.
+
+Also closed on 2026-08-28: **`xschem -n -q` exits non-zero (10) on any
+sheet using the `extra` body/bias pins** -- its connectivity check cannot
+see those -- while writing a perfectly good netlist. Under `set -e` that
+stopped `tools/regenerate_routed.sh` and the `tools/check_*_sim.sh`
+scripts before they reached ngspice, so the diff amp CI job could never
+have passed. They now check what came out (netlist written, no
+`IS MISSING`) instead of the exit code.
+
 Closed on 2026-08-27, so don't re-open any of the three: **pad loading is
 finished business.** (a) *The analog muxes were never missing.* Upstream's
 `pad_model.sch` already contains them -- one transmission gate sized

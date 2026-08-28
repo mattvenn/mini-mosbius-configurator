@@ -18,6 +18,38 @@
 # branches oscillate ~40x apart, so neither analysis suits both).
 set -e
 
+# Netlist one schematic and check what came out, rather than trusting
+# xschem's exit code.
+#
+# xschem exits non-zero (10, observed) on any sheet that instantiates
+# mosbius_nsink/mosbius_psource/mosbius_ntail/mosbius_ptail/mosbius_ota,
+# while writing a perfectly good netlist. Those symbols supply their body
+# and bias connections through xschem's `extra` attribute, which its
+# connectivity check cannot see (CLAUDE.md, "Useful facts"), so it counts
+# them as issues. Under `set -e` that stopped these scripts before they
+# reached ngspice -- the diff amp job could never have passed.
+#
+# What is worth checking is the netlist itself: that it was written, and
+# that the symbol library was actually on the path. Launch xschem from
+# anywhere but the repo root and every device comes out as
+# `IS MISSING !!!!` -- a deck with no transistors that ngspice runs
+# happily (CLAUDE.md, and examples/README.md's gotchas).
+netlist_schematic() {
+    sch=$1
+    out=build/$(basename "$sch" .sch).spice
+    rm -f "$out"
+    xschem -n -q "$sch" || true
+    if [ ! -f "$out" ]; then
+        echo "xschem wrote no netlist for $sch (expected $out)" >&2
+        exit 1
+    fi
+    if grep -q 'IS MISSING' "$out"; then
+        echo "$out has unresolved symbols -- run this from the repo root," >&2
+        echo "so xschem reads the repo's own xschemrc." >&2
+        exit 1
+    fi
+}
+
 cd "$(dirname "$0")/.."
 mkdir -p build
 
@@ -25,7 +57,7 @@ echo "== netlisting, routing and building examples/ringosc/ring.sch"
 sh tools/regenerate_routed.sh examples/ringosc/ring.sch
 
 echo "== netlisting examples/ringosc/tb_ring.sch"
-xschem -n -q examples/ringosc/tb_ring.sch
+netlist_schematic examples/ringosc/tb_ring.sch
 
 echo "== running ngspice"
 cp .spiceinit build/.spiceinit

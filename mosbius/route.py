@@ -1173,6 +1173,25 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             if msb:
                 bits.add(setting_bit(pin, 1))
 
+    # -- The OTA's mirror gates have to be tied to one of its own outputs,
+    # and nothing in a schematic says which. ctrl_otan_mode[0] ties them to
+    # outp, ctrl_otan_mode[1] to outm (upstream ota_n.sch has a switch for
+    # each). With neither closed -- which is what this router did until
+    # 2026-08-28 -- the gate node floats and the block is not an amplifier
+    # at all: the routed netlist came out with `Rcfg190 ctrl_otan_mode[0]
+    # VGND`, tying the control low, while the as-drawn model quietly
+    # assumed the opposite.
+    #
+    # mode[0] is the one to close, because xschem/mosbius_lib/mosbius_ota.sch
+    # -- the as-drawn model of this same block -- hardwires both PMOS load
+    # gates to outp. That makes outp the diode-connected node and outm the
+    # high-impedance output, and it is the arrangement every measurement
+    # taken through the ideal symbol already describes. Closing mode[1]
+    # instead would swap which output has the gain, so a design's drawn and
+    # routed halves would no longer be the same circuit.
+    if "ota" in roles.values():
+        bits.add(setting_bit("ctrl_otan_mode", 0))
+
     return RoutedDesign(
         config=SwitchConfig(bits=frozenset(bits)),
         device_roles=roles,

@@ -166,6 +166,51 @@ made the slower routed branch look like a worse amplifier when it is an
 equally good one. The tell was in the raw file: a measurement that is
 still moving while you take it is not a measurement.
 
+## The bias reference
+
+`ibias` (pin `ua[0]`) is a **current input**, not a voltage. On silicon it
+feeds one diode-connected NMOS -- `mirror_n`'s reference leg -- and every
+programmable mirror leg, differential-pair tail bank and the OTA's tail is
+a *slave* copying that one gate voltage. The PMOS side gets its own node,
+`ibias_p`, made by copying the reference 1:1 with an NMOS and pushing it
+through a PMOS diode. One reference per chip, two gate nodes, one per
+polarity.
+
+The design sheets model that directly. `mini_mosbius.sch` -- and so every
+design copied from it -- carries a three-transistor **bias generator**
+sized from the chip's own schematics: an NMOS reference (L=1 W=10 nf=2),
+a 1:1 NMOS copy, and a PMOS diode (L=1 W=30 nf=4). It is part of the
+silicon rather than part of your circuit, which is why it sits off to one
+side of the sheet with nothing wired to it by hand.
+
+**Keep exactly one.** Two generators would halve the reference current;
+none leaves `ibias` with no DC path at all, which does not simulate.
+Nothing else about it needs your attention -- the device symbols find it
+by net name.
+
+What that buys you is that the settings mean what they say: `ratio=N` on a
+`mosbius_nsink`/`mosbius_psource` is N x `ibias`, and `tail=N` on a
+`mosbius_ntail`/`mosbius_ptail`/`mosbius_ota` is N x `ibias`, which is
+also what the hardware's own 2/4/6/8 cycler encoding means. At the
+testbench default of 100 uA, `tail=4` is 400 uA.
+
+Two consequences worth knowing. Each instance in a testbench needs **its
+own** bias source: the sheets carry `Ibias_drawn` and `Ibias_routed`, both
+`'ibias_amps'`, for the same reason both load capacitors are `'cload'` --
+one source shared between two chips gets divided between them, and the
+split depends on their input impedances, so both branches move. And
+sweeping `ibias_amps` scales every mirror, tail and OTA on the sheet at
+once, which is a first-class experiment rather than a nuisance: the
+demoboard's bias source is programmable from the same host that loads the
+bitstream (`mosbius program --ibias`).
+
+This was got wrong until 2026-08-28, in a way worth recognising if you
+meet an old sheet: each device symbol used to carry its *own* copy of the
+reference diode, so N devices split the reference N ways, and
+`mosbius_psource` referenced the NMOS node instead of `ibias_p`. Symptoms
+were currents that came out at 1/N of the request, or a lone
+`mosbius_psource` delivering picoamps.
+
 ## Gotchas
 
 These have each cost someone a day.
@@ -240,9 +285,10 @@ follows; this is the same path at reference speed.
 Copy `xschem/mosbius_lib/mini_mosbius.sch` to a new file **in the same
 directory** -- schematics refer to symbols by bare name, so they resolve
 only while the file sits somewhere on xschem's library path. It arrives
-with the nine pins already placed. Wire your circuit to them; there is
-nothing else to wire to, and no body or bias pin to draw, since those are
-hard-wired on silicon and supplied by the symbols themselves.
+with the nine pins already placed, and with the chip's bias generator off
+to one side (above). Wire your circuit to the pins; there is nothing else
+to wire to, and no body or bias pin to draw, since those are hard-wired on
+silicon and supplied by the symbols themselves.
 
 Netlist with xschem's Netlist button. Then, from the host:
 

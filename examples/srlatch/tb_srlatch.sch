@@ -41,7 +41,7 @@ C {mini_mosbius.sym} -60 -120 0 0 {name=x2
 schematic=srlatch_routed
 spice_sym_def="tcleval([mosbius_routed_include build/srlatch_routed.spice])"
 tclcommand="textwindow [file normalize build/srlatch_routed.spice]"}
-C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=Ibias}
+C {devices/lab_pin.sym} -350 -40 2 0 {name=p1 sig_type=std_logic lab=ibias_drawn}
 C {devices/lab_wire.sym} -550 -200 0 0 {name=p6 sig_type=std_logic lab=set}
 C {devices/lab_wire.sym} -550 -160 0 0 {name=p7 sig_type=std_logic lab=reset}
 C {devices/lab_wire.sym} -550 -120 0 0 {name=p8 sig_type=std_logic lab=out_drawn}
@@ -50,7 +50,7 @@ C {devices/lab_wire.sym} -550 -40 0 0 {name=p10 sig_type=std_logic lab=ua5_drawn
 C {devices/lab_pin.sym} -350 -220 2 0 {name=pv1 sig_type=std_logic lab=VAPWR}
 C {devices/lab_pin.sym} -350 -160 2 0 {name=pv2 sig_type=std_logic lab=VDPWR}
 C {devices/lab_pin.sym} -350 -100 2 0 {name=pv3 sig_type=std_logic lab=VGND}
-C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=Ibias}
+C {devices/lab_pin.sym} 40 -40 2 0 {name=p1b sig_type=std_logic lab=ibias_routed}
 C {devices/lab_wire.sym} -160 -200 0 0 {name=p6b sig_type=std_logic lab=set}
 C {devices/lab_wire.sym} -160 -160 0 0 {name=p7b sig_type=std_logic lab=reset}
 C {devices/lab_wire.sym} -160 -120 0 0 {name=p8b sig_type=std_logic lab=out_routed}
@@ -65,9 +65,12 @@ C {devices/gnd.sym} -440 200 0 0 {name=l1 lab=VGND}
 C {devices/vsource.sym} -340 170 0 0 {name=VDPWR value=1.8}
 C {devices/lab_pin.sym} -340 140 1 0 {name=pvd sig_type=std_logic lab=VDPWR}
 C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
-C {devices/isource.sym} -240 170 2 1 {name=Ibias value=100u}
-C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=Ibias}
+C {devices/isource.sym} -240 170 2 1 {name=Ibias_drawn value="'ibias_amps'"}
+C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=ibias_drawn}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
+C {devices/isource.sym} -240 300 2 1 {name=Ibias_routed value="'ibias_amps'"}
+C {devices/lab_pin.sym} -240 270 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
+C {devices/gnd.sym} -240 330 0 0 {name=l3b lab=VGND}
 C {devices/vsource.sym} -130 160 0 0 {name=Vset value="PULSE(0 3.3 60n 1n 1n 40n 1000n)"}
 C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=set}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
@@ -83,6 +86,8 @@ C {devices/gnd.sym} -140 -380 0 0 {name=lc2 lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
 C {devices/code_shown.sym} 170 -720 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
+
+.param ibias_amps=100u
 .param cload=10p
 .ic v(out_drawn)=0 v(out_routed)=0
 

@@ -2,10 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/diffamp/tb_diffamp.sch
 against the reference measurements in examples/diffamp/README.md ("Step
-response and settling"), last measured 2026-08-27 at cload=10p:
+response and settling"), last measured 2026-08-28 at cload=10p:
 
-    as drawn   base 2.147V   +40mV -> 2.949V   -40mV -> 1.306V
-    as routed  base 2.175V   +40mV -> 2.981V   -40mV -> 1.331V
+    as drawn   base 1.985V   +40mV -> 2.714V   -40mV -> 1.222V
+    as routed  base 2.020V   +40mV -> 2.771V   -40mV -> 1.228V
+
+These moved on 2026-08-28 with the bias-reference correction: the tail
+bank now draws the 400 uA that tail=4 means on silicon, where the old
+ideal model gave it 200 uA. See that README's "The bias-reference
+correction".
 
 Run by tools/check_diffamp_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the
@@ -39,19 +44,21 @@ import sys
 
 # Volts, from the README table. The measure names are tb_diffamp.sch's own.
 REFERENCE_V = {
-    "vout_drawn_base": 2.147,
-    "vout_drawn_pos": 2.949,
-    "vout_drawn_neg": 1.306,
-    "vout_routed_base": 2.175,
-    "vout_routed_pos": 2.981,
-    "vout_routed_neg": 1.331,
+    "vout_drawn_base": 1.985,
+    "vout_drawn_pos": 2.714,
+    "vout_drawn_neg": 1.222,
+    "vout_routed_base": 2.020,
+    "vout_routed_pos": 2.771,
+    "vout_routed_neg": 1.228,
 }
 # The differential step tb_diffamp.sch applies, in volts: PWL takes ua1 from
 # 1.5V to 1.54V and then to 1.46V, against ua2 held at 1.5V.
 STEP_V = 0.04
 TOLERANCE = 0.05
 # How far the as-drawn and as-routed gains may differ from each other before
-# this is a real finding rather than rounding. The README measures 0.5%.
+# this is a real finding rather than rounding. The README measures 3%: the
+# two branches share a bias point now, and what is left is the ideal
+# tail/mirror models against the routed branch's real diff_n and mirror_p.
 BRANCH_AGREEMENT = 0.05
 
 

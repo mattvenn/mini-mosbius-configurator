@@ -188,6 +188,43 @@ def check_netlist_fresh(netlist_path: Path) -> None:
     )
 
 
+def _design_block(text: str) -> list[str]:
+    """The lines of the design itself, without the symbol bodies below it.
+
+    xschem writes the design as a commented-out `**.subckt` / `**.ends`
+    pair at the top of the file, then appends a real `.subckt` for every
+    symbol the design used. Only the first block is the circuit the user
+    drew; the rest is the library.
+
+    That distinction matters because `mosbius_ota.sch` builds its tail
+    bank out of a `mosbius_nsink`, passing the OTA's own parameter
+    through:
+
+        XMtail net1 ibias bn mosbius_nsink ratio=tail
+
+    Scanning the whole file matched that line, tried `int("tail")` and
+    raised a ValueError traceback -- and, with the int() made tolerant,
+    would still have counted a current sink the schematic never drew.
+    Every OTA design hit it; the FET symbols never did, because their
+    bodies hold raw sky130 devices rather than mosbius_* ones.
+
+    Hand-written netlists (this project's own tests, mostly) have no
+    `**.subckt` marker at all, so a file without one is read whole, the
+    way it always was.
+    """
+    lines = text.splitlines()
+    start = next(
+        (i for i, l in enumerate(lines) if l.strip().startswith("**.subckt")), None
+    )
+    if start is None:
+        return lines
+    end = next(
+        (i for i, l in enumerate(lines[start:], start) if l.strip().startswith("**.ends")),
+        len(lines),
+    )
+    return lines[start:end]
+
+
 def parse_netlist(text: str) -> MosbiusDesign:
     """Parse the text of an xschem-generated SPICE netlist of a design
     built on mini_mosbius.sch.
@@ -209,7 +246,7 @@ def parse_netlist(text: str) -> MosbiusDesign:
         )
 
     devices: list[DeviceRequest] = []
-    for line in text.splitlines():
+    for line in _design_block(text):
         if line.strip().startswith(("*", ".")):
             continue
         m = _INSTANCE_RE.match(line)

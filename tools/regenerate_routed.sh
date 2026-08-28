@@ -31,7 +31,20 @@ fi
 name=$(basename "$sch" .sch)
 
 echo "== netlisting $sch"
-xschem -n -q "$sch"
+# xschem exits non-zero (10, observed) on any sheet using the mosbius_*
+# symbols that carry `extra` body/bias pins -- its connectivity check
+# cannot see those, so it counts them as issues -- while writing a
+# perfectly good netlist. Check what came out instead of the exit code.
+xschem -n -q "$sch" || true
+if [ ! -f "build/$name.spice" ]; then
+    echo "xschem wrote no netlist for $sch (expected build/$name.spice)" >&2
+    exit 1
+fi
+if grep -q 'IS MISSING' "build/$name.spice"; then
+    echo "build/$name.spice has unresolved symbols -- run this from the" >&2
+    echo "repo root, so xschem reads the repo's own xschemrc." >&2
+    exit 1
+fi
 
 echo "== routing build/$name.spice"
 python3 -m mosbius.cli route "build/$name.spice" --out "build/$name.mosbius.json"

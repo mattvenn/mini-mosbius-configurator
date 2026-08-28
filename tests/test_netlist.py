@@ -188,3 +188,40 @@ def test_netlist_without_a_sch_path_header_is_skipped(tmp_path):
     netlist.write_text("XM1 a b VGND VGND mosbius_nmos w=1\n")
     assert schematic_for_netlist(netlist) is None
     check_netlist_fresh(netlist)
+
+
+# An OTA netlist as xschem actually writes it: the design block, then the
+# symbol bodies below it. mosbius_ota.sch builds its tail bank out of a
+# mosbius_nsink and passes its own parameter through as `ratio=tail`, so a
+# parser that reads the whole file matched that line and raised
+# `ValueError: invalid literal for int() with base 10: 'tail'` -- every OTA
+# design, from every real netlist.
+OTA_NETLIST_WITH_SYMBOL_BODIES = """\
+** sch_path: /work/examples/otabuf/otabuf.sch
+**.subckt otabuf ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND
+*.iopin ibias
+XA1 ua1 ua2 ua3 ua2 ibias VGND VAPWR mosbius_ota tail=4
+**.ends
+
+* expanding   symbol:  mosbius_ota.sym # of pins=4
+.subckt mosbius_ota inp inm outp outm ibias bn bp  tail=2
+XMtail net1 ibias bn mosbius_nsink ratio=tail
+.ends
+
+.subckt mosbius_nsink out ibias b  ratio=1
+XM2 out ibias b b sky130_fd_pr__nfet_g5v0d10v5 L=0.5 W=10*ratio
+.ends
+"""
+
+
+def test_symbol_bodies_are_not_part_of_the_design():
+    design = parse_netlist(OTA_NETLIST_WITH_SYMBOL_BODIES)
+    assert [d.name for d in design.devices] == ["XA1"]
+    assert design.devices[0].kind == "ota"
+    assert design.devices[0].properties == {"tail": 4}
+
+
+def test_netlist_without_a_subckt_marker_is_read_whole():
+    # Hand-written netlists (most of this suite) have no **.subckt line.
+    design = parse_netlist("m1 ua1 ua2 VGND b mosbius_nmos w=1\n")
+    assert [d.name for d in design.devices] == ["m1"]

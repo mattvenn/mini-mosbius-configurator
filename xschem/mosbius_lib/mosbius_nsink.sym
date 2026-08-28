@@ -15,6 +15,15 @@ v {xschem version=3.4.8RC file_version=1.2
 * 2026-08-22: verified wiring either to a real net routed clean with no
 * warning, since the router ignored both completely).
 *
+*
+* This symbol holds ONE transistor: the mirror slave. The reference leg
+* it copies lives once per chip, in mini_mosbius.sch's bias generator,
+* the same way the chip has one mirror_n reference feeding every
+* programmable leg. Until 2026-08-28 every one of these symbols carried
+* its own private reference diode, so N devices on a sheet split the
+* chip's one reference current N ways: two mosbius_nsink at ratio=2
+* measured -99 uA each where -200 uA was right.
+*
 * The pin-box (B) record below is declared in netlist pin order, which
 * is also the .subckt port order -- extra pins are appended, in the
 * order `extra` lists them. mosbius/netlist.py's DEVICE_PINS holds a

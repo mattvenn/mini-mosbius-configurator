@@ -157,6 +157,25 @@ def test_single_ota_routes():
     assert check(routed.config).errors == []
 
 
+def test_ota_gets_its_mirror_gates_tied_to_outp():
+    # ctrl_otan_mode[0] ties the OTA's PMOS mirror gates to outp, which is
+    # what xschem/mosbius_lib/mosbius_ota.sch (the as-drawn model of the
+    # same block) hardwires. With neither mode bit closed -- the behaviour
+    # until 2026-08-28 -- the gate node floats and the routed OTA is not an
+    # amplifier at all, while the drawn one is.
+    routed = route(parse_netlist(OTA_NETLIST))
+    settings = routed.config.device_settings()
+    assert settings.otan_mode0 is True
+    assert settings.otan_mode1 is False
+
+
+def test_no_ota_leaves_the_mode_bits_alone():
+    routed = route(parse_netlist(INVERTER_NETLIST))
+    settings = routed.config.device_settings()
+    assert settings.otan_mode0 is False
+    assert settings.otan_mode1 is False
+
+
 def test_ota_terminals_land_on_the_side_the_bit_map_says():
     from mosbius.route import TERMINAL_PIN, TERMINAL_SIDE
 

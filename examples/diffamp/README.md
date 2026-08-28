@@ -152,49 +152,57 @@ in between (the design as drawn -- ideal wires, no switch matrix, SPEC.md §3.1b
 
 `ua2` (inm) is held at a fixed 1.5V common-mode bias; `ua1` (inp) steps
 through a differential offset of 2, 5, 10, 20 and 40mV, then the same five
-values negative, each held for 50ns. `ua4` starts at **2.0998V** with both
+values negative, each held for 50ns. `ua4` starts at **1.9994V** with both
 inputs equal -- not railed to either supply, confirming the mirror and
 tail bank are both biased into their normal operating region, not cut off
 or saturated by the (arbitrarily chosen) 1.5V common-mode point.
 
 The response is genuine differential gain, not a digital switch: each
-step moves `ua4` by roughly 21x itself near the origin, and that ratio
+step moves `ua4` by roughly 20x itself near the origin, and that ratio
 holds essentially flat out to about ±10mV before visibly compressing
 towards the rails at the largest steps -- exactly the large-signal
 transfer characteristic a single differential pair is supposed to have.
 
 | input step | output delta | gain (V/V) |
 |---|---|---|
-| +2mV | +42.7mV | 21.3 |
-| +5mV | +106.6mV | 21.3 |
-| +10mV | +212.3mV | 21.2 |
-| +20mV | +418.1mV | 20.9 |
-| +40mV | +780.6mV | 19.5 |
-| -2mV | -42.7mV | 21.4 |
-| -5mV | -106.9mV | 21.4 |
-| -10mV | -213.5mV | 21.3 |
-| -20mV | -424.0mV | 21.2 |
-| -40mV | -822.1mV | 20.6 |
+| +2mV | +39.6mV | 19.8 |
+| +5mV | +98.7mV | 19.8 |
+| +10mV | +196.5mV | 19.7 |
+| +20mV | +386.8mV | 19.3 |
+| +40mV | +726.8mV | 18.2 |
+| -2mV | -39.6mV | 19.8 |
+| -5mV | -99.2mV | 19.8 |
+| -10mV | -198.2mV | 19.8 |
+| -20mV | -394.1mV | 19.7 |
+| -40mV | -763.4mV | 19.1 |
 
-Small-signal gain is **~21.3 V/V (26.6dB)**, symmetric to within rounding
-either side of the bias point, falling to ~19.5-20.6 V/V by ±40mV as the
+Small-signal gain is **~19.8 V/V (25.9dB)**, symmetric to within rounding
+either side of the bias point, falling to ~18.2-19.1 V/V by ±40mV as the
 pair starts steering all of the tail current to one side.
+
+Re-measured 2026-08-28, after the bias-reference correction below: the
+tail bank now draws the 400 uA that `tail=4` means on silicon, where the
+old ideal model gave it 200 uA. The earlier numbers on this page (base
+2.0998V, ~21.3 V/V) were taken at that half-current bias point.
 
 ### Reproducing it
 
 Netlist the schematic as above, then prepend stimulus and append the
 analysis to it (strip its trailing `.end` first), same recipe as
-`examples/srlatch/README.md`'s. `Iibias` is the part every other example
-in this directory could skip: `ibias` is a current *input*, not a
-voltage, and it has to be forced for the tail bank and mirror to do
-anything meaningful at all (SPEC.md §3.4b, 100uA is upstream's own
-testbench convention).
+`examples/srlatch/README.md`'s. `Iibias` is the line that matters most
+here: `ibias` is a current *input*, not a voltage, and it has to be forced
+for the sheet's bias generator to have anything to reference, and so for
+the tail bank and mirror to do anything meaningful at all (SPEC.md §3.4b,
+100uA is upstream's own testbench convention). Every design sheet now
+carries that generator, so every deck needs the line -- it is no longer
+something the other examples can skip.
 
 ```spice
 .lib /foss/pdks/sky130A/libs.tech/ngspice/sky130.lib.spice tt
 Vapwr  VAPWR 0 3.3
+Vdpwr  VDPWR 0 1.8
 Vgnd   VGND  0 0
-Iibias VAPWR ibias 100u
+Iibias VGND ibias 100u
 Vinp   ua1 0 PWL(0 1.5 49n 1.5 50n 1.502 99n 1.502 100n 1.505 ...)
 Vinm   ua2 0 1.5
 * ... netlist body ...
@@ -243,25 +251,67 @@ Vinp  PWL(0 1.5  999n 1.5  1000n 1.54  3499n 1.54  3500n 1.46  5999n 1.46  6000n
 tran 5n 6.5u
 ```
 
-Measured 2026-08-27, at `cload=10p`:
+Measured 2026-08-28, at `cload=10p`:
 
 | | `out` base | after `+40mV` | after `-40mV` | gain + | gain - |
 |---|---|---|---|---|---|
-| as drawn | 2.147 V | 2.949 V | 1.306 V | 20.06 V/V | 21.02 V/V |
-| as routed | 2.175 V | 2.981 V | 1.331 V | 20.16 V/V | 21.09 V/V |
+| as drawn | 1.985 V | 2.714 V | 1.222 V | 18.22 V/V | 19.08 V/V |
+| as routed | 2.020 V | 2.771 V | 1.228 V | 18.78 V/V | 19.80 V/V |
 
-**The two agree to within 0.5%, and that is the expected answer.** At DC
-no current flows into a capacitor, so the pad's and the switch matrix's
+**The two agree to within about 3%, and that is the expected answer.** At
+DC no current flows into a capacitor, so the pad's and the switch matrix's
 series resistance drop no voltage at all: everything the routed model adds
-is resistance and capacitance, and neither changes a settled gain. Both
-also match the `~21.3 V/V` unloaded figure in the steps table above. So
-the switch matrix costs this circuit **bandwidth, not gain** -- the exact
+is resistance and capacitance, and neither changes a settled gain. So the
+switch matrix costs this circuit **bandwidth, not gain** -- the exact
 mirror of `examples/inverter/`, where a fast edge is dominated by the pad.
+
+The residual 3% is a real model difference, not noise: the as-drawn tail
+bank and mirror are the library's idealised `mosbius_ntail`/`mosbius_pmos`
+against the routed branch's actual `diff_n` and `mirror_p` silicon. Both
+now sit at the same 400 uA tail current, which is what makes the
+comparison meaningful at all.
+
+An earlier version of this table reported the two branches agreeing to
+0.5%. That was a coincidence of two different bias points: the as-drawn
+tail ran at 200 uA and the routed one at 400 uA, and the gains happened to
+land close together. See below.
 
 The ~5% difference between the positive and negative gains appears
 identically in both branches, which makes it a real property of the
 amplifier -- its swing is not symmetric about the operating point -- and
 not a measurement artifact.
+
+### The bias-reference correction (2026-08-28)
+
+Every number on this page moved on 2026-08-28, and the reason is worth
+reading even if you only care about your own circuit.
+
+The ideal device symbols each used to carry their own copy of the chip's
+bias reference: a diode-connected transistor on the `ibias` net, plus the
+slave that mirrors it. Silicon has exactly one reference -- pin `ua[0]`
+feeds `mirror_n`'s reference leg, and every programmable leg, tail bank
+and OTA tail is a slave off that one gate voltage, with `ibias_p` made
+from it for the PMOS side. Replicating the reference per device meant two
+things went wrong: N devices on a sheet split the one reference current N
+ways, and `mosbius_ntail`'s private reference (W=20 nf=4) was twice the
+chip's (W=10 nf=2), so `tail=4` delivered 200 uA where silicon delivers
+400 uA.
+
+The fix moves the reference where it belongs -- one generator in
+`mini_mosbius.sch`, copied into every design sheet, matching the chip's
+own `ua[0]` -> `mirror_n` -> `ibias_p` -> `mirror_p` chain with those
+schematics' own device sizes. The device symbols keep only their slave
+legs, whose existing width expressions then come out right against the
+real reference: `ratio=N` is N x ibias, and `tail=N` is N x ibias, which
+is exactly what the hardware's own cycler encoding means.
+
+For this example that doubled the as-drawn tail current, which is why the
+gain fell from ~21.3 to ~19.8 V/V and the output's quiescent point moved
+down. The as-drawn model is now the more accurate one, not the more
+flattering one. `examples/currentsource/` is the example that found this;
+`examples/inverter/`, `examples/srlatch/` and `examples/ringosc/` were
+re-measured after the change and are unchanged to the last digit, since
+none of them uses a bias-referenced device.
 
 ### Why the earlier numbers here were wrong
 
