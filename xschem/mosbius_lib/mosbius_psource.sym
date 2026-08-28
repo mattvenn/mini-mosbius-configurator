@@ -29,6 +29,10 @@ v {xschem version=3.4.8RC file_version=1.2
 * `extra` and there is no pin box on either, so there is nothing to wire
 * and nothing a wire could silently miss. Only the drain has a pin.
 *
+* The channel and gate bars are drawn longer than mosbius_nmos/mosbius_pmos
+* on purpose: these are L=1 devices against those L=0.5 ones, and a longer
+* channel is what makes a mirror leg a usable current source at all.
+*
 * It is deliberately not an ideal-current-source circle any more. This is
 * a mirror leg: its current droops with output voltage (about 12 uA/V,
 * ~85 kOhm) and collapses as the drain approaches its rail. A current
@@ -50,7 +54,7 @@ V {}
 S {}
 F {}
 E {}
-L 4 -15 -30 -15 30 {}
+L 4 -15 -40 -15 40 {}
 L 4 -15 -20 0 -20 {}
 L 4 0 -30 0 -20 {}
 L 4 0 -35 0 -30 {}
@@ -58,7 +62,7 @@ L 4 -12 -35 12 -35 {}
 L 4 -15 20 0 20 {}
 L 4 0 20 0 30 {}
 L 4 0 30 0 40 {}
-L 4 -25 -15 -25 15 {}
+L 4 -25 -25 -25 25 {}
 L 4 -40 0 -32.5 0 {}
 B 5 -2.5 37.5 2.5 42.5 {name=out dir=inout}
 A 4 -28.75 0 3.75 270 360 {}

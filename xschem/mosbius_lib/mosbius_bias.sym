@@ -20,6 +20,9 @@ v {xschem version=3.4.8RC file_version=1.2
 * has to be unique. The other two, the 1:1 copy and the PMOS diode that
 * makes ibias_p, are inside; descend into the symbol to see all three.
 *
+* The channel and gate bars are drawn longer than mosbius_nmos/mosbius_pmos
+* on purpose: this is an L=1 device against those L=0.5 ones.
+*
 * Deliberately not a current-source circle: nothing here sources a
 * current. Current is pushed *in* at the pin, and what comes out is two
 * gate voltages.
@@ -49,7 +52,7 @@ V {}
 S {}
 F {}
 E {}
-L 4 -15 -30 -15 30 {}
+L 4 -15 -40 -15 40 {}
 L 4 -15 -20 0 -20 {}
 L 4 0 -30 0 -20 {}
 L 4 0 -40 0 -30 {}
@@ -58,7 +61,7 @@ L 4 0 20 0 30 {}
 L 4 -10 30 10 30 {}
 L 4 -6 34 6 34 {}
 L 4 -2 38 2 38 {}
-L 4 -25 -15 -25 15 {}
+L 4 -25 -25 -25 25 {}
 L 4 -40 0 -25 0 {}
 L 4 -40 -35 -40 0 {}
 L 4 -40 -35 0 -35 {}
