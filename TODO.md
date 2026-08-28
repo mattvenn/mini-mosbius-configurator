@@ -73,3 +73,98 @@ first.
 
 18. look at combining the tests with the github tests and the spice regression and the AD3 tests. at
 the moment I think they're all a bit separate. possiblity to reuse
+
+19. `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
+cannot build, and fixing it closes a question the README currently calls
+unexplained. `XM5` and `XM6` land on diff-pair halves, whose geometry is
+fixed in silicon at `w=4`; the sheet draws `w=1`. The router already says
+so -- `WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and
+ndiffpair- have a fixed width` -- but the as-drawn deck goes on
+simulating the `w=1` circuit, so for this one example "as drawn" is not
+the ideal version of the same circuit, it is a different circuit with 4x
+weaker write transistors. Measured 2026-08-28 by re-running the committed
+testbench with only those two widths changed in the netlist
+(`build/tb_srlatch_drawn_w4.spice`, nothing else touched):
+
+    w=1 (committed)          w=4 (buildable)      as routed
+    vset_drawn    3.139 V    1.692 V              1.881 V
+    vreset_drawn  3.141 V    1.699 V              1.840 V
+    treset_drawn  18.78 ns   1.82 ns              10.94 ns
+
+The width is the whole story: at `w=4` the drawn write thresholds land
+within ~190 mV of the routed ones, and the rest is the routing itself --
+the matrix's series resistance weakens the pull-down, so it needs a
+little more gate drive.
+
+The second row of that table is the reason to come back to this. The
+README and `tools/check_srlatch_sim.py` both record that `treset_routed`
+comes out *faster* than `treset_drawn` (10.94 ns against 18.78 ns), call
+it the opposite of the inverter's result, and say plainly that it is not
+explained -- `check_srlatch_sim.py` deliberately declines to assert an
+ordering because of it. It is explained: the as-drawn deck was resetting
+through a transistor four times weaker than the one on the chip. At `w=4`
+drawn is 1.82 ns against routed's 10.94 ns, so routed is slower, the same
+direction as the inverter and the ring.
+
+Drawing `w=4` on those two devices is a one-character change each. What
+makes it a decision rather than a fix is that it moves `treset_drawn`, a
+published number, in the README, in `check_srlatch_sim.py`'s references
+and in the monthly regression -- and it silences a router warning that is
+currently doing its job, which is worth being deliberate about. The
+silicon measurement is the tiebreaker either way: the two write-threshold
+predictions are 1.26 V apart, far outside anything calibration could
+account for, so one reading on the bench says which model describes the
+chip. `tools/measure_srlatch_ad3.py` takes it.
+
+
+19. the unit tests build their netlists as hand-written strings, and 20 of
+them describe designs `mosbius route` would reject. Investigated
+2026-08-28; the numbers below are measured, not estimated.
+
+57 of 271 tests embed a `mosbius_*` device line, and they split in two.
+37 are error-path tests -- a reversed drain/source, a tail with three
+matching sources, a circuit that doesn't fit -- and those have to stay
+hand-written, because the input is a deliberately broken circuit that no
+committed schematic could reasonably carry. The other 20 are happy-path
+"does this route to the right bits" tests, and those could read a real
+xschem netlist instead.
+
+**The gap worth closing first needs no fixtures at all.** `check_design`'s
+B1 (exactly one bias generator) is an ERROR for any design using
+`mosbius_nsink`/`psource`/`ntail`/`ptail`/`ota` without a `mosbius_bias`
+block, and both `cli.py` and `watch.py` run `check_design` before routing.
+The test strings mostly have no such block -- `test_route.py` has 16
+bias-referenced device lines and no `mosbius_bias`, `test_netlist.py` 12
+and none -- so those tests call `route()` underneath a gate the product
+applies. The bits they assert are right; the composition is one the user
+can never reach. Adding the missing line to the existing strings is a
+ten-minute change and closes it. (Designs without a mirror are unaffected:
+B1 is silent for a plain inverter, so the inverter, SR latch and ring
+strings are already realistic.)
+
+**Real netlists would work as fixtures if we go further.** All six
+examples parse, route clean and reproduce their documented bitstreams
+from `build/*.spice`, and the hand-written and real inverter netlists give
+byte-identical bitstreams despite differing instance names (`nfeta_0`
+against `XM1`) and the `**.subckt` markers. Cost is about 17 KB for all
+six, mostly symbol bodies -- the inverter is 55 lines of which 13 are the
+design block.
+
+The dependency question that comes with it: committed fixtures do *not*
+put xschem in pytest's path, they put staleness there instead. Two things
+make that manageable. The netlists are byte-reproducible (no timestamps,
+no version stamp), so a freshness check is a plain diff; and
+`schematic_for_netlist()` already falls back to a same-named `.sch` under
+`examples/`, so a fixture written with a container path resolves fine on
+a host, which means `check_netlist_fresh()` works on fixtures and pytest
+could assert one is not older than its schematic with no docker at all. A
+CI job that re-netlists the six and diffs is the stronger version, and
+would also be the fast route-only check that the monthly regression is
+too slow to provide.
+
+The argument against is worth keeping in view: a committed fixture is a
+second copy of a generated file, which is the shape of the stale-netlist
+bug this project already fixed once (see CLAUDE.md on netlisting twice).
+The difference is that a fixture is declared to be a snapshot and has a
+job policing it. Related to the question about combining the test suites
+that the item above raises.
