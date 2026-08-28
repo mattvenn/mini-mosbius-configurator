@@ -51,6 +51,24 @@ def _bitstream_arg(value: str) -> str:
     """
     path = Path(value)
     if not path.exists():
+        # A bitstream is 48 hex characters and nothing else, so anything
+        # with a slash or a file extension in it was meant as a path. Say
+        # the file is missing, rather than letting it fall through to
+        # from_bitstream() and come back as "27 hex characters, expected
+        # 48" -- which is what someone sees who ran this before `route`
+        # had written the file, i.e. exactly the person least able to
+        # decode that answer.
+        if "/" in value or path.suffix:
+            raise ArgumentError(
+                f"there is no file at {path}\n\n"
+                f"  This looks like a path rather than a bitstream, and nothing is\n"
+                f"  there. If you have not routed the design yet, that is the step\n"
+                f"  that writes it:\n\n"
+                f"    python3 -m mosbius.cli route build/<design>.spice --out {path}\n\n"
+                f"  The netlist it reads comes from xschem's Netlist button, with\n"
+                f"  xschem launched from the top of this repo so it picks up\n"
+                f"  xschemrc and writes into build/.\n"
+            )
         return value
 
     try:
@@ -196,7 +214,11 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
 
 def cmd_program(args: argparse.Namespace) -> int:
-    config = SwitchConfig.from_bitstream(args.bitstream, ibias=args.ibias)
+    try:
+        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
+    except (ArgumentError, BitstreamError) as e:
+        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        return 1
     try:
         result = program(
             config,
@@ -221,12 +243,12 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--ibias", type=float, default=DEFAULT_IBIAS, help="bias current in amps (default: 100uA)")
 
     p = sub.add_parser("decode", help="show the circuit a 48-hex-char bitstream configures")
-    p.add_argument("bitstream", help="48 hex characters, e.g. 0000000000a4...")
+    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
     add_ibias(p)
     p.set_defaults(func=cmd_decode)
 
     p = sub.add_parser("check", help="run the safety checker (SPEC.md Sec 3.1) against a bitstream")
-    p.add_argument("bitstream", help="48 hex characters")
+    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
     add_ibias(p)
     p.add_argument("--verbose", "-v", action="store_true", help="also show INFO notes (e.g. unused bus rows)")
     p.set_defaults(func=cmd_check)
@@ -249,7 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("program", help="upload a bitstream to real hardware (SPEC.md Sec 3.5, M4)")
-    p.add_argument("bitstream", help="48 hex characters")
+    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
     add_ibias(p)
     p.add_argument("--project", default="tt_um_tnt_mosbius")
     p.add_argument("--force", action="store_true", help="upload even if check() finds an error")

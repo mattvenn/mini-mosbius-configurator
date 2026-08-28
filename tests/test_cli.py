@@ -192,3 +192,45 @@ def test_decode_reports_a_bad_bitstream_without_a_traceback(capsys):
     err = capsys.readouterr().err
     assert "expected exactly 48" in err
     assert "Traceback" not in err
+
+
+def test_program_accepts_a_routed_design_json(tmp_path, capsys):
+    """`program` was the one command that took only the 48 hex characters,
+    so the routed design the rest of the pipeline passes around had to be
+    unpacked by hand on the command line.
+    """
+    routed = tmp_path / "inverter.mosbius.json"
+    routed.write_text(json.dumps({"bitstream": INVERTER_BITSTREAM}))
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {"ok": True, "verify_ok": True}
+        rc = main(["program", str(routed), "--verify"])
+    assert rc == 0
+    assert "OK" in capsys.readouterr().out
+    config, = mock_program.call_args[0]
+    assert config.to_bitstream() == INVERTER_BITSTREAM
+
+
+def test_program_explains_a_missing_routed_design_without_reaching_hardware(tmp_path, capsys):
+    """A path that isn't there used to fall through to from_bitstream() and
+    come back as "27 hex characters, expected 48" -- unreadable to someone
+    who simply hasn't run `route` yet.
+    """
+    missing = tmp_path / "inverter.mosbius.json"
+    with patch("mosbius.cli.program") as mock_program:
+        rc = main(["program", str(missing)])
+    assert rc == 1
+    mock_program.assert_not_called()
+    err = capsys.readouterr().err
+    assert "there is no file at" in err
+    assert "mosbius.cli route" in err  # names the step that writes it
+    assert "hex" not in err
+
+
+def test_a_bare_bitstream_is_still_not_treated_as_a_path(capsys):
+    """48 hex characters have no slash and no suffix, so they must not trip
+    the missing-file branch.
+    """
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {"ok": True, "verify_ok": None}
+        assert main(["program", INVERTER_BITSTREAM]) == 0
+    assert mock_program.called
