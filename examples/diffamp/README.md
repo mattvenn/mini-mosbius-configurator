@@ -328,11 +328,39 @@ predicts 1.985/2.020 V. That mattered beyond the offset number, because the
 made them spuriously asymmetric -- it reported the positive side steeper
 where both simulated branches say the negative side is.
 
+### Step response, measured
+
+**Measured 2026-08-29** with `tools/measure_settling_ad3.py diffamp`, which
+steps `ua1` by +/-40 mV about the measured operating point and fits the
+output's exponential settle.
+
+| | value |
+|---|---|
+| **on silicon** | **489.5 ns** (sd 3.75 over 16 captures) |
+| published as routed, 10 pF probe | 220 ns |
+| **corrected to this probe's 24 pF** | **430 ns** |
+
+Silicon is **1.14x** the corrected figure. The correction is not optional:
+a settling time constant is `Rout x C`, the published pair was taken at
+`cprobe=10p`, and an Analog Discovery presents about 24 pF -- so at
+`Rout` = 15 kOhm the node goes from 14.7 pF to 28.7 pF and the expected
+time constant roughly doubles. Comparing against the raw 220 ns would have
+shown a 2.2x disagreement that is entirely the instrument.
+
+Two things make the number trustworthy rather than merely reproducible.
+The stimulus edge is 66 ns, **7.4x faster** than the settle, so this is the
+circuit and not the generator -- unlike `examples/otabuf/`'s slew, where
+that ratio is 1.1x and the measurement has to be rescued by sweeping the
+bias. And the fit cross-checks against a second route to the same quantity:
+the output's own 10-90% is 1063 ns, an exponential's 10-90% is 2.197 tau,
+so that implies 484 ns against the fitted 490 -- **1.1% apart**. A large gap
+there would have meant the settle is not a single pole and the fit was
+describing something else.
+
 ### Not measured
 
-Bandwidth and settling, which need a real edge rather than the levels
-`ad3.wavegen()` produces -- the same gap as `examples/otabuf/`, and one
-triggered-capture script could serve both.
+Bandwidth as a frequency response. The step response above covers settling;
+a gain-bandwidth measurement would need a swept sine.
 
 To reproduce:
 

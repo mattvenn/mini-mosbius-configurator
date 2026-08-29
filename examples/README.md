@@ -44,6 +44,16 @@ schematic. The last two needed a bias current before they could be measured
 at all, which is what "Feeding it by hand, when the board can't" below is
 about; only currentsource is left.
 
+Both amplifiers also have their step response measured, by one shared
+script, `tools/measure_settling_ad3.py`. Read the two examples' own pages
+for the results, but one lesson generalises: **a published figure taken at
+`cprobe=10p` is not comparable to a bench reading through a 24 pF
+instrument**, and the difference is not small -- it halves an expected slew
+rate and doubles an expected settling time constant. That script does the
+correction itself and prints it beside the measurement, because the
+uncorrected comparison shows a 1.5x-to-2x disagreement that is entirely the
+probe.
+
 The expected ordering is as drawn faster than as routed faster than
 silicon: the drawn model omits the most, the routed model omits less, the
 chip omits nothing. When an example violates that ordering it says so

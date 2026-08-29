@@ -3,8 +3,9 @@
 """Minimal Digilent WaveForms (AD3/AD2) wrapper for bench measurements.
 
 Only what the measurement scripts in tools/ need: open the device, drive
-W1, capture the two scope channels, and set the programmable supplies. No
-dependency beyond ctypes and the WaveForms install itself.
+W1, capture the two scope channels (untriggered for levels, triggered for
+timing), and set the programmable supplies. No dependency beyond ctypes and
+the WaveForms install itself.
 
 **Installing the SDK on macOS is two steps, not one.** `brew install
 --cask waveforms` puts the *application* in /Applications, and the app
@@ -148,6 +149,120 @@ def mean(samples, ch):
 
 
 # ---------------------------------------------------------------------------
+# Triggered capture
+# ---------------------------------------------------------------------------
+#
+# For timing anything: a slew rate, a settling time constant, a propagation
+# delay. The untriggered acquire() above is for levels, and it cannot do
+# these -- an event tens or hundreds of nanoseconds long inside a stimulus
+# period of tens of microseconds lands inside one or two samples of a
+# capture slow enough to span the period. Triggered at the device's full
+# rate, the same event is hundreds of samples wide.
+#
+# **Drive the edge as a waveform, never by moving a DC offset.** See
+# wavegen()'s docstring: an offset change is slewed over milliseconds and
+# produces a clean, plausible, entirely wrong ramp. square_wave() below
+# configures the generator to clock the edge out itself.
+#
+# **The generator is not infinitely fast either, and on these circuits that
+# matters.** An Analog Discovery's output amplifier takes tens of
+# nanoseconds to move volts, so a measurement of something comparably fast
+# is partly a measurement of the stimulus. Always capture the driving
+# channel too and report its own edge beside the result, so the margin is
+# visible rather than assumed. tools/measure_srlatch_edge_ad3.py learned
+# this the expensive way.
+
+TRIGSRC_DETECTOR_ANALOG_IN = 2
+TRIGTYPE_EDGE = 0
+SLOPE_RISE, SLOPE_FALL = 0, 1
+
+
+def max_rate(h) -> float:
+    lo, hi = c_double(), c_double()
+    dwf.FDwfAnalogInFrequencyInfo(h, byref(lo), byref(hi))
+    return hi.value
+
+
+def scope_setup_triggered(h, rate, nsamples, trigger_channel, trigger_level,
+                          rising=True, position=0.0, channels=(0, 1),
+                          rng=CHIP_RANGE, offset=CHIP_OFFSET):
+    """Arm both channels to capture around an edge on `trigger_channel`.
+
+    `position` is where the trigger sits in the buffer, in seconds relative
+    to its centre -- 0.0 centres it, so half the buffer is pre-trigger,
+    which is what you want for measuring an edge you also need the baseline
+    of. Auto-timeout is disabled: a capture that never triggers should hang
+    visibly rather than quietly return a buffer of untriggered noise that
+    looks like a measurement.
+    """
+    for ch in channels:
+        dwf.FDwfAnalogInChannelEnableSet(h, c_int(ch), c_int(1))
+        dwf.FDwfAnalogInChannelRangeSet(h, c_int(ch), c_double(rng))
+        dwf.FDwfAnalogInChannelOffsetSet(h, c_int(ch), c_double(offset))
+    dwf.FDwfAnalogInFrequencySet(h, c_double(rate))
+    dwf.FDwfAnalogInBufferSizeSet(h, c_int(nsamples))
+    dwf.FDwfAnalogInTriggerAutoTimeoutSet(h, c_double(0.0))
+    dwf.FDwfAnalogInTriggerSourceSet(h, c_ubyte(TRIGSRC_DETECTOR_ANALOG_IN))
+    dwf.FDwfAnalogInTriggerTypeSet(h, c_int(TRIGTYPE_EDGE))
+    dwf.FDwfAnalogInTriggerChannelSet(h, c_int(trigger_channel))
+    dwf.FDwfAnalogInTriggerLevelSet(h, c_double(trigger_level))
+    dwf.FDwfAnalogInTriggerConditionSet(
+        h, c_int(SLOPE_RISE if rising else SLOPE_FALL))
+    dwf.FDwfAnalogInTriggerPositionSet(h, c_double(position))
+    dwf.FDwfAnalogInConfigure(h, c_int(1), c_int(1))
+    scope_setup.window = (offset - rng / 2, offset + rng / 2)
+
+
+def square_wave(h, ch, low, high, freq, symmetry=50.0, phase=0.0):
+    """A real edge: the generator clocks it out at its own full speed."""
+    amp, offset = (high - low) / 2.0, (high + low) / 2.0
+    dwf.FDwfAnalogOutNodeEnableSet(h, c_int(ch), c_int(0), c_int(1))
+    dwf.FDwfAnalogOutNodeFunctionSet(h, c_int(ch), c_int(0), c_ubyte(funcSquare))
+    dwf.FDwfAnalogOutNodeFrequencySet(h, c_int(ch), c_int(0), c_double(freq))
+    dwf.FDwfAnalogOutNodeAmplitudeSet(h, c_int(ch), c_int(0), c_double(amp))
+    dwf.FDwfAnalogOutNodeOffsetSet(h, c_int(ch), c_int(0), c_double(offset))
+    dwf.FDwfAnalogOutNodeSymmetrySet(h, c_int(ch), c_int(0), c_double(symmetry))
+    dwf.FDwfAnalogOutNodePhaseSet(h, c_int(ch), c_int(0), c_double(phase))
+
+
+def capture_triggered(h, nsamples, channels=(0, 1), timeout=5.0, tag=""):
+    """Wait for one trigger and return {channel: samples}. None on timeout."""
+    dwf.FDwfAnalogInConfigure(h, c_int(0), c_int(1))
+    status = c_ubyte()
+    deadline = time.time() + timeout
+    while True:
+        dwf.FDwfAnalogInStatus(h, c_int(1), byref(status))
+        if status.value == _STATE_DONE:
+            break
+        if time.time() > deadline:
+            return None
+        time.sleep(0.001)
+    out = {}
+    for ch in channels:
+        buf = (c_double * nsamples)()
+        dwf.FDwfAnalogInStatusData(h, c_int(ch), buf, c_int(nsamples))
+        out[ch] = list(buf)
+    return check_clipping(out, tag)
+
+
+def crossing(values, level, rising=True, dt=1.0):
+    """Time of the first crossing of `level`, interpolated between samples.
+
+    Interpolation is the point: it makes the resolution finer than the
+    sample interval, which is what lets a handful of samples across an edge
+    still time it usefully.
+    """
+    for i in range(1, len(values)):
+        a, b = values[i - 1], values[i]
+        if (rising and a < level <= b) or (not rising and a > level >= b):
+            span = b - a
+            frac = 0.0 if span == 0 else (level - a) / span
+            return (i - 1 + frac) * dt
+    return None
+
+
+
+# ---------------------------------------------------------------------------
 # Programmable supplies (V+ / V-)
 # ---------------------------------------------------------------------------
 #
@@ -288,6 +403,32 @@ def supply_status(h, channel="V+"):
                 h, c_int(idx), c_int(nodes[key][0]), byref(value))
             out[key] = value.value
     return out
+
+
+def wait_supply_stable(h, channel="V+", tol=0.004, timeout=8.0, interval=0.2):
+    """Poll a rail until successive readings agree, and return the last.
+
+    **A rail does not reach its new setting when the call returns, and going
+    down is far slower than going up.** Nothing discharges the supply's own
+    output capacitance except whatever load is on it, so stepping V+ from
+    3.28 V to 1.65 V into a 20 kOhm resistor takes seconds, not the
+    fraction supply()'s settle waits. Reading the voltage too early gave a
+    bias current 60% too high on one point of a slew-versus-bias sweep,
+    which is worse than a slow measurement: the rail had reached the right
+    place by the time the captures ran, so the *reading* was wrong while the
+    measurement was right, and the two disagreed for no visible reason.
+    """
+    last = None
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        now = supply_status(h, channel).get("voltage")
+        if now is None:
+            return None
+        if last is not None and abs(now - last) <= tol:
+            return now
+        last = now
+        time.sleep(interval)
+    return last
 
 
 def supplies_off(h):

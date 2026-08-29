@@ -268,12 +268,11 @@ wrong common-mode range on the first pass -- see `_tracking_band()` in
 `tools/measure_otabuf_ad3.py`, which needs both a nearness test and a
 slope test because either alone marks the dead region as tracking.
 
-**Slew rate is not measured yet.** It needs a real edge, and
-`ad3.wavegen()` makes levels: changing a DC output's offset is slewed over
-milliseconds, which produces a clean, plausible and entirely wrong ramp.
-That wants the triggered-capture idiom of
-`tools/measure_srlatch_edge_ad3.py` as its own script, and it is the
-measurement that would test the 2.78x capacitance claim above.
+**Slew rate is measured** -- see "Slew rate and delay" below, which needed
+a triggered capture and a real edge rather than the levels `ad3.wavegen()`
+produces, and which does test the 2.78x capacitance claim above: the
+output node comes out at 43.1 pF against the model's 40.0 pF with this
+probe on it.
 
 To reproduce:
 
@@ -282,6 +281,87 @@ python3 tools/measure_ibias_clamp_ad3.py --resistor 20000   # confirm pad K, set
 python3 tools/measure_otabuf_ad3.py                         # programs, sweeps, reports
 python3 tools/plot_otabuf_comparison.py                     # redraws the figure
 ```
+
+### Slew rate and delay
+
+**Measured 2026-08-29** with `tools/measure_settling_ad3.py otabuf`.
+
+![slew and delay against bias current](otabuf_settling.png)
+
+**A single slew reading at the nominal bias is worthless, and saying why is
+the useful part.** At 100 uA the output crosses its 1.3-to-2.0 V band in
+81 ns while the Analog Discovery's own output edge is 74 ns, so the two
+cannot be separated -- what gets timed is partly the generator. The first
+run reported 8.62 V/us and the script flagged it as untrustworthy, which
+was correct: the naive comparison against the page's 15.4 V/us gives
+0.86x, and essentially all of that gap is instrument.
+
+**Two corrections make it a real measurement.**
+
+*The probe.* The published figures are at `cprobe=10p`; an AD3 presents
+about 24 pF. Slew goes as 1/C, so backing the node capacitance out of the
+published number (400 uA / 15.4 V/us = 26 pF), swapping the probe, and
+recomputing gives an expected **10.0 V/us**, not 15.4. Ignoring 14 pF would
+have manufactured a 1.5x disagreement out of nothing.
+
+*The bias.* Slew is the tail current over the node capacitance and
+`tail=4` means the tail is 4 x `ibias` -- so turning the bias *down* slows
+the output while the generator's edge stays exactly where it is. That is
+what the figure's x axis is for, and the shaded region is where the margin
+falls below 3x:
+
+| bias | rising | falling | output crosses 0.7 V | margin |
+|---|---|---|---|---|
+| 18.7 uA | 1.84 V/us | 1.36 V/us | 381 ns | 5.2x |
+| 24.4 uA | 2.38 V/us | 1.75 V/us | 294 ns | 4.0x |
+| 30.4 uA | 2.93 V/us | 2.15 V/us | 239 ns | 3.2x |
+| 40.6 uA | 3.86 V/us | 2.82 V/us | 181 ns | 2.5x |
+| 51.0 uA | 4.76 V/us | 3.50 V/us | 147 ns | 2.0x |
+| 74.6 uA | 6.71 V/us | 4.92 V/us | 104 ns | 1.4x |
+| 100.1 uA | 8.62 V/us | 6.33 V/us | 81 ns | 1.1x |
+
+**So the number to quote is a capacitance, not a slew rate.** Fitting the
+three points that clear 3x gives an output node capacitance of
+**43.1 pF against 40.0 pF** from the routed model plus this probe --
+**1.08x**. A slope needs no assumption about the probe; a single slew
+reading needs 24 pF to be exactly right, and 24 pF is a datasheet figure.
+The sweep also audits itself: slew/`ibias` falls monotonically from 0.098
+to 0.086 as bias rises, which is the stimulus progressively limiting the
+output, so the low-bias points are demonstrably the clean ones rather than
+merely the better-conditioned ones.
+
+**The two directions do not match.** Falling slew is 0.74x rising,
+consistently, at every one of the seven bias points (0.73 to 0.74). That is
+a real asymmetry with a cause in the topology: `outm` is pulled up by the
+PMOS load mirror and pulled down by the input pair's own current, so
+different devices set the two rates. It is worth knowing that this is
+*below* what a scope resolves at a useful timebase -- from the bench the
+two edges looked the same, and at the nominal bias they differ by tens of
+nanoseconds on a ~100 ns lag. The eye and the fit do not disagree; the eye
+could not resolve it.
+
+**Delay is better conditioned than slew, and it came from the bench.**
+Watching the step on a scope showed the output lagging the input by around
+100 ns at the half-way point, on both edges -- a quantity the script was
+not computing, though it already had both channels in every capture. It is
+the better measurement for the same reason
+`tools/measure_srlatch_edge_ad3.py` gives: both channels sit behind the
+same instrument input path, so a delay common to them cancels out of their
+difference, while an edge *width* is the signal's own rise and the
+instrument's combined and cannot be separated. Measured, the rising delay
+runs 315 ns at 18.7 uA down to 71 ns at 100.1 uA, with falling 1.5x that
+throughout.
+
+Fitting delay against 1/`ibias` splits it in two: a slew-dependent part,
+and **16 ns that survives at infinite bias** -- fixed delay through the
+loop and the instrument together. If slewing were the whole story that
+intercept would be zero. A single reading at one bias cannot separate
+those; the sweep can.
+
+**Still not measured: loop stability.** This circuit's stated reason for
+existing is that the switch matrix sits inside the feedback loop, and
+nothing here has looked for overshoot or ringing, or added load
+capacitance deliberately to find where it starts.
 
 ## On the bench
 
