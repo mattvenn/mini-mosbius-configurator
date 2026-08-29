@@ -5,7 +5,7 @@ name: Spice Regression
 # monthly canary below: the decks rarely change, and most of each job is
 # ngspice parsing sky130A's model library rather than simulating anything
 # (see CLAUDE.md). It is on push for now because they are changing daily
-# and a break is worth hearing about the same day -- the six jobs run in
+# and a break is worth hearing about the same day -- the seven jobs run in
 # parallel, so that costs about five minutes of waiting. TODO.md carries
 # the item to put it back.
 on:
@@ -21,8 +21,11 @@ jobs:
   # worth more than one that stops at the first. The inverter is
   # pad-and-load dominated; the ring is switch-matrix dominated (row
   # coupling and bus-wire capacitance are what set its frequency); the diff
-  # amp is the only one that would notice a shifted bias point, since it is
-  # the only analog operating point here rather than a digital edge; the
+  # amp is the only one that would notice a shifted bias point on the NMOS
+  # side, since it is an analog operating point rather than a digital edge,
+  # and the PMOS diff amp is its mirror -- the only job that exercises the
+  # PMOS tail bank, so a device-library change that got the PMOS side wrong
+  # would leave the NMOS one passing; the
   # SR latch is the only one that stores a value, so it is the only one that
   # would notice the routed matrix losing a held state; the OTA follower is
   # the only one that uses mosbius_ota at all and the only one that closes a
@@ -81,6 +84,24 @@ jobs:
         with:
           name: diffamp-ngspice-log
           path: build/ngspice_tb_diffamp.log
+          if-no-files-found: ignore
+
+  pdiffamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Simulate examples/pdiffamp in IIC-OSIC-TOOLS
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+            --skip bash -lc 'sh tools/check_pdiffamp_sim.sh'
+
+      - name: Upload ngspice log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdiffamp-ngspice-log
+          path: build/ngspice_tb_pdiffamp.log
           if-no-files-found: ignore
 
   srlatch:

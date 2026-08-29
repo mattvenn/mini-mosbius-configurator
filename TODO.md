@@ -1,11 +1,15 @@
 # todo
 
-1 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+Grouped by what kind of work an item is, and numbered from 1 straight
+through the groups. As always, the numbering is rewritten whenever
+anything is removed, so cite an item by describing it, not by its number.
 
-2 automatic hardware-in-the-loop testing. Seven scripts in `tools/` now
+## Bench and hardware in the loop
+
+1 automatic hardware-in-the-loop testing. Eight scripts in `tools/` now
 measure real silicon with an Analog Discovery -- inverter, ring, SR latch,
-diff amp, OTA follower, current source, and the ibias clamp -- and each
-compares against the same design as drawn and as routed. What none of them
+both diff amps, OTA follower, current source, and the ibias clamp -- and
+each compares against the same design as drawn and as routed. What none of them
 is, is automatic: every one asks a person to wire a rig and press Enter,
 and nothing runs them on a schedule or checks the answers have not moved.
 The RP2350's own ADC/DAC would remove the person for some of it. Note that
@@ -17,30 +21,78 @@ current is a lookup in `build/ibias_clamp.json`, not a calculation.
 up with some hardware in the loop test" and "could we use the rp2350's
 adc / dac / ibias control to do automatic hil testing".)
 
+2 do a curve tracer experiment. Scoped on 2026-08-29 but not built; the
+analysis is worth keeping so it is not re-derived.
+
+The hard part is not the sweep, it is that every FET terminal reaches its
+pad through a crosspoint switch and a pad model -- together on the order of
+150-200 Ohm, and voltage-dependent. For a current source that costs almost
+nothing, which is why `examples/currentsource/` measured cleanly: a current
+source is indifferent to what is in series with it. For a FET it is fatal,
+because the resistance sits between the instrument and the drain, so the
+Vds you set is not the Vds the device sees. At `w=1` the NMOS is W=10/L=0.5
+and a few hundred microamps is tolerable; at `w=4` and Vgs=3.3 the drop is
+hundreds of millivolts and the trace is substantially of the switch.
+
+Three ways out; take the first and third. Compare against the routed deck
+rather than the drawn one -- it already contains every switch and pad, so
+no correction is needed and it fits the drawn/routed/measured framing the
+other examples use. Stay at `w=1` and modest Vgs for anything to be called
+"the transistor". And Kelvin-sense the drain on a second `ua` pin:
+crosspoints are independent switches, so one terminal can close two and
+bring the same node out on a pad carrying no current. Whether `route.py`
+can express two `ua` pins on one net is unchecked.
+
+Vg, Vd and Id do not fit in the AD3's two scope channels, so it needs two
+passes over a deterministic sweep, or the gate taken from W1's setpoint at
++/-25 mV. `tools/measure_currentsource_ad3.py` already has the reusable
+half: the differential shunt read, the common-mode zero check (-9.7 mV/V on
+this instrument), the pin-servoing sweep, and `--mode background` for what
+the pad node draws on its own (487 kOhm to the channel offset, ie the two
+scope inputs).
+
+## Examples
+
 3 use haralds 50 nifty
 
-4 try to get coverage of all devices
+4 finish the fallout of the model-binning fix. Four of the five
+re-measures are done (2026-08-29); what is left is one design decision and
+two stale tables.
 
-6 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
-ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
+The fix itself, and why it was needed, is in `examples/pdiffamp/README.md`
+under "The model-binning bug this example found" and in CLAUDE.md's trap
+list. Re-measured and updated, README and `tools/check_*_sim.py` reference
+together: the inverter (`trise_drawn` 8.90 -> 8.16 ns, trip point 1.495 ->
+1.605 V, gain -8.5 -> -14.79 V/V, and the 100 pF pair 88.43 -> 81.07 ns),
+the ring (`freq_drawn` 2.083 -> 2.289 GHz), and the diff amp (base 1.985 ->
+2.012 V, gains 18.22/19.08 -> 18.31/19.35). `examples/otabuf/` and
+`examples/currentsource/` came back inside tolerance, as predicted, since
+the OTA and mirror symbols size off `tail` and `ratio`, which collide with
+nothing. Every as-routed number is unchanged.
 
-7 make it easy for people to submit designs to the examples
+`examples/pdiffamp/` was measured on silicon the same day and is fully
+closed: 17.82 V/V fitted against 21.22 as drawn, a +18 mV input offset,
+and gain flat with tail current, all taken on the corrected library from
+the start.
 
-8 document what VDPWR is actually for. Nowhere says that the FETs a user
-draws never see 1.8V: every analog device in the submodule (nmos_prog,
-pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
-VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only
-tt_asw_3v3, whose 01v8/01v8_hvt pair is the level shifter that turns a
-1.8V config bit into a 3.3V pass-gate drive -- spice.py ties all 192
-config pins to VDPWR/VGND, so without that rail a routed design is 192
-open switches. It is also a dead port in the as-drawn instance: a design
-built from mosbius_* symbols never connects it. So it powers nothing you
-draw, and exists so the matrix can be told what to be. Belongs in
-TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
+**The SR latch is the one that needs a decision, and the fix has made it
+sharper.** Its as-drawn branch no longer sets at all -- `qd_after_set`
+0.0009 V where it was 3.300 V -- so `treset_drawn` cannot be measured and
+`tools/check_srlatch_sim.sh` fails. The cause is the pre-existing `w=1` on
+`XM5`/`XM6` against diff-pair halves fixed at `w=4` in silicon (the item
+below): those write transistors are four times too weak, and the wrong
+model bin had been over-strengthening every device just enough to hide it.
+Probed without touching the sheet, `w=4` gives 3.2999 V and
+`treset_drawn` = 1.77 ns against the routed 10.94. Until that decision is
+taken, CI has one red job.
 
-9 check all the mosbius library symbols for cleanup
+Two tables were not re-run and say so on their own pages: the diff amp's
++-2/5/10/20/40 mV sweep (a one-off 13-level PWL deck, not the committed
+testbench) and its figure. Rebuilding that deck is the work; the settled
+table that `check_diffamp_sim.py` reproduces is the current source of
+truth either way.
 
-10 `examples/currentsource/` owes two simulation sweeps and one bench sweep,
+5 `examples/currentsource/` owes two simulation sweeps and one bench sweep,
 all three about `ratio`.
 
 In simulation, both are listed in its own "Still to do, in simulation". The
@@ -67,20 +119,10 @@ Both examples are in
 I-V analysis is folded into the example's README (with the correction that
 the drawn-versus-routed offset at the knee is 24.3 mV and about 150 Ohm,
 not the 17 mV and ~100 Ohm a scratch note here had); the ibias calibration
-sweep that item 15 called "the valuable one" was run on 2026-08-29; and
+sweep this list once called "the valuable one" was run on 2026-08-29; and
 otabuf's slew-versus-tail was run the same day.
 
-11 no example exercises mosbius_ptail. Its orientation was fixed on
-2026-08-28 -- it had been drawn upside down, a PMOS with a ground symbol
-under it, and its pin moved from (0,-40) to (0,+40) -- so nothing but the
-test suite has ever placed one. A PMOS differential pair mirroring
-`examples/diffamp/` would cover it, and would be the cheapest of the
-example ideas that came out of that session.
-
-12 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
-the moment I think they're all a bit separate. possiblity to reuse
-
-13 `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
+6 `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
 cannot build. `XM5` and `XM6` land on diff-pair halves, whose geometry is
 fixed in silicon at `w=4`; the sheet draws `w=1`. The router already says
 so -- `WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and
@@ -102,15 +144,34 @@ takes as-drawn from 40.70 ns to 9.07 ns, against 21.30 ns as routed and
 was this one discrepancy. Both READMEs and `check_srlatch_sim.py` now say
 so.
 
-What is left is only the decision. Drawing `w=4` on those two devices is a
-one-character change each, and it would make the as-drawn branch simulate
-the circuit the chip actually builds. Against that: it moves
-`treset_drawn`, a published number, in `examples/srlatch/README.md`, in
-`check_srlatch_sim.py`'s references and in the monthly regression -- and
-it silences a router warning that is currently doing its job, which is
-worth being deliberate about.
+What is left is only the decision, and since 2026-08-29 it is no longer
+optional in the same way: with the model-binning fix in place (the item
+above), the as-drawn latch **does not set at all** -- `qd_after_set` reads
+0.0009 V where it read 3.300 V -- so `treset_drawn` cannot be measured and
+`tools/check_srlatch_sim.sh` fails. The wrong model bin had been making
+every as-drawn device stronger than silicon, which was just enough to let
+write transistors four times too weak flip the cell.
 
-14 the unit tests build their netlists as hand-written strings, and 20 of
+Drawing `w=4` on those two devices is a one-character change each, and it
+would make the as-drawn branch simulate the circuit the chip actually
+builds. Probed on the netlist without touching the sheet it gives
+`qd_after_set` = 3.2999 V and `treset_drawn` = 1.77 ns against the routed
+10.94, the ordering every other example shows. Against it: it moves
+`treset_drawn`, a published number, in `examples/srlatch/README.md`, in
+`check_srlatch_sim.py`'s references and in the regression -- and it
+silences a router warning that is currently doing its job, which is worth
+being deliberate about. The alternative is to leave the sheet as the
+demonstration that the warning matters and let that job stay red, which is
+what it does today.
+
+7 make it easy for people to submit designs to the examples
+
+## Tests and CI
+
+8 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
+the moment I think they're all a bit separate. possiblity to reuse
+
+9 the unit tests build their netlists as hand-written strings, and 20 of
 them describe designs `mosbius route` would reject. Investigated
 2026-08-28; the numbers below are measured, not estimated.
 
@@ -162,37 +223,7 @@ The difference is that a fixture is declared to be a snapshot and has a
 job policing it. Related to the question about combining the test suites
 that the item above raises.
 
-15 do a curve tracer experiment. Scoped on 2026-08-29 but not built; the
-analysis is worth keeping so it is not re-derived.
-
-The hard part is not the sweep, it is that every FET terminal reaches its
-pad through a crosspoint switch and a pad model -- together on the order of
-150-200 Ohm, and voltage-dependent. For a current source that costs almost
-nothing, which is why `examples/currentsource/` measured cleanly: a current
-source is indifferent to what is in series with it. For a FET it is fatal,
-because the resistance sits between the instrument and the drain, so the
-Vds you set is not the Vds the device sees. At `w=1` the NMOS is W=10/L=0.5
-and a few hundred microamps is tolerable; at `w=4` and Vgs=3.3 the drop is
-hundreds of millivolts and the trace is substantially of the switch.
-
-Three ways out; take the first and third. Compare against the routed deck
-rather than the drawn one -- it already contains every switch and pad, so
-no correction is needed and it fits the drawn/routed/measured framing the
-other examples use. Stay at `w=1` and modest Vgs for anything to be called
-"the transistor". And Kelvin-sense the drain on a second `ua` pin:
-crosspoints are independent switches, so one terminal can close two and
-bring the same node out on a pad carrying no current. Whether `route.py`
-can express two `ua` pins on one net is unchecked.
-
-Vg, Vd and Id do not fit in the AD3's two scope channels, so it needs two
-passes over a deterministic sweep, or the gate taken from W1's setpoint at
-+/-25 mV. `tools/measure_currentsource_ad3.py` already has the reusable
-half: the differential shunt read, the common-mode zero check (-9.7 mV/V on
-this instrument), the pin-servoing sweep, and `--mode background` for what
-the pad node draws on its own (487 kOhm to the channel offset, ie the two
-scope inputs).
-
-16 put `.github/workflows/spice-regression.yml` back on its monthly
+10 put `.github/workflows/spice-regression.yml` back on its monthly
 schedule. It was switched to run on every push on 2026-08-29, deliberately
 and temporarily, because the examples are changing daily and a break is
 worth hearing about the same day. It costs about five minutes per push --
@@ -201,3 +232,66 @@ sky130A's model library rather than simulating anything. Flip it back once
 the examples settle -- delete the bare `push:` trigger and the note above
 it; the `schedule:` and `workflow_dispatch:` entries are still there
 untouched.
+
+## Tooling and library
+
+11 `route_rail_net()` picks a `cfg_bus_pwr` tap without looking at the row
+its `cfg_bus_short` will drag in on the other side, so which of two unrelated
+failures you get depends on the order xschem happened to list the instances
+in. Found 2026-08-29 while checking what `examples/pdiffamp/` would cover.
+
+Any net that needs a rail *row* trips this -- which in practice means any FET
+whose drain goes to a rail, i.e. every source follower, the most ordinary
+buffer a beginner draws. (A source reaching a rail is free: it uses the
+device's own `ctrl_*_source` tie and no row at all, which is why no example
+had ever exercised a tap.)
+
+There are only three VAPWR taps -- bus_A[4], bus_B[1], bus_B[6] -- and a
+VAPWR net touching both bus sides has to sit on the same row number on both,
+bridged by `cfg_bus_short`. bus_A[4] pairs with bus_B[4], which is bonded to
+ua5; bus_B[1] pairs with bus_A[1], which is bonded to ua1. Only bus_B[6] /
+bus_A[6] has neither end bonded. The router takes `usable[0]` on the side of
+whichever touch came first, so on one PMOS-pair-plus-two-followers netlist it
+picked bus_A[4] and the checker correctly reported `DANGEROUS -- ua[5]
+shorted to VAPWR`, and with the two follower instances swapped it picked
+bus_B[1] and died with `DOESN'T FIT -- bus_A[1] is needed by both 'ua1' and
+'VAPWR'`. Same circuit, same devices, two different answers. VGND is the same
+shape: taps at bus_A[2], bus_B[5], bus_A[6].
+
+The fix is to score the tap by what the partner row costs -- prefer a row
+free on both sides, which is the same rule `route_internal_net()` already
+applies to two-sided nets -- rather than taking the lowest-numbered one. This
+is the rail-row twin of the instance-order dependence
+`_allocate_fets_by_constraint()` fixed for FET allocation on 2026-08-22.
+
+12 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
+
+13 the six `tools/plot_*_comparison.py` figures draw silicon in a green
+that collides with the orange they draw "as routed" in. The dataviz
+palette validator scores that adjacent pair at Delta E 4.5 for protanopes,
+against a floor of 8, so the two series are not reliably separable for a
+red-green colourblind reader; the blue/orange pair is fine.
+`tools/plot_pdiffamp_comparison.py` already uses a purple (`#7d5bbe`)
+that scores 18.9 against the same orange and passes every check. Swapping
+the other five over is a one-constant change each plus a re-run, and until
+it happens the figure set is inconsistent -- which is the only reason not
+to have done it at the time.
+
+14 check all the mosbius library symbols for cleanup
+
+## Docs and user-facing text
+
+15 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+
+16 document what VDPWR is actually for. Nowhere says that the FETs a user
+draws never see 1.8V: every analog device in the submodule (nmos_prog,
+pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
+VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only
+tt_asw_3v3, whose 01v8/01v8_hvt pair is the level shifter that turns a
+1.8V config bit into a 3.3V pass-gate drive -- spice.py ties all 192
+config pins to VDPWR/VGND, so without that rail a routed design is 192
+open switches. It is also a dead port in the as-drawn instance: a design
+built from mosbius_* symbols never connects it. So it powers nothing you
+draw, and exists so the matrix can be told what to be. Belongs in
+TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.

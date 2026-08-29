@@ -72,24 +72,38 @@ NOMINAL_IBIAS = 100e-6
 
 
 def wiring_table(pad: str, resistor: float) -> str:
+    k = f"{resistor / 1000:g}k"
     rows = [
-        ("V+ (red)", "one end of R", f"the rail, through your {resistor / 1000:g}k resistor"),
-        ("2+ (blue)", "that same end", "the rail measured at the resistor, not"),
-        ("", "", "at the instrument -- lead drops are real"),
-        ("1+ (orange)", f"pad {pad}", "the other end of R, and the bias pin"),
-        ("1-, 2-, GND", "any gnd", "scope reference. The inputs are differential,"),
-        ("", "", "so an ungrounded '-' makes every reading wrong"),
+        ("V+ (red)", "one leg of the " + k, "the supply reaches the chip only"),
+        ("", "resistor", "through this resistor"),
+        ("R's other leg", f"pad {pad}", "the far end of the resistor IS the"),
+        ("", "", "bias pin; nothing else touches it"),
+        ("2+ (blue)", "the V+ leg of the", "the rail measured at the resistor,"),
+        ("", "resistor", "not at the instrument -- lead drops"),
+        ("", "", "are real"),
+        ("1+ (orange)", f"the pad {pad} leg", "the pad's own voltage"),
+        ("1-, 2-, GND", "any gnd square", "scope reference. The inputs are"),
+        ("", "", "differential, so an ungrounded '-'"),
+        ("", "", "makes every reading wrong"),
     ]
     out = [
         "\n  Wire the Analog Discovery to the demoboard like this:\n",
-        "    AD3 lead      where              signal",
-        "    -----------   ----------------   -----------------------------------",
+        "    AD3 lead      where               what it is",
+        "    -----------   -----------------   -----------------------------------",
     ]
     for lead, where, what in rows:
-        out.append(f"    {lead:<13s} {where:<18s} {what}")
+        out.append(f"    {lead:<13s} {where:<19s} {what}")
     out.append("")
-    out.append("  The resistor is in series between V+ and the pad. Nothing else")
-    out.append("  connects to the pad -- no wavegen, no second supply.")
+    out.append(f"  The resistor is a loose two-terminal part in series between the")
+    out.append(f"  supply and the chip -- it does not go to ground:")
+    out.append("")
+    out.append(f"        V+ o---[ {k} ]---o pad {pad}")
+    out.append( "             |             |")
+    out.append( "            2+            1+          1-, 2- and GND to a gnd square")
+    out.append("")
+    out.append(f"  The current into the chip is (2+ minus 1+) / {k}, which is why both")
+    out.append("  ends are measured rather than trusting the supply's own setting.")
+    out.append(f"  Nothing else connects to pad {pad} -- no wavegen, no second supply.")
     out.append("")
     out.append(format_analog_header({"ibias": pad}))
     return "\n".join(out) + "\n"

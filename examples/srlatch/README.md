@@ -238,11 +238,52 @@ ending.
 the inverter's result, and it is explained: `XM5` and `XM6` are drawn
 `w=1` where the differential-pair halves they land on are fixed at `w=4`
 in silicon, so the as-drawn deck resets through write transistors four
-times too weak. Widen those two and `treset_drawn` becomes 1.82 ns, faster
+times too weak. Widen those two and `treset_drawn` becomes 1.77 ns, faster
 than the routed 10.94 as expected. See "Timing the reset" below, where the
 same comparison is made against silicon. (An earlier guess here -- that
 the two instances might power up in different states -- was wrong, and the
 `.ic` lines in the sheet rule it out anyway.)
+
+### The as-drawn branch stopped working on 2026-08-29, and that is a real result
+
+**The block above is the last run in which the as-drawn latch worked.**
+After the model-binning fix -- the ideal library had been handing sky130 a
+width expression naming the model subcircuit's own `w` parameter, and so
+selecting the wrong, stronger model bin
+([`../pdiffamp/README.md`](../pdiffamp/README.md) has the diagnosis) --
+the same sheet gives:
+
+```
+qd_after_set     =  0.0009V    qr_after_set     =  3.110V
+treset_drawn     =  failed: trig(TARG) : out of interval
+treset_routed    = 10.94ns
+```
+
+The as-drawn latch **no longer sets at all**. The as-routed branch is
+untouched to the last digit, because the routed decks write literal widths
+and were never affected.
+
+This is the same `w=1`-against-fixed-`w=4` mismatch as above, no longer
+survivable. `XM5`/`XM6` are drawn four times too weak, and the wrong model
+bin had been making every transistor stronger than it should be -- just
+enough to let the too-weak write pair flip the cell. With correct devices
+it cannot. So the router's standing warning --
+
+```
+WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
+           have a fixed width
+```
+
+-- was never cosmetic: the as-drawn deck has been simulating a circuit the
+chip cannot build, and now it simulates one that does not work.
+
+The fix is one character on each of two devices, `w=1` -> `w=4`, and it is
+deliberately **not** applied here, because it moves a published number and
+silences a warning that is doing its job. Probed on the netlist without
+touching the sheet, `w=4` gives `qd_after_set` = 3.2999 V and
+`treset_drawn` = **1.77 ns** against the routed 10.94 ns, which is the
+ordering every other example shows. `TODO.md` carries the decision, and
+`tools/check_srlatch_sim.sh` fails until it is made.
 
 ## On the bench
 
@@ -365,7 +406,7 @@ written.** `treset_routed` coming out *faster* than `treset_drawn` --
 inverter's result -- was recorded here and in `tools/check_srlatch_sim.py`
 as unexplained, with a guess about the two instances powering up in
 different states. It was the width mismatch: at `w=4` the sheet's own deck
-gives `treset_drawn` = 1.82 ns, comfortably faster than the routed 10.94,
+gives `treset_drawn` = 1.77 ns, comfortably faster than the routed 10.94,
 so the ordering was never wrong, the drawn circuit was just crippled.
 
 **Why the numbers here are not the sheet's 18.79 and 10.94 ns.** Those are

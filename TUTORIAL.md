@@ -6,6 +6,11 @@ the end you'll have drawn it, turned it into a bitstream, checked it's
 safe, watched it live-update, simulated it, and (if you have a demoboard)
 uploaded it to real silicon.
 
+First, from the repo root, `pip install -e .` -- that is what makes
+`mosbius` a command. Everything below also works uninstalled as
+`python3 -m mosbius.cli <subcommand>`, which is the form the tool's own
+error messages print.
+
 If you just want the finished files, `examples/inverter/` has them already
 -- open `examples/inverter/inverter.sch` in xschem to see where this
 tutorial ends up. `examples/srlatch/` has a second, slightly harder worked
@@ -108,7 +113,7 @@ that button the only manual part of the loop.
 ## 3. Route it
 
 ```bash
-python3 -m mosbius.cli route build/my_inverter.spice \
+mosbius route build/my_inverter.spice \
   --out build/my_inverter.mosbius.json
 ```
 
@@ -150,7 +155,7 @@ circuit this small and don't mean anything is wrong).
 Instead of re-running step 3 by hand after every edit, run:
 
 ```bash
-python3 -m mosbius.cli watch build/my_inverter.spice
+mosbius watch build/my_inverter.spice
 ```
 
 and leave it running in a terminal. Every time you press Netlist in xschem
@@ -190,8 +195,8 @@ same testbench worked through with numbers and a plot.
 ## 6. Upload it (needs a physical demoboard)
 
 ```bash
-pip install mpremote   # once
-python3 -m mosbius.cli program <bitstream from step 3>
+pip install -e '.[hardware]'   # once, from the repo root: mpremote
+mosbius program <bitstream from step 3>
 ```
 
 This refuses to upload if the safety checker found an ERROR (pass `--force`
@@ -215,7 +220,7 @@ placement on that shuttle puts it on. `program` prints the table when it
 finishes, and you can ask for it again at any time:
 
 ```bash
-python3 -m mosbius.cli pads build/your_design.mosbius.json
+mosbius pads build/your_design.mosbius.json
 ```
 
 ```

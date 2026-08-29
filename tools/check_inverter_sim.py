@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 import sys
 
-REFERENCE_NS = {"trise_drawn": 8.90, "trise_routed": 24.63}
+REFERENCE_NS = {"trise_drawn": 8.16, "trise_routed": 24.63}
 TOLERANCE = 0.05
 
 

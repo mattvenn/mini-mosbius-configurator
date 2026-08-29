@@ -16,8 +16,8 @@ N 240 -40 240 40 {
 lab=d}
 C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 220 -70 0 0 {name=M1
 L=0.5
-W="30*w"
-nf="4*w"
+W="wdev"
+nf="nfdev"
 mult=1
 ad="'int((nf+1)/2) * W/nf * 0.29'"
 pd="'2*int((nf+1)/2) * (W/nf + 0.29)'"
@@ -32,3 +32,4 @@ spiceprefix=X
 C {devices/iopin.sym} 0 -160 0 1 {name=p7 lab=s}
 C {devices/ipin.sym} 0 -70 0 1 {name=p1 lab=g}
 C {devices/iopin.sym} 0 40 0 1 {name=p2 lab=d}
+C {devices/code.sym} -120 -300 0 0 {name=SIZE only_toplevel=false value=".param wdev='30*w' nfdev='4*w'"}

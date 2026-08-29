@@ -47,7 +47,7 @@ import sys
 # through the real switch matrix, and is the one comparable in spirit to
 # the ~30MHz silicon measurement (though not directly -- that bitstream is
 # the unbuffered, all-pins circuit; see the README).
-REFERENCE_HZ = {"freq_drawn": 2.083e9, "freq_routed": 43.89e6}
+REFERENCE_HZ = {"freq_drawn": 2.289e9, "freq_routed": 43.89e6}
 TOLERANCE = 0.05
 
 

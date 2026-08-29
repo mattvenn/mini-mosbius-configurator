@@ -22,3 +22,7 @@ simulations/
 # five mosbius_*.sch device schematics, all of which belong in git. Finished
 # designs go to examples/<name>/ and are tracked there; there are no ignored
 # schematics at the moment.
+
+# pip install -e . leaves this behind; the package metadata lives in
+# pyproject.toml, never here.
+*.egg-info/

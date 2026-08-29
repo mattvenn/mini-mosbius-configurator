@@ -7,7 +7,7 @@ testbench idiom, capacitive loading, the common gotchas -- is in
 **Status: measured on silicon 2026-08-28, and still a working note
 rather than a polished tutorial artifact.** The headline result is in --
 this circuit runs at 39.528 MHz on a real chip against 43.89 MHz as
-routed and 2.083 GHz as drawn, see "What the committed schematic measures
+routed and 2.289 GHz as drawn, see "What the committed schematic measures
 now, and on silicon" -- but the surrounding text is still the record of a
 gap-closing exercise, kept so it can be picked back up without
 re-deriving everything, rather than something written for a newcomer to
@@ -240,22 +240,31 @@ measurement on a ttsky25a chip with an Analog Discovery 3 on `ua3`.
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| frequency | 2.083 GHz | **43.89 MHz** | **39.528 MHz** |
-| against silicon | x53 too fast | +11% | -- |
+| frequency | 2.289 GHz | **43.89 MHz** | **39.528 MHz** |
+| against silicon | x58 too fast | +11% | -- |
 
 Reproduce the simulated columns with `sh tools/check_ring_sim.sh` inside
 the container, the measured one with `python3 tools/measure_ring_ad3.py`
 on the host, and the figure with `python3 tools/plot_ring_comparison.py`.
 
+The as-drawn column moved from 2.083 GHz on 2026-08-29, when the ideal
+device library stopped handing sky130 a width expression that named the
+model subcircuit's own `w` parameter and so selected the wrong model bin
+(`examples/pdiffamp/README.md` has the diagnosis). It changes nothing
+about this example's conclusion -- an as-drawn ring with no parasitics was
+never going to be within a factor of anything -- and the as-routed column
+is unchanged to the last digit, since the routed decks were never
+affected. The figure is regenerated from the same data.
+
 **This is the result the example was built for.** Drawing the circuit and
-simulating it ideally is wrong by a factor of fifty-three. The same
+simulating it ideally is wrong by a factor of fifty-eight. The same
 circuit through the real configured switch matrix is wrong by eleven
 percent. Nothing about the design changed between those two numbers --
 only whether the switches it actually runs on are in the model.
 
 **Reading the figure.** Two panels on two timebases, the same split
 `tb_ring.sch` already makes with its two `tran` runs: as drawn is a
-factor of 53 away and gets its own axis, while as routed and silicon are
+factor of 58 away and gets its own axis, while as routed and silicon are
 close enough to overlay -- and once overlaid, an 11% period difference is
 something you watch drift apart across 50 ns rather than a number you
 take on trust.

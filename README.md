@@ -30,14 +30,27 @@ behaves that way, and what to try instead.
 
 ## Status
 
-All five milestones (M0-M4) are code-complete and tested; M5 (this
-documentation, plus the two worked examples in `examples/`) closes out the
-plan in `SPEC.md` Sec 5. The one thing that has *not* happened in this
-environment, because it needs a physical demoboard: uploading a bitstream to
-real silicon and reading it back. `mosbius/program.py` is built from the
-real upstream SDK source and its logic is fully tested, but SPEC.md Sec 8.4's
-"inverts on real silicon" / "`--verify` readback matches" exit criteria need
-your own hardware bring-up session.
+All five milestones (M0-M4) are code-complete and tested, and **the whole
+loop has run on real silicon.** On 2026-08-28 a TTDBv3 [3.2] demoboard
+carrying a ttsky25a chip loaded `examples/inverter`'s bitstream with
+`mosbius program --verify`, the readback matched (SPEC.md Sec 8.4's exit
+criterion), and an Analog Discovery 3 then measured the inverter's transfer
+curve through the real switch matrix.
+
+Seven worked examples now carry that comparison through: each one is
+simulated **as drawn** (your schematic, ideal wires) and **as routed**
+(through the configured switch matrix, with its parasitics and pads -- what
+`mosbius simulate` builds), and five of them are **measured on silicon**
+as well, with the numbers and the disagreements written up in
+`examples/README.md`. Every symbol in the device library appears in at
+least one of them. Two independent
+measurements -- a ring oscillator's frequency and the inverter's trip point
+-- put this chip at the PDK's `ss` corner, where the routed decks land
+within 0.3% and 4 mV of the bench.
+
+Still open: `TODO.md`. The big ones are complete device coverage in the
+examples, automating the hardware-in-the-loop measurements (today every one
+asks a person to wire a rig), and a curve-tracer experiment.
 
 ## Quickstart
 
@@ -49,11 +62,19 @@ the Python tooling runs on the host (it needs USB serial access for
 ```bash
 git submodule update --init   # first time only
 
+# Install the command line (host, not the container). The routing/checking/
+# bitstream/simulation half is pure standard library; the extras are only for
+# talking to a demoboard and drawing comparison plots:
+pip install -e .                     # gives you the `mosbius` command
+pip install -e '.[hardware,plots]'   # + mpremote, matplotlib
+
 # Draw a circuit: open xschem/mosbius_lib/mini_mosbius.sch (or copy
 # it), wire up mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/
 # mosbius_ota/mosbius_ntail/mosbius_ptail devices from mosbius_lib to the
-# ports (ibias, ua1..ua5, VAPWR, VDPWR, VGND). See examples/inverter/,
-# examples/srlatch/ and examples/diffamp/ for worked circuits (see
+# ports (ibias, ua1..ua5, VAPWR, VDPWR, VGND). examples/ has seven worked
+# circuits -- inverter, ringosc, srlatch, diffamp, pdiffamp, otabuf,
+# currentsource -- each simulated as drawn and as routed, and five of them
+# measured on silicon too (see
 # examples/README.md for the background they share), or follow TUTORIAL.md
 # end to end.
 
@@ -63,17 +84,22 @@ git submodule update --init   # first time only
 
 # Route it (allocates devices onto real switch-matrix positions, checks for
 # safety hazards, emits the 192-bit bitstream) -- runs on the host:
-python3 -m mosbius.cli route build/your_design.spice \
+mosbius route build/your_design.spice \
   --out build/your_design.mosbius.json
 
-# Upload it to a connected TT demoboard (needs mpremote: pip install mpremote):
-python3 -m mosbius.cli program <the bitstream printed above>
+# Upload it to a connected TT demoboard (needs the `hardware` extra above):
+mosbius program <the bitstream printed above>
 
 # ...which finishes by printing the bench wiring table: which PCB pad each
 # connected pin comes out on, and what the configuration put there. Ask for
 # it on its own any time with:
-python3 -m mosbius.cli pads build/your_design.mosbius.json
+mosbius pads build/your_design.mosbius.json
 ```
+
+Not installing is fine too: every `mosbius <subcommand>` in these docs is exactly
+`python3 -m mosbius.cli <subcommand>` run from the repo root, which is the
+form the tool's own error messages print, since it works whether or not you
+have installed anything.
 
 `mosbius watch build/your_design.spice` re-runs
 route+check every time xschem re-netlists the file (polls the file's mtime, so it works across the

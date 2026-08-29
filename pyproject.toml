@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-mosbius-configurator"
+version = "0.1.0"
+description = "Draw an analog circuit in xschem, validate it, and configure tnt's mini-MOSbius chip with it"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Matthew Venn", email = "matthewvenn@gmail.com" }]
+keywords = ["asic", "analog", "sky130", "tinytapeout", "mosbius", "xschem"]
+classifiers = [
+  "Intended Audience :: Education",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation",
+]
+
+# The routing, checking, bitstream and simulation-deck half needs nothing but
+# the standard library, on purpose: a beginner should be able to get from a
+# netlist to a bitstream with one pip install and no build tools. The extras
+# below are only for the things that talk to hardware or draw pictures.
+dependencies = []
+
+[project.optional-dependencies]
+hardware = ["mpremote"]   # mosbius program: shifts the bitstream onto a demoboard
+plots = ["matplotlib"]    # tools/plot_*_comparison.py
+dev = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/mattvenn/mini-mosbius-configurator"
+Chip = "https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius"
+
+[project.scripts]
+mosbius = "mosbius.cli:main"
+
+[tool.setuptools]
+packages = ["mosbius"]
+
+[tool.setuptools.package-data]
+mosbius = ["data/*.spice"]

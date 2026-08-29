@@ -2,14 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/diffamp/tb_diffamp.sch
 against the reference measurements in examples/diffamp/README.md ("Step
-response and settling"), last measured 2026-08-28 at cprobe=10p (with rprobe=10meg):
+response and settling"), last measured 2026-08-29 at cprobe=10p (with rprobe=10meg):
 
-    as drawn   base 1.985V   +40mV -> 2.714V   -40mV -> 1.222V
-    as routed  base 2.020V   +40mV -> 2.771V   -40mV -> 1.228V
+    as drawn   base 2.012V   +40mV -> 2.744V   -40mV -> 1.237V
+    as routed  base 2.018V   +40mV -> 2.769V   -40mV -> 1.227V
 
-These moved on 2026-08-28 with the bias-reference correction: the tail
-bank now draws the 400 uA that tail=4 means on silicon, where the old
-ideal model gave it 200 uA. See that README's "The bias-reference
+The as-drawn column moved on 2026-08-29 with the model-binning fix (see
+examples/pdiffamp/README.md): the ideal library was handing sky130 a width
+expression naming its own `w` parameter, which selected the wrong model
+bin. The as-routed column is unchanged to the millivolt, because the
+routed decks write literal widths and were never affected.
+
+They moved once before, on 2026-08-28, with the bias-reference correction:
+the tail bank now draws the 400 uA that tail=4 means on silicon, where the
+old ideal model gave it 200 uA. See that README's "The bias-reference
 correction".
 
 Run by tools/check_diffamp_sim.sh, which
@@ -44,12 +50,12 @@ import sys
 
 # Volts, from the README table. The measure names are tb_diffamp.sch's own.
 REFERENCE_V = {
-    "vout_drawn_base": 1.985,
-    "vout_drawn_pos": 2.714,
-    "vout_drawn_neg": 1.222,
-    "vout_routed_base": 2.020,
-    "vout_routed_pos": 2.771,
-    "vout_routed_neg": 1.228,
+    "vout_drawn_base": 2.012,
+    "vout_drawn_pos": 2.744,
+    "vout_drawn_neg": 1.237,
+    "vout_routed_base": 2.018,
+    "vout_routed_pos": 2.769,
+    "vout_routed_neg": 1.227,
 }
 # The differential step tb_diffamp.sch applies, in volts: PWL takes ua1 from
 # 1.5V to 1.54V and then to 1.46V, against ua2 held at 1.5V.

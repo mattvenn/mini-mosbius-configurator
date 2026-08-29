@@ -1,6 +1,6 @@
 # Working with the examples
 
-*Six circuits share one workflow, one testbench idiom, and one set of
+*Seven circuits share one workflow, one testbench idiom, and one set of
 traps. This page is the common ground; each example's own README covers
 only what is particular to that circuit.*
 
@@ -9,6 +9,7 @@ only what is particular to that circuit.*
 | [`inverter/`](inverter/) | Two FETs | The whole pipeline end to end, and the sharpest as-drawn/as-routed comparison. Start here. |
 | [`srlatch/`](srlatch/) | Six FETs | State, plus a routing constraint that bites: which devices can take diff-pair halves. |
 | [`diffamp/`](diffamp/) | Five FETs + tail bank | Drawing a differential pair *as a pair*, with a real tail current. |
+| [`pdiffamp/`](pdiffamp/) | Five FETs + PMOS tail bank | The diff amp in the opposite polarity, and the only example that places a `mosbius_ptail`. |
 | [`currentsource/`](currentsource/) | Two mirror legs | `ibias` itself: what `ratio=` buys, and an I-V curve with a real compliance limit. The only example that measures a current. |
 | [`otabuf/`](otabuf/) | OTA: five FETs + tail bank | A feedback loop closed through the switch matrix, and the only example that uses `mosbius_ota`. |
 | [`ringosc/`](ringosc/) | Eight FETs | An open investigation, not a polished example: how close the routed model gets to measured silicon. |
@@ -36,13 +37,13 @@ uses. It exposes the same nine-pin port list as a hand-drawn design
 (`ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`), so it drops into a
 testbench in place of the ideal block.
 
-**Measured on silicon** is a number from real hardware. Five of the six
+**Measured on silicon** is a number from real hardware. Six of the seven
 have one, taken here with an Analog Discovery 3: the inverter, the ring
-oscillator, the SR latch, the OTA follower and the differential amplifier.
-In the ring's case it is a *different bitstream* from the committed
-schematic. The last two needed a bias current before they could be measured
-at all, which is what "Feeding it by hand, when the board can't" below is
-about; only currentsource is left.
+oscillator, the SR latch, the OTA follower and both differential
+amplifiers. In the ring's case it is a *different bitstream* from the
+committed schematic. Three of those needed a bias current before they
+could be measured at all, which is what "Feeding it by hand, when the
+board can't" below is about; only the current source is left.
 
 Both amplifiers also have their step response measured, by one shared
 script, `tools/measure_settling_ad3.py`. Read the two examples' own pages
@@ -64,7 +65,7 @@ vocabulary: `out_drawn`/`out_routed`, `trise_drawn`/`trise_routed`.
 
 ## The side-by-side testbench
 
-All six testbenches have the same shape, and `xschem/mosbius_lib/tb_template.sch`
+All seven testbenches have the same shape, and `xschem/mosbius_lib/tb_template.sch`
 is that shape with the circuit-specific parts removed. Two instances of
 one symbol -- `mini_mosbius.sym`, the chip as a nine-pin block, which is
 identical for every design -- differing only in what each stands for:
@@ -458,7 +459,7 @@ silicon and supplied by the symbols themselves.
 Netlist with xschem's Netlist button. Then, from the host:
 
 ```bash
-python3 -m mosbius.cli route build/my_design.spice --out build/my_design.mosbius.json
+mosbius route build/my_design.spice --out build/my_design.mosbius.json
 ```
 
 `--out` persists the routing decision, so re-running on an unchanged
@@ -470,7 +471,7 @@ again reproduces the same bitstream.
 **Then leave watch mode running while you draw:**
 
 ```bash
-python3 -m mosbius.cli watch build/my_design.spice
+mosbius watch build/my_design.spice
 ```
 
 Every time you press Netlist, the watcher notices (it polls mtime, so it
@@ -490,7 +491,7 @@ Finally, with a demoboard connected:
 
 ```bash
 pip install mpremote   # once
-python3 -m mosbius.cli program <bitstream>
+mosbius program <bitstream>
 ```
 
 which refuses to upload if the safety checker found an ERROR. Add

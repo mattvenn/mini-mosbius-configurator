@@ -19,10 +19,13 @@ host: `mosbius program ... --verify` loaded `examples/inverter`'s
 bitstream and the readback matched, which is SPEC.md Sec 8.4's exit
 criterion met. Then an Analog Discovery 3 measured the transfer curve of
 that inverter through the real switch matrix. Against the same circuit
-simulated: threshold 1.555 V measured, 1.600 V as routed, 1.495 V as
-drawn -- so the routed model moves the threshold in the right direction
-and most of the way, which is the first independent evidence the switch
-matrix model is right. Peak gain -17.6 V/V measured at 25 mV steps and
+simulated: threshold 1.599 V measured (calibrated), 1.600 V as routed,
+1.605 V as drawn -- all three within 6 mV. **That last number was 1.495 V
+until 2026-08-29, and the "the matrix moves the threshold 105 mV, and
+silicon agrees" claim built on it is withdrawn**: the 1.495 V came from
+the model-binning bug in trap 10 below, and with correct devices the
+matrix barely moves this inverter's trip point at all. What the matrix
+demonstrably costs here is speed -- 24.63 ns of rise time against 8.16 ns. Peak gain -17.6 V/V measured at 25 mV steps and
 -20.7 V/V at 4 mV steps (the transition is only ~220 mV wide, so the step
 size matters), against -15.4 V/V as routed. Absolute levels agreed too,
 but only to the AD3's uncalibrated ~45 mV of channel offset, which is
@@ -169,6 +172,36 @@ sheet cannot reproduce a bench measurement of a level at all.
 the silicon comparison above is against. And a units error went with it:
 `examples/README.md` called the diff amp's output "a ~20 MOhm node"
 alongside its own 200 ns at 10 pF, which is 20 kOhm.
+
+**Every symbol in the library now appears in a worked example, and
+`examples/pdiffamp/` is what closed that (2026-08-29).** It is the diff
+amp in the opposite polarity -- a PMOS pair on `pdiffpair+/-` with a
+`mosbius_ptail`, loaded by an NMOS mirror on `nmos_a`/`nmos_b` -- and it
+is the only example that places a `mosbius_ptail` or reaches
+`ctrl_dpp_tail` at all. Its quiescent output sits one NMOS `Vgs` *above*
+`VGND` (1.12 V) where the NMOS diff amp's sits one PMOS `Vgs` below
+`VAPWR` (2.0 V), so its testbench steps ±10 mV rather than ±40 mV: at
+21 V/V a bigger step compresses against the bottom rail and the chord gain
+measures the compression. As drawn and as routed agree to about 1%.
+
+**Measured on silicon 2026-08-29** (`tools/measure_pdiffamp_ad3.py`, pads
+`ibias` K, `ua1` C, `ua2` J, `ua4` G): 17.82 V/V fitted at 99.4 uA against
+21.22 as drawn, i.e. 16% low -- the third circuit on this part to fall
+short in the same direction, after the diff amp's 18% and otabuf's, and so
+the third piece of evidence for the `ss` corner. Its gain moves 1.028x
+across 2.55x of tail current, where strong inversion predicts 1.60x, which
+is the NMOS pair's moderate-inversion result reproduced on the PMOS side
+with different devices. And it measures a **+18 mV input offset**, the one
+quantity the sheet cannot produce at all, since both simulated branches
+are symmetric by construction.
+
+Two things it flushed out on the way, both worth not rediscovering: the
+model-binning trap in the list below, and a router limitation now in
+`TODO.md` -- `route_rail_net()` chooses a `cfg_bus_pwr` tap without
+checking which row its `cfg_bus_short` pulls in on the other side, so a
+design whose FET *drain* needs a rail (any source follower) gets either a
+`DANGEROUS -- ua[5] shorted to VAPWR` or a spurious `DOESN'T FIT`,
+decided by the order xschem happened to list the instances in.
 
 `TODO.md` holds deferred work. It is renumbered from 1 whenever items are
 removed, so a `TODO.md` §number goes stale the moment anything above it
@@ -527,6 +560,28 @@ These were all got wrong once. The sources that look authoritative are not.
    the `descr="..."` and `tclcommand="..."` attributes on launcher symbols
    are fine, since those quotes are the delimiters themselves. Hit on
    `examples/ringosc/tb_ring.sch` and fixed 2026-08-24.
+
+10. **An expression handed to a subcircuit must not name a parameter the
+    callee also defines** -- and sky130's binned model subcircuits define
+    `w`. `mosbius_nmos.sch`/`mosbius_pmos.sch` sized their FET as
+    `W="10*w"`, where `w` is our own user-facing width attribute; ngspice
+    re-evaluates that expression in the callee's scope, where `w` means
+    the model subcircuit's own parameter, and **selects the wrong bin**.
+    The final geometry is right (ngspice reports W=10u L=0.5u either way)
+    and nothing warns; what changes is the model card, and with it the
+    threshold: 0.535 V against 0.822 V, worth 200 mV of Vgs at 187 uA.
+    Found 2026-08-29 as a 55% as-drawn/as-routed gain disagreement in
+    `examples/pdiffamp/`, isolated in a three-device deck, and fixed by
+    computing the size into a differently-named parameter
+    (`.param wdev='10*w' nfdev='2*w'`, then `W=wdev nf=nfdev`), which
+    changes no user-facing name and no design sheet. `ratio=` and `tail=`
+    never collided, so the mirror, tail and OTA symbols were always fine,
+    and `mosbius/data/mosbius_device_library.spice` writes literal widths,
+    so the as-routed side was never affected -- which is exactly why the
+    bug showed up as the two branches disagreeing. Every bitstream is
+    byte-identical before and after. The as-drawn *numbers* published in
+    the inverter, ring, SR latch and diff amp READMEs were all computed in
+    the wrong bin and still need re-running; `TODO.md` carries that.
 
 ## Useful facts
 

@@ -87,16 +87,16 @@ reproducing that second measurement:
 
 ![Inverter w=4 waveform: same input pulse, output rises noticeably faster](inverter_w4.png)
 
-At `w=4`, rise time is **21.1 ns** -- about 4x faster than the `w=1` case,
+At `w=4`, rise time is **20.3 ns** -- about 4x faster than the `w=1` case,
 tracking the published ~50ns -> ~25ns improvement (a 2x change) reasonably
 well in direction and roughly in magnitude, if not exactly: this
 simulation's absolute numbers run somewhat higher than the published ones
-(84ns vs ~50ns at `w=1`). That gap is the load, not the model. An as-drawn
+(81ns vs ~50ns at `w=1`). That gap is the load, not the model. An as-drawn
 model leaves out the chip's parasitic resistance and capacitance, which
 makes it *faster* than silicon, not slower -- so omission cannot explain a
 number above the measurement, and the 100pF load used here, heavier than
 whatever tnt probed with, can. At the 10pF the testbench below uses, the
-same as-drawn model gives 8.9ns and the ordering comes out right: as drawn
+same as-drawn model gives 8.16ns and the ordering comes out right: as drawn
 is faster than as routed, which is faster than silicon. See "What this does
 and doesn't prove" below.
 
@@ -235,27 +235,47 @@ an Analog Discovery 3 on the bench.
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| trip point (out = in) | 1.495 V | **1.600 V** | **1.599 V** |
-| small-signal gain there | -8.5 V/V | -14.5 V/V | -16.9 V/V |
+| trip point (out = in) | 1.605 V | **1.600 V** | **1.599 V** |
+| small-signal gain there | -14.79 V/V | -14.49 V/V | -16.90 V/V |
 | VOH | 3.2999 V | 3.2999 V | 3.3031 V |
 | VOL | 0.0000 V | 0.0000 V | -0.0071 V |
-| 10%-90% rise, 500ns pulse | 8.90 ns | 24.63 ns | not measured |
+| 10%-90% rise, 500ns pulse | 8.16 ns | 24.63 ns | not measured |
 
 Reproduce the simulated columns with `sh tools/check_inverter_sim.sh`
 inside the container, the measured one with `python3
 tools/measure_inverter_ad3.py` on the host, and the figure and table with
 `python3 tools/plot_inverter_comparison.py`.
 
-**The trip point is the headline.** As drawn puts it at 1.495 V. Routing
-the same circuit through the matrix moves it to 1.600 V. Silicon says
+**The trip point is the headline: all three columns agree within 6 mV.**
+As drawn puts it at 1.605 V, as routed at 1.600 V, and silicon says
 1.599 V. A millivolt is well inside the measurement's own repeatability
-(+/-2 mV across runs), so treat it as luck in the last digit -- but a
-105 mV shift predicted and 104 mV observed is not luck, and it is the
-first independent evidence that `mosbius simulate`'s model of the switch
-matrix is right rather than merely plausible.
+(+/-2 mV across runs), so treat the last digit as luck -- but three
+independent routes to the same 1.6 V, one of them a physical chip, is not.
+
+**These as-drawn numbers changed on 2026-08-29, and the earlier version of
+this paragraph claimed something that was an artifact.** It read: as drawn
+1.495 V, as routed 1.600 V, silicon 1.599 V, "a 105 mV shift predicted and
+104 mV observed", offered as the first independent evidence that the
+switch-matrix model was right. The 1.495 V was wrong. The ideal device
+library was handing sky130 a width expression that named the model
+subcircuit's own `w` parameter, which silently selected the wrong model
+bin -- 0.535 V of threshold against 0.822 V -- so the as-drawn inverter
+was built from transistors that do not exist. Corrected, as drawn lands at
+1.605 V and there is no 105 mV shift to explain: the matrix moves this
+inverter's trip point by about 5 mV, not by a tenth of a volt.
+`examples/pdiffamp/README.md` has the full diagnosis, and TODO.md carried
+the re-measure.
+
+What survives is better than what it replaced. The claim was that the
+routed model tracks silicon; the corrected numbers say the routed model
+*and* the as-drawn model both land on the measurement, which is a stronger
+statement about the device models and a weaker one about the matrix. What
+the matrix demonstrably costs this circuit is speed: 24.63 ns of rise time
+against 8.16 ns, a 3x slowdown that no as-drawn model shows. The gain is
+where a real disagreement remains, and the next paragraph is about that.
 
 **The gain gap is the process corner.** As routed at `tt` gives
--14.5 V/V against -16.9 V/V measured, about 17% low -- but this chip is
+-14.49 V/V against -16.90 V/V measured, about 14% low -- but this chip is
 not a `tt` part. At `ss` the same deck gives -16.13 V/V, a 4.6% error, and
 `ss` simultaneously puts the ring oscillator within 0.3% of its measured
 frequency; see `examples/ringosc/README.md` for the full corner table and
@@ -297,13 +317,22 @@ survive an offset. Calibrate first (WaveForms, Settings -> Device Manager
 
 ### What the routed model is mostly adding
 
-Set `cprobe=100p` and re-run and the two rise times become 88.43 ns and
-130.33 ns, a ratio of 1.47 against 2.77 at the default 10 pF. Two loads
+Set `cprobe=100p` and re-run and the two rise times become 81.07 ns and
+130.37 ns, a ratio of 1.61 against 3.02 at the default 10 pF. Two loads
 separate two effects: a purely resistive difference would hold the ratio
 constant and a purely capacitive one would shrink it at the larger load,
 so it is both, and solving them together puts roughly **10.8 pF of extra
 capacitance** on the routed output against a series switch resistance of
-about **33%** of the drive resistance.
+about **45%** of the drive resistance.
+
+Re-measured 2026-08-29 after the model-binning fix, which moved only the
+as-drawn branch (88.43 -> 81.07 ns here, 8.90 -> 8.16 ns at 10 pF; the
+routed 130.33 -> 130.37 ns is the same number to within the solver's own
+tolerance). **The extracted capacitance did not move at all**: 10.8 pF
+before and 10.80 pF after, which is a good sign, since that quantity is
+the one this section actually claims. The resistive share did move, from
+33% to 45%, because it is what absorbs the change in how strong the
+as-drawn transistors are.
 
 That capacitance is the bond pad, not the switch matrix. It matches what
 `mosbius simulate` instantiates on a used package pin: the pad model in

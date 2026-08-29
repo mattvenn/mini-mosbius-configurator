@@ -180,6 +180,15 @@ Small-signal gain is **~19.8 V/V (25.9dB)**, symmetric to within rounding
 either side of the bias point, falling to ~18.2-19.1 V/V by ±40mV as the
 pair starts steering all of the tail current to one side.
 
+**This table and figure predate the 2026-08-29 model-binning fix and have
+not been re-run.** They come from a one-off 13-level PWL deck rather than
+from `tb_diffamp.sch`, so reproducing them exactly would mean rebuilding
+that deck; the settled table further down, which the committed testbench
+and `tools/check_diffamp_sim.py` do reproduce, is the current source of
+truth. Expect this one to be off by the same order the settled numbers
+moved -- half a V/V, about 2%, in the direction of slightly *less* gain --
+and the shape of the compression to be unchanged.
+
 Re-measured 2026-08-28, after the bias-reference correction below: the
 tail bank now draws the 400 uA that `tail=4` means on silicon, where the
 old ideal model gave it 200 uA. The earlier numbers on this page (base
@@ -242,7 +251,7 @@ board can't" in [`../README.md`](../README.md).
 
 **This also confirmed `ua4` -> pad G**, which had never been checked on
 silicon. The output sat at about 2.07 V with the inputs balanced, against a
-simulated base of 1.985 V as drawn and 2.020 V as routed -- a pad tied to
+simulated base of 2.012 V as drawn and 2.018 V as routed -- a pad tied to
 ground would have read 0 V and an unconnected one would not have moved.
 Five of the six analog pads are now confirmed; only `ua5` -> F is not.
 
@@ -250,10 +259,10 @@ Five of the six analog pads are now confirmed; only `ua5` -> F is not.
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| small-signal gain | 19.8 V/V | 19.80 V/V | **16.19 V/V** |
-| output base | 1.985 V | 2.020 V | ~2.07 V |
+| small-signal gain | ~19.5 V/V | 19.77 V/V | **16.19 V/V** |
+| output base | 2.012 V | 2.018 V | ~2.07 V |
 
-Silicon is **18% below** the as-drawn small-signal gain. Two known effects
+Silicon is **17% below** the as-drawn small-signal gain. Two known effects
 account for part of that before anything else is invoked. The AD3's 1 MOhm
 input sits across this amplifier's ~20 kOhm output and is worth about 2%,
 and every simulated number on this page is at `rprobe=10meg cprobe=10p`;
@@ -323,7 +332,7 @@ between the extremes of the coarse sweep -- which landed 15 to 32 mV from
 where the gain actually peaks, because this amplifier's swing is not
 symmetric about its bias point. The tell was the output level: the wrong
 rule put it at 1.82 V, the peak-gain point puts it at 2.07 V, and the sheet
-predicts 1.985/2.020 V. That mattered beyond the offset number, because the
+predicts 2.012/2.018 V. That mattered beyond the offset number, because the
 `+/-N mV` gain chords are measured *from* the centre, so a misplaced centre
 made them spuriously asymmetric -- it reported the positive side steeper
 where both simulated branches say the negative side is.
@@ -401,14 +410,22 @@ Vinp  PWL(0 1.5  999n 1.5  1000n 1.54  3499n 1.54  3500n 1.46  5999n 1.46  6000n
 tran 5n 6.5u
 ```
 
-Measured 2026-08-28, at `cprobe=10p (with rprobe=10meg)`:
+Measured 2026-08-29, at `cprobe=10p (with rprobe=10meg)`:
 
 | | `out` base | after `+40mV` | after `-40mV` | gain + | gain - |
 |---|---|---|---|---|---|
-| as drawn | 1.985 V | 2.714 V | 1.222 V | 18.22 V/V | 19.08 V/V |
-| as routed | 2.020 V | 2.771 V | 1.228 V | 18.78 V/V | 19.80 V/V |
+| as drawn | 2.012 V | 2.744 V | 1.237 V | 18.31 V/V | 19.35 V/V |
+| as routed | 2.018 V | 2.769 V | 1.227 V | 18.78 V/V | 19.77 V/V |
 
-**The two agree to within about 3%, and that is the expected answer.** At
+The as-drawn row moved on 2026-08-29 with the model-binning fix -- the
+ideal library had been handing sky130 a width expression naming the model
+subcircuit's own `w` parameter, selecting the wrong bin
+(`../pdiffamp/README.md` has the diagnosis). It moved the as-drawn base by
+27 mV and the gains by under half a V/V, and it moved them *towards* the
+as-routed column, which did not move at all: the routed decks write
+literal widths and were never affected.
+
+**The two agree to within about 2%, and that is the expected answer.** At
 DC no current flows into a capacitor, so the pad's and the switch matrix's
 series resistance drop no voltage at all: everything the routed model adds
 is resistance and capacitance, and neither changes a settled gain. So the
