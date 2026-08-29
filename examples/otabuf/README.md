@@ -198,14 +198,100 @@ nothing for its reference to split with. `tail=4` was 400 uA before and
 is 400 uA now -- confirmed by the slew rate landing on the same
 42.9 V/us.
 
+## On silicon
+
+**Measured 2026-08-29** on a ttsky25a part, TTDBv3 [3.2] demoboard, with an
+Analog Discovery 3. This is the fourth example measured on real hardware
+and the first that needed a bias current at all -- the other three
+(inverter, SR latch, ring oscillator) are plain `mosbius_nmos`/
+`mosbius_pmos` circuits with nothing referencing `ibias`.
+
+![output and offset as drawn, as routed and on silicon](otabuf_three_ways.png)
+
+**Getting a bias current took a detour**, because this demoboard has no
+circuit to make one: the RP2350-controlled current source arrived on later
+ETR boards, and on an older one `tt.analog_current_source` is `None`. So
+`ibias` came from a bench supply through a 20 kOhm resistor into pad K --
+see "Feeding it by hand, when the board can't" in
+[`../README.md`](../README.md), which also records the first silicon
+measurement of the bias reference itself. Confirming that pad was a
+prerequisite rather than a nicety: `ua0` -> K had never been checked at a
+bench. This run was at **100.1 uA**, interpolated from that clamp sweep
+against a measured rail of 3.2879 V.
+
+**The follower follows**, which was the point of measuring this one first:
+a follower follows regardless of how much tail current it has, so the
+result does not hinge on the number that is least well known here. Then the
+detail, at `tail=4`:
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| closed-loop slope, 1.00-2.50 V | 0.9599 | 0.9615 | **0.9476** |
+| offset at 1.00 V | +30.2 mV | +25.0 mV | +36.2 mV |
+| offset at 1.65 V | +8.6 mV | +5.9 mV | +9.3 mV |
+| offset at 2.50 V | -31.7 mV | -33.1 mV | -44.2 mV |
+| input common-mode range | 0.85-2.90 V | 0.85-2.90 V | 0.57-2.90 V |
+| output floor below that range | ~0.01 V | ~0.02 V | **0.31 V** |
+
+**Read the slope, not the offsets.** Output minus input on a bench is the
+difference of two uncalibrated scope channel offsets plus the real thing,
+and on this instrument that difference is the same tens of millivolts as
+the offsets being measured -- it is the 44 mV that moved
+`examples/inverter/`'s threshold. A slope is a ratio of differences within
+each channel, so a constant offset cancels out of it entirely. That is why
+the figure's legend carries slopes and why the offset rows above are shape
+rather than magnitude: the sign change near 1.65 V is real, the absolute
+values wait on calibration.
+
+So the number that means something: silicon's shortfall from unity is
+**1.38x the routed model's**, which for a unity-gain follower says the real
+OTA's open-loop gain is lower than modelled by about that factor. It is the
+first quantitative disagreement any example here has found between the
+routed model and silicon that is not explained by capacitance -- the
+inverter's and the ring's both were.
+
+**The upper common-mode edge lands on 2.90 V**, exactly as both decks
+predict. The lower edge should not be compared: the 0.57 V here comes from
+requiring the local slope to sit within 0.8-1.2 V/V, while the 0.85 V was
+read off a simulated ramp by eye, so the two numbers are not the same
+measurement.
+
+**The output floor is an open divergence.** Below the common-mode range the
+output is pinned, and it pins at 0.31 V on silicon against ~0.01 V in both
+decks. At 300 mV that is much the largest disagreement in this measurement,
+far outside anything channel offset could explain, and there is no
+explanation for it here yet. It is annotated on the figure because it is
+also the easiest feature to misread: the input ramps up *through* that
+floor, so output minus input passes through zero on the way past and the
+trace briefly looks like it is following when it is not. That trap cost a
+wrong common-mode range on the first pass -- see `_tracking_band()` in
+`tools/measure_otabuf_ad3.py`, which needs both a nearness test and a
+slope test because either alone marks the dead region as tracking.
+
+**Slew rate is not measured yet.** It needs a real edge, and
+`ad3.wavegen()` makes levels: changing a DC output's offset is slewed over
+milliseconds, which produces a clean, plausible and entirely wrong ramp.
+That wants the triggered-capture idiom of
+`tools/measure_srlatch_edge_ad3.py` as its own script, and it is the
+measurement that would test the 2.78x capacitance claim above.
+
+To reproduce:
+
+```bash
+python3 tools/measure_ibias_clamp_ad3.py --resistor 20000   # confirm pad K, set the rail
+python3 tools/measure_otabuf_ad3.py                         # programs, sweeps, reports
+python3 tools/plot_otabuf_comparison.py                     # redraws the figure
+```
+
 ## On the bench
 
-**Offset and input range** is a DC sweep: drive `ua1` from a bench supply,
-read `ua2` with a meter, step across the supply range. Worth checking
-while doing it: the feedback tie between `outm` and `inm` happens on the
-bus row, on-chip, so the pad and mux resistance are outside the loop, and
-the offset should not depend on which pin you observe through. If it does,
-the pad model needs another look.
+**Offset and input range** is done -- see "On silicon" above. One check
+that went with it is still open: the feedback tie between `outm` and `inm`
+happens on the bus row, on-chip, so the pad and mux resistance are outside
+the loop, and the offset should not depend on which pin you observe
+through. Testing that means routing the same circuit to a different output
+pin and repeating the sweep. If the offset moves, the pad model needs
+another look.
 
 **Slew rate versus `tail`** is four bitstreams and a scope, and it is a
 ratio measurement, so it survives the demoboard's uncalibrated bias

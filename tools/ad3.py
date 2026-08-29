@@ -3,8 +3,8 @@
 """Minimal Digilent WaveForms (AD3/AD2) wrapper for bench measurements.
 
 Only what the measurement scripts in tools/ need: open the device, drive
-W1, capture the two scope channels. No dependency beyond ctypes and the
-WaveForms install itself.
+W1, capture the two scope channels, and set the programmable supplies. No
+dependency beyond ctypes and the WaveForms install itself.
 
 **Installing the SDK on macOS is two steps, not one.** `brew install
 --cask waveforms` puts the *application* in /Applications, and the app
@@ -30,6 +30,7 @@ check_clipping().
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import time
 from ctypes import byref, c_double, c_int, c_ubyte
@@ -146,6 +147,176 @@ def mean(samples, ch):
     return sum(samples[ch]) / len(samples[ch])
 
 
+# ---------------------------------------------------------------------------
+# Programmable supplies (V+ / V-)
+# ---------------------------------------------------------------------------
+#
+# These are here for `ibias`. The chip's bias input is a *current*, and only
+# the later ETR demoboards carry the RP2350-controlled circuit that makes
+# one -- on an older board `tt.analog_current_source` is None and the bias
+# pin is simply unfed. So a bench measurement of any example that mirrors
+# ibias -- diffamp, currentsource, otabuf -- makes the current the crude
+# way, by driving V+ through a series resistor into the bias pin. See
+# examples/README.md on ibias for what that node is.
+#
+# **There are two enables, and forgetting the second one is silent.** Each
+# supply channel has its own Enable node, *and* the instrument has one
+# master switch (FDwfAnalogIOEnableSet). Set the voltage and the channel
+# enable but not the master and the rail just sits at 0 V, with every call
+# returning success. supply() sets both.
+#
+# Channel and node numbers are deliberately not hard-coded. The SDK reports
+# its own names -- "Positive Supply" labelled "V+", with nodes "Enable",
+# "Voltage", "Current" -- and they are not identical across AD2 and AD3, so
+# they are looked up per device rather than trusted to a constant.
+
+
+def _io_map(h):
+    """{channel index: (name, label, {node name: (index, units)})}, cached."""
+    cache = getattr(_io_map, "cache", {})
+    if h.value in cache:
+        return cache[h.value]
+    count = c_int()
+    dwf.FDwfAnalogIOChannelCount(h, byref(count))
+    channels = {}
+    for idx in range(count.value):
+        name, label = ctypes.create_string_buffer(32), ctypes.create_string_buffer(16)
+        dwf.FDwfAnalogIOChannelName(h, c_int(idx), name, label)
+        nodes_n = c_int()
+        dwf.FDwfAnalogIOChannelInfo(h, c_int(idx), byref(nodes_n))
+        nodes = {}
+        for n in range(nodes_n.value):
+            nname = ctypes.create_string_buffer(32)
+            nunits = ctypes.create_string_buffer(16)
+            dwf.FDwfAnalogIOChannelNodeName(h, c_int(idx), c_int(n), nname, nunits)
+            nodes[nname.value.decode().strip().lower()] = (
+                n, nunits.value.decode().strip())
+        channels[idx] = (name.value.decode().strip(),
+                         label.value.decode().strip(), nodes)
+    cache[h.value] = channels
+    _io_map.cache = cache
+    return channels
+
+
+def _find_supply(h, channel):
+    """Match "V+" / "v-" / "positive" against the device's own channel names."""
+    wanted = channel.strip().lower()
+    for idx, (name, label, nodes) in _io_map(h).items():
+        if wanted == label.lower() or wanted in name.lower():
+            return idx, name, label, nodes
+    listing = "\n".join(
+        f"    {label or '(no label)'}  {name}  nodes: "
+        + (", ".join(sorted(nodes)) or "(none)")
+        for _, (name, label, nodes) in sorted(_io_map(h).items()))
+    raise RuntimeError(
+        f"this device has no analog IO channel matching {channel!r}.\n"
+        f"  What it does report:\n{listing or '    (nothing)'}\n"
+        "  Match on the label (V+, V-) or any part of the name.")
+
+
+def supply(h, volts, channel="V+", current_limit=None, settle=0.3):
+    """Set one programmable rail and turn it on. Returns supply_status().
+
+    `volts` is clamped to nothing -- the device's own limits are read back
+    and a value outside them is refused by name, since silently delivering a
+    different rail than you asked for is how a bias current goes wrong
+    without anyone noticing.
+
+    Driving the chip's `ibias` pin: pick the resistor so most of the rail is
+    dropped across it. The bias node is a diode-connected NMOS that sets its
+    own gate voltage, so it is the *difference* that makes the current, and
+    a large drop makes the current insensitive to what that node happens to
+    sit at.
+
+    **V+ does not reach 0 V.** On the AD3 it is settable over +0.5..+5.0 V
+    in 4500 steps, and V- over -5.0..-0.5 V in 4000 (read off the device
+    2026-08-29). So a rail cannot be brought gently up from zero, and
+    "supply off" is supplies_off() or close(), not supply(h, 0).
+    """
+    idx, name, label, nodes = _find_supply(h, channel)
+    if "voltage" not in nodes:
+        raise RuntimeError(
+            f"{label or name} has no Voltage node, so it is not a settable "
+            f"supply.\n  Its nodes are: {', '.join(sorted(nodes)) or '(none)'}")
+
+    node, _units = nodes["voltage"]
+    lo, hi, steps = c_double(), c_double(), c_int()
+    dwf.FDwfAnalogIOChannelNodeSetInfo(
+        h, c_int(idx), c_int(node), byref(lo), byref(hi), byref(steps))
+    if not (min(lo.value, hi.value) <= volts <= max(lo.value, hi.value)):
+        raise RuntimeError(
+            f"{volts:+.3f} V is outside what {label or name} can deliver "
+            f"({lo.value:+.3f} to {hi.value:+.3f} V).")
+
+    dwf.FDwfAnalogIOChannelNodeSet(h, c_int(idx), c_int(node), c_double(volts))
+    if current_limit is not None and "current" in nodes:
+        dwf.FDwfAnalogIOChannelNodeSet(
+            h, c_int(idx), c_int(nodes["current"][0]), c_double(current_limit))
+    if "enable" in nodes:
+        dwf.FDwfAnalogIOChannelNodeSet(
+            h, c_int(idx), c_int(nodes["enable"][0]), c_double(1))
+    dwf.FDwfAnalogIOEnableSet(h, c_int(1))  # the master switch, see above
+    time.sleep(settle)
+    return supply_status(h, channel)
+
+
+def supply_status(h, channel="V+"):
+    """{'voltage': V, 'current': A} for one rail, as the instrument reports it.
+
+    **The voltage is measured, not echoed back** -- checked against an AD3
+    on 2026-08-29, where asking for 0.500/1.370/2.900/5.000 V read back
+    0.504/1.376/2.910/5.010, about +0.3% throughout. So this is the number
+    to record for V+, in preference to the value you asked for.
+
+    The current node was 0.000000 A at every one of those settings, with
+    nothing connected. That is the right answer for an open circuit and
+    therefore no evidence the current monitor works; it has not been read
+    under a known load.
+
+    None of this establishes an injected bias current on its own. The rail
+    is one end of the resistor and the chip's bias pin is the other, and
+    that pin sets its own voltage, so put a scope channel on the pin and
+    compute (V_supply - V_pin) / R.
+    """
+    idx, _name, _label, nodes = _find_supply(h, channel)
+    dwf.FDwfAnalogIOStatus(h)
+    out = {}
+    for key in ("voltage", "current"):
+        if key in nodes:
+            value = c_double()
+            dwf.FDwfAnalogIOChannelNodeStatus(
+                h, c_int(idx), c_int(nodes[key][0]), byref(value))
+            out[key] = value.value
+    return out
+
+
+def supplies_off(h):
+    """Drop both rails via the master switch."""
+    dwf.FDwfAnalogIOEnableSet(h, c_int(0))
+
+
+@contextlib.contextmanager
+def device():
+    """`with ad3.device() as h:` -- open, and close on the way out either way.
+
+    Worth using once a supply is involved: an exception raised between
+    open_device() and close() otherwise leaves V+ still driving the chip.
+    """
+    handle = open_device()
+    try:
+        yield handle
+    finally:
+        close(handle)
+
+
 def close(h):
+    """Stop W1 and drop the supplies before letting go of the device.
+
+    The rails go off here on purpose: a script that exits with V+ still
+    feeding the chip's bias pin leaves the chip biased by an instrument
+    nobody is watching. Keep the handle open if you want a rail to persist
+    across a measurement.
+    """
     dwf.FDwfAnalogOutConfigure(h, c_int(0), c_int(0))
+    supplies_off(h)
     dwf.FDwfDeviceClose(h)

@@ -36,11 +36,13 @@ uses. It exposes the same nine-pin port list as a hand-drawn design
 (`ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`), so it drops into a
 testbench in place of the ideal block.
 
-**Measured on silicon** is a number from real hardware. Only the inverter
-and the ring oscillator have one, both from
-[tnt's bring-up post](https://www.tinytapeout.com/news/mini-mosbius/), and
-in the ring's case it is a *different bitstream* from the committed
-schematic.
+**Measured on silicon** is a number from real hardware. Four of the six
+have one, taken here with an Analog Discovery 3: the inverter, the ring
+oscillator, the SR latch and the OTA follower. In the ring's case it is a
+*different bitstream* from the committed schematic. The otabuf one needed a
+bias current before it could be taken at all, which is what "Feeding it by
+hand, when the board can't" below is about; diffamp and currentsource mirror
+`ibias` too and are still unmeasured.
 
 The expected ordering is as drawn faster than as routed faster than
 silicon: the drawn model omits the most, the routed model omits less, the
@@ -245,9 +247,10 @@ own** bias source: the sheets carry `Ibias_drawn` and `Ibias_routed`, both
 one source shared between two chips gets divided between them, and the
 split depends on their input impedances, so both branches move. And
 sweeping `ibias_amps` scales every mirror, tail and OTA on the sheet at
-once, which is a first-class experiment rather than a nuisance: the
-demoboard's bias source is programmable from the same host that loads the
-bitstream (`mosbius program --ibias`).
+once, which is a first-class experiment rather than a nuisance -- on a
+demoboard that can make the current, it is programmable from the same host
+that loads the bitstream (`mosbius program --ibias`). Whether yours can is
+the subject of the next section.
 
 This was got wrong until 2026-08-28, in a way worth recognising if you
 meet an old sheet: each device symbol used to carry its *own* copy of the
@@ -255,6 +258,85 @@ reference diode, so N devices split the reference N ways, and
 `mosbius_psource` referenced the NMOS node instead of `ibias_p`. Symptoms
 were currents that came out at 1/N of the request, or a lone
 `mosbius_psource` delivering picoamps.
+
+### Feeding it by hand, when the board can't
+
+The RP2350-controlled circuit that makes this current arrived on the later
+ETR demoboards. On an older one `tt.analog_current_source` is `None`, there
+is no bias current at all, and `mosbius program` says so in as many words
+beside the upload -- the bits are still on the chip and still correct, but
+every `mosbius_nsink`, `mosbius_psource`, `mosbius_ntail`, `mosbius_ptail`
+and `mosbius_ota` in the design is referencing a current that isn't there.
+A design of plain `mosbius_nmos`/`mosbius_pmos` FETs neither notices nor
+cares, which is why the inverter, the SR latch and the ring oscillator were
+measured on silicon long before anyone found this.
+
+The workaround is a bench supply and one resistor into the bias pad. It is
+cruder than a current source, and the crudeness is worth understanding
+rather than working around: what you control is a *voltage*, and the pin
+wants a *current*, so the resistor is what converts one to the other. The
+pin sets its own voltage; the resistor sees the difference.
+
+    V+  ---[ R ]--- ibias pad          I = (V+ - V_pad) / R
+
+**Which means the resistor should be large.** Pick it so most of the supply
+is dropped across it, because the part you did not choose -- what the bias
+pin settles at -- then matters proportionally less. With 20 kOhm at 100 uA
+the resistor takes 2.0 V and the pin about 1.3 V, so being 50 mV wrong
+about the pin is a 2.5% error in the current. With 4.7 kOhm the resistor
+takes only 0.47 V and the same 50 mV is a 10.6% error. Same current, four
+times the sensitivity to the half you know least well.
+
+**Measure the pad; do not assume it.** `tools/measure_ibias_clamp_ad3.py`
+sweeps the supply and reads *both* ends of the resistor on the two scope
+channels, so the current is a difference between two measurements rather
+than a number derived from the supply's own idea of its output. It also
+answers a question you cannot answer with a multimeter: whether the pad is
+the bias pin at all. Three outcomes look alike at a single voltage and
+nothing alike across a sweep -- a pad that follows the supply 1:1 is
+connected to nothing, a pad pinned at 0 V is one of the eight header
+letters tied to ground, and a pad that holds its own voltage while the
+supply moves by volts is the reference.
+
+#### What it measured
+
+Run on a ttsky25a part 2026-08-29, into pad K through 20 kOhm, 0.5 to 4.5 V:
+
+| | |
+|---|---|
+| pad voltage at 100 uA | 1.282 V |
+| moved, over 6.4 to 154 uA | 545 mV, against a 2.0 V move at the supply |
+| square-law fit, 15 points | Vth 0.744 V, 54.2 mV per sqrt(uA) |
+| fit residuals | -10.6 to +4.0 mV, rms 3.5 mV |
+
+**That fit is the identification.** A diode-connected FET in saturation has
+`Vgs = Vth + sqrt(2I/k)`, so plotting the square root of the current
+against the pad voltage should give a straight line -- and it does, to an
+rms of 3.5 mV across a 24x range of current. A pn junction would have been
+logarithmic instead, moving about 60 mV per decade, or ~83 mV over the 1.38
+decades swept; the pad moved 545 mV, six times stiffer. So this is not an
+ESD structure or a leakage path being mistaken for a reference, it is
+`mirror_n`'s M1, and the extracted 0.744 V is where a sky130
+`g5v0d10v5` HV NMOS threshold belongs.
+
+**It also confirmed a pad letter.** `ua[0]` -> K was composed from the
+shuttle index and the carrier's KiCad wiring and had never been checked at
+a bench; it now has been, joining ua1 -> C, ua2 -> J and ua3 -> D.
+
+**So, with 20 kOhm: set the supply to 3.28 V for the nominal 100 uA**, and
+5.0 V reaches about 178 uA, which is the ceiling with that resistor. Note
+that `tail=` and `ratio=` multiply *on the chip*, so 100 uA of reference is
+what `tail=4`'s 400 uA is built from -- the pad never carries it.
+
+One honest limit on those numbers. The pad voltage carries one scope
+channel's offset directly, so 1.282 V and the 0.744 V threshold are only as
+good as that channel's calibration -- tens of millivolts, uncalibrated. The
+*current* is a difference across the resistor and so carries only the
+difference of the two channels' offsets, which is the smaller error; the
+3.28 V setting is the more trustworthy half of this table. Calibrate the
+instrument (WaveForms -> Settings -> Device Manager -> Calibrate) before
+quoting the threshold anywhere.
+
 
 ## Gotchas
 

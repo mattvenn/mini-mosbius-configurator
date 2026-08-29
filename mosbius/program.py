@@ -113,7 +113,7 @@ DO_RESET = {reset!r}
 DO_VERIFY = {verify!r}
 IBIAS_LEVEL = {ibias_level!r}
 
-result = {{"ok": False, "error": None, "verify_ok": None}}
+result = {{"ok": False, "error": None, "verify_ok": None, "ibias_set": None}}
 try:
     # DemoBoard.get() takes no arguments (it's a bare singleton accessor --
     # mode comes from config.ini on creation); set the mode explicitly
@@ -126,14 +126,18 @@ try:
         raise RuntimeError("project %s not found on this shuttle" % PROJECT)
     tt.shuttle.get(PROJECT).enable()
 
+    # Whether the bias current was actually delivered is reported in its own
+    # field, not in result["error"]. It used to be the latter, which meant it
+    # was written and then discarded: the host only reads "error" when "ok"
+    # is False, and "ok" goes True a few lines below on exactly this path. So
+    # a board with no bias circuit reported a clean upload and a pad table
+    # asserting a current nothing had supplied.
     if tt.analog_current_source is not None:
         tt.analog_current_source.level = IBIAS_LEVEL
         tt.analog_current_source.enabled = True
+        result["ibias_set"] = True
     else:
-        result["error"] = (
-            "no analog_current_source on this board revision -- ibias not set "
-            "by software; bias it externally per SPEC.md Sec 3.4b"
-        )
+        result["ibias_set"] = False
 
     # -- Sec 3.5 step 1: enable low BEFORE anything else, for the whole shift.
     tt.ui_in[1] = 0

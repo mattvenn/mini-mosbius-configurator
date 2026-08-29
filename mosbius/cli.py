@@ -282,6 +282,34 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ibias_warning(result: dict, config: SwitchConfig) -> str | None:
+    """What to say when the board could not deliver the bias current.
+
+    Only the newer ETR demoboards carry the RP2350-controlled circuit that
+    makes this current; on an older one `tt.analog_current_source` is None
+    and the bias pin is simply unfed. The upload is still perfectly good --
+    the 192 bits are on the chip -- but every mirror, differential-pair tail
+    and OTA tail in the design is referenced to a current that isn't there,
+    so a design using any of them measures nothing, quietly.
+    """
+    if result.get("ibias_set") is not False or not config.ibias:
+        return None
+    return (
+        "\n  BIAS CURRENT NOT SET -- this demoboard has no current source.\n\n"
+        f"  The bitstream is on the chip and correct. But {config.ibias * 1e6:.1f} uA was\n"
+        "  asked for, and this board revision has no `analog_current_source`:\n"
+        "  the RP2350-controlled bias circuit arrived on later ETR demoboards.\n"
+        "  So the chip's bias pin is floating, and anything in this design that\n"
+        "  mirrors it -- mosbius_nsink, mosbius_psource, mosbius_ntail,\n"
+        "  mosbius_ptail, mosbius_ota -- has no operating point.\n\n"
+        "  Feed it externally instead (SPEC.md Sec 3.4b): a bench supply through a\n"
+        "  series resistor into the bias pad, sized so most of the supply is\n"
+        "  dropped across the resistor. To confirm the pad and set the current:\n\n"
+        "    python3 tools/measure_ibias_clamp_ad3.py --resistor 20000\n\n"
+        "  A design of plain mosbius_nmos/mosbius_pmos FETs needs none of this."
+    )
+
+
 def cmd_program(args: argparse.Namespace) -> int:
     try:
         config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
@@ -327,7 +355,13 @@ def cmd_program(args: argparse.Namespace) -> int:
             f"     mosbius pads {args.bitstream} --shuttle {DEFAULT_SHUTTLE})",
             file=sys.stderr,
         )
+        warning = _ibias_warning(result, config)
+        if warning:
+            print(warning, file=sys.stderr)
         return 0
+    warning = _ibias_warning(result, config)
+    if warning:
+        print(warning, file=sys.stderr)
     print()
     try:
         print(format_pad_table(config, shuttle, args.project))

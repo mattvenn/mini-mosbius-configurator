@@ -303,3 +303,16 @@ def test_read_board_identity_does_not_call_itself_a_failed_upload():
 def test_device_script_reads_the_identity_it_reports_back():
     script = generate_device_script(make_inverter_config(), project="tt_um_tnt_mosbius")
     assert "chip_ROM" in script and "_read_identity(tt)" in script
+
+
+def test_device_script_reports_bias_delivery_separately_from_failure():
+    # The regression: this used to be written into result["error"], which the
+    # host only reads when result["ok"] is False -- and "ok" goes True on this
+    # very path. So a board with no bias circuit reported a clean upload and a
+    # pad table asserting a current nothing had supplied.
+    script = generate_device_script(make_inverter_config(), project="tt_um_tnt_mosbius")
+    assert '"ibias_set": None' in script
+    assert 'result["ibias_set"] = True' in script
+    assert 'result["ibias_set"] = False' in script
+    bias_block = script.split("analog_current_source")[1]
+    assert 'result["error"]' not in bias_block.split("Sec 3.5 step 1")[0]

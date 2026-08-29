@@ -408,3 +408,40 @@ def test_program_prints_no_pad_table_when_the_board_reported_no_shuttle(capsys):
     assert "OK -- uploaded" in captured.out
     assert "PCB pad" not in captured.out
     assert "--shuttle" in captured.err
+
+
+class TestIbiasWarning:
+    """The bias current a board could not deliver has to be said out loud.
+
+    Only the later ETR demoboards carry the RP2350-controlled bias circuit.
+    On an older one the upload is still good and the bits are still right,
+    so this is a warning beside a success, never a failure -- but staying
+    silent leaves every mirror and tail in the design unbiased.
+    """
+
+    def _config(self, ibias):
+        from mosbius.bitstream import unpack
+        from mosbius.model import SwitchConfig
+        return SwitchConfig(bits=unpack("0" * 48), ibias=ibias)
+
+    def test_names_the_current_and_what_it_affects(self):
+        from mosbius.cli import _ibias_warning
+        text = _ibias_warning({"ibias_set": False}, self._config(100e-6))
+        assert "100.0 uA" in text
+        assert "mosbius_ota" in text and "mosbius_nsink" in text
+        assert "tools/measure_ibias_clamp_ad3.py" in text
+        assert "on the chip and correct" in text  # not a failed upload
+
+    def test_silent_when_the_board_did_set_it(self):
+        from mosbius.cli import _ibias_warning
+        assert _ibias_warning({"ibias_set": True}, self._config(100e-6)) is None
+
+    def test_silent_when_the_board_never_said(self):
+        # A device script older than the ibias_set field must not produce a
+        # warning about hardware we know nothing about.
+        from mosbius.cli import _ibias_warning
+        assert _ibias_warning({}, self._config(100e-6)) is None
+
+    def test_silent_when_no_bias_was_asked_for(self):
+        from mosbius.cli import _ibias_warning
+        assert _ibias_warning({"ibias_set": False}, self._config(0)) is None
