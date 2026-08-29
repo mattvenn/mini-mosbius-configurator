@@ -33,9 +33,9 @@ built from mosbius_* symbols never connects it. So it powers nothing you
 draw, and exists so the matrix can be told what to be. Belongs in
 TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
 
-14. check all the mosbius library symbols for cleanup
+12. check all the mosbius library symbols for cleanup
 
-15. two simulation sweeps `examples/currentsource/` still owes, both
+13. two simulation sweeps `examples/currentsource/` still owes, both
 listed in its own "Still to do". The `ratio` 1-4 sweep is four netlist
 and route runs rather than one deck, since `ratio` is a device property
 that changes the bitstream; it checks the four currents come out evenly
@@ -54,14 +54,14 @@ drawn-versus-routed voltage offset at the knee is 24.3 mV and about
 150 Ohm, interpolated between sweep points, not the 17 mV and ~100 Ohm
 the scratch note here had.
 
-16. no example exercises mosbius_ptail. Its orientation was fixed on
+14. no example exercises mosbius_ptail. Its orientation was fixed on
 2026-08-28 -- it had been drawn upside down, a PMOS with a ground symbol
 under it, and its pin moved from (0,-40) to (0,+40) -- so nothing but the
 test suite has ever placed one. A PMOS differential pair mirroring
 `examples/diffamp/` would cover it, and would be the cheapest of the
 example ideas that came out of that session.
 
-17. the bench plans in the two new examples are written but unrun, and now
+15. the bench plans in the two new examples are written but unrun, and now
 runnable: real silicon was programmed and read back on 2026-08-28. Both
 READMEs carry an "On the bench" section. The valuable one is
 `examples/currentsource/`'s ibias calibration sweep -- `program.py`'s
@@ -71,53 +71,33 @@ this chip depends on. Ratio linearity and slew-versus-tail are both ratio
 measurements, so they survive the uncalibrated source and can be done
 first.
 
-18. look at combining the tests with the github tests and the spice regression and the AD3 tests. at
+16. look at combining the tests with the github tests and the spice regression and the AD3 tests. at
 the moment I think they're all a bit separate. possiblity to reuse
 
-19. `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
-cannot build, and fixing it closes a question the README currently calls
-unexplained. `XM5` and `XM6` land on diff-pair halves, whose geometry is
+17. `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
+cannot build. `XM5` and `XM6` land on diff-pair halves, whose geometry is
 fixed in silicon at `w=4`; the sheet draws `w=1`. The router already says
 so -- `WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and
 ndiffpair- have a fixed width` -- but the as-drawn deck goes on
 simulating the `w=1` circuit, so for this one example "as drawn" is not
 the ideal version of the same circuit, it is a different circuit with 4x
-weaker write transistors. Measured 2026-08-28 by re-running the committed
-testbench with only those two widths changed in the netlist
-(`build/tb_srlatch_drawn_w4.spice`, nothing else touched):
+weaker write transistors.
 
-    w=1 (committed)          w=4 (buildable)      as routed
-    vset_drawn    3.139 V    1.692 V              1.881 V
-    vreset_drawn  3.141 V    1.699 V              1.840 V
-    treset_drawn  18.78 ns   1.82 ns              10.94 ns
-
-The width is the whole story: at `w=4` the drawn write thresholds land
-within ~190 mV of the routed ones, and the rest is the routing itself --
-the matrix's series resistance weakens the pull-down, so it needs a
-little more gate drive.
-
-The second row of that table is the reason to come back to this. The
-README and `tools/check_srlatch_sim.py` both record that `treset_routed`
-comes out *faster* than `treset_drawn` (10.94 ns against 18.78 ns), call
-it the opposite of the inverter's result, and say plainly that it is not
-explained -- `check_srlatch_sim.py` deliberately declines to assert an
-ordering because of it. It is explained: the as-drawn deck was resetting
-through a transistor four times weaker than the one on the chip. At `w=4`
-drawn is 1.82 ns against routed's 10.94 ns, so routed is slower, the same
-direction as the inverter and the ring.
+This may also explain something the README and `tools/check_srlatch_sim.py`
+both record as unexplained: `treset_routed` comes out *faster* than
+`treset_drawn`, the opposite of the inverter's result, and
+`check_srlatch_sim.py` declines to assert an ordering because of it. A
+reset through a transistor four times weaker than the one on the chip
+would do that. Worth measuring at `w=4` to find out.
 
 Drawing `w=4` on those two devices is a one-character change each. What
 makes it a decision rather than a fix is that it moves `treset_drawn`, a
 published number, in the README, in `check_srlatch_sim.py`'s references
 and in the monthly regression -- and it silences a router warning that is
-currently doing its job, which is worth being deliberate about. The
-silicon measurement is the tiebreaker either way: the two write-threshold
-predictions are 1.26 V apart, far outside anything calibration could
-account for, so one reading on the bench says which model describes the
-chip. `tools/measure_srlatch_ad3.py` takes it.
+currently doing its job, which is worth being deliberate about.
 
 
-19. the unit tests build their netlists as hand-written strings, and 20 of
+18. the unit tests build their netlists as hand-written strings, and 20 of
 them describe designs `mosbius route` would reject. Investigated
 2026-08-28; the numbers below are measured, not estimated.
 
@@ -168,3 +148,5 @@ bug this project already fixed once (see CLAUDE.md on netlisting twice).
 The difference is that a fixture is declared to be a snapshot and has a
 job policing it. Related to the question about combining the test suites
 that the item above raises.
+
+19. do a curve tracer experiement

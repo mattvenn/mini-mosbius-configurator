@@ -14,7 +14,7 @@ divy=5
 subdivy=1
 unity=1
 x1=0
-x2=2.8e-06
+x2=4e-07
 divx=5
 subdivx=1
 xlabmag=1.0
@@ -68,13 +68,13 @@ C {devices/gnd.sym} -340 200 0 0 {name=l2 lab=VGND}
 C {devices/isource.sym} -240 170 2 1 {name=Ibias_drawn value="'ibias_amps'"}
 C {devices/lab_pin.sym} -240 140 1 0 {name=p4 sig_type=std_logic lab=ibias_drawn}
 C {devices/gnd.sym} -240 200 0 0 {name=l3 lab=VGND}
-C {devices/isource.sym} -240 300 2 1 {name=Ibias_routed value="'ibias_amps'"}
-C {devices/lab_pin.sym} -240 270 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
-C {devices/gnd.sym} -240 330 0 0 {name=l3b lab=VGND}
-C {devices/vsource.sym} -130 160 0 0 {name=Vset value="PWL(0 0 60n 0 61n 3.3 101n 3.3 102n 0 400n 0 1400n 3.3 1450n 3.3 1451n 0 2800n 0)"}
+C {devices/isource.sym} -540 170 2 1 {name=Ibias_routed value="'ibias_amps'"}
+C {devices/lab_pin.sym} -540 140 1 0 {name=p4b sig_type=std_logic lab=ibias_routed}
+C {devices/gnd.sym} -540 200 0 0 {name=l3b lab=VGND}
+C {devices/vsource.sym} -130 160 0 0 {name=Vset value="PULSE(0 3.3 60n 1n 1n 40n 1000n)"}
 C {devices/lab_pin.sym} -130 130 1 0 {name=pin1 sig_type=std_logic lab=set}
 C {devices/gnd.sym} -130 190 0 0 {name=lvin lab=VGND}
-C {devices/vsource.sym} -30 160 0 0 {name=Vreset value="PWL(0 0 220n 0 221n 3.3 261n 3.3 262n 0 1600n 0 2600n 3.3 2650n 3.3 2651n 0 2800n 0)"}
+C {devices/vsource.sym} -30 160 0 0 {name=Vreset value="PULSE(0 3.3 220n 1n 1n 40n 1000n)"}
 C {devices/lab_pin.sym} -30 130 1 0 {name=pin2 sig_type=std_logic lab=reset}
 C {devices/gnd.sym} -30 190 0 0 {name=lvin2 lab=VGND}
 C {devices/capa.sym} -320 -410 0 0 {name=Cprobe_drawn m=1 value="'cprobe'" footprint=1206 device="ceramic capacitor"}
@@ -90,7 +90,7 @@ C {devices/res.sym} 40 -410 0 0 {name=Rprobe_routed value="'rprobe'" footprint=1
 C {devices/lab_pin.sym} 40 -440 2 0 {name=pr_routed sig_type=std_logic lab=out_routed}
 C {devices/gnd.sym} 40 -380 0 0 {name=lr_routed lab=VGND}
 C {sky130_fd_pr/corner.sym} -530 -460 0 0 {name=CORNER only_toplevel=true corner=tt}
-C {devices/code_shown.sym} 170 -720 0 0 {name=NGSPICE only_toplevel=true value="
+C {devices/code_shown.sym} 170 -790 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
 
 .param ibias_amps=100u
@@ -100,37 +100,14 @@ Vgnd VGND 0 0
 
 .option reltol=0.01
 .control
-* Save the four nodes this sheet plots and measures, not every node in
-* the circuit. `save all` is fine for a 300ns run, but the routed
-* subcircuit carries the whole switch matrix -- hundreds of internal
-* nodes -- and the write-threshold ramps made this a 2.8us run, at which
-* point storing all of them ran the container out of memory and ngspice
-* was killed with no error of its own (the log simply stops after the
-* solver banner).
-  save v(set) v(reset) v(out_drawn) v(out_routed)
-  tran 100p 2800n
+  save all
+  tran 100p 300n
   meas tran qd_after_set FIND v(out_drawn) AT=110n
   meas tran qr_after_set FIND v(out_routed) AT=110n
   meas tran qd_after_reset FIND v(out_drawn) AT=280n
   meas tran qr_after_reset FIND v(out_routed) AT=280n
   meas tran treset_drawn TRIG v(reset) VAL=1.65 RISE=1 TARG v(out_drawn) VAL=1.65 FALL=1
   meas tran treset_routed TRIG v(reset) VAL=1.65 RISE=1 TARG v(out_routed) VAL=1.65 FALL=1
-* The write thresholds. Everything above is a transient the bench cannot
-* see -- these edges are nanoseconds wide. These four are static: ramp one
-* input slowly and read the level at which the latch gives way, which is a
-* contest between the pull-down being driven and the keeper PMOS holding
-* the node, so it is a ratio and an oscilloscope can measure it. The pulse
-* phase has already used the first rise and the first fall of each output,
-* so the ramps are the second of each.
-  meas tran vset_drawn FIND v(set) WHEN v(out_drawn)=1.65 RISE=2
-  meas tran vset_routed FIND v(set) WHEN v(out_routed)=1.65 RISE=2
-  meas tran vreset_drawn FIND v(reset) WHEN v(out_drawn)=1.65 FALL=2
-  meas tran vreset_routed FIND v(reset) WHEN v(out_routed)=1.65 FALL=2
-* The stored high level, read at the end of the set ramp with both inputs
-* back at 0 -- this is the one static level the routed matrix moves, and
-* it moves with the probe resistance, so it is what a real probe changes.
-  meas tran voh_drawn FIND v(out_drawn) AT=1550n
-  meas tran voh_routed FIND v(out_routed) AT=1550n
   wrdata srlatch_tb_set.txt v(set)
   wrdata srlatch_tb_reset.txt v(reset)
   wrdata srlatch_tb_out_drawn.txt v(out_drawn)
