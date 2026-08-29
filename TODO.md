@@ -2,26 +2,47 @@
 
 1 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-2 come up with some hardware in the loop test.
+2 automatic hardware-in-the-loop testing. Seven scripts in `tools/` now
+measure real silicon with an Analog Discovery -- inverter, ring, SR latch,
+diff amp, OTA follower, current source, and the ibias clamp -- and each
+compares against the same design as drawn and as routed. What none of them
+is, is automatic: every one asks a person to wire a rig and press Enter,
+and nothing runs them on a schedule or checks the answers have not moved.
+The RP2350's own ADC/DAC would remove the person for some of it. Note that
+the demoboard here has no `analog_current_source`, so anything assuming
+programmable bias will not run on this bench -- the bias has to come from a
+supply through a series resistor, and which supply setting gives which
+current is a lookup in `build/ibias_clamp.json`, not a calculation.
+(This is the merge of two items that asked the same question twice: "come
+up with some hardware in the loop test" and "could we use the rp2350's
+adc / dac / ibias control to do automatic hil testing".)
 
 3 use haralds 50 nifty
 
 4 try to get coverage of all devices
 
-5 could we use the scope against simulation
+5 automatically label an xschem sheet with the PCB pad letters. The lookup
+half is done as of 2026-08-29: `mosbius/pads.py` composes the shuttle
+index's `analog_pins` with the carrier's own wiring, and
+`format_analog_header()` draws the ANALOG header with the pads in use
+bracketed, which `mosbius program` and five of the measurement scripts
+print. What is not done is putting those letters onto the schematic itself,
+so a sheet says "ua2 (pad J)" beside the pin rather than making the reader
+run a command to find out.
 
-6 could we use the rp2350's adc / dac / ibias control to do automatic hil testing
+Two items are closed by work already done and have been dropped rather
+than renumbered: "each new shuttle's mini mosbius will have pins tied to
+different lettered pcb pins", which `pad_map()` handles by composing the
+index with the carrier table; and "could we use the scope against
+simulation", which is what the seven measurement scripts in item 2 do,
+every one of them against the same design as drawn and as routed.
 
-7 each new shuttle's mini mosbius will have pins tied to different lettered pcb pins
-
-8 could the tool fetch the pinout to make it clearer what pins to connect to / routed to/ automatically label an xschem sch
-
-9 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+6 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
-10 make it easy for people to submit designs to the examples
+7 make it easy for people to submit designs to the examples
 
-11 document what VDPWR is actually for. Nowhere says that the FETs a user
+8 document what VDPWR is actually for. Nowhere says that the FETs a user
 draws never see 1.8V: every analog device in the submodule (nmos_prog,
 pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
 VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only
@@ -33,48 +54,49 @@ built from mosbius_* symbols never connects it. So it powers nothing you
 draw, and exists so the matrix can be told what to be. Belongs in
 TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
 
-12. check all the mosbius library symbols for cleanup
+9 check all the mosbius library symbols for cleanup
 
-13. two simulation sweeps `examples/currentsource/` still owes, both
-listed in its own "Still to do". The `ratio` 1-4 sweep is four netlist
-and route runs rather than one deck, since `ratio` is a device property
-that changes the bitstream; it checks the four currents come out evenly
-spaced, which is the one measurement immune to the demoboard's
-uncalibrated bias source. The nested `dc` sweep over `ibias_amps` is one
-run and gives the family of curves.
+10 `examples/currentsource/` owes two simulation sweeps and one bench sweep,
+all three about `ratio`.
 
-Everything else in that item is done as of 2026-08-28: both examples are
-listed in `examples/README.md`, both have a job in
-`.github/workflows/spice-regression.yml` (six now, with
-`tools/check_otabuf_sim.sh` and `tools/check_currentsource_sim.sh`), the
-work-in-progress banners are gone, and the I-V sweep analysis that was
-only written down here is folded into
-`examples/currentsource/README.md`. One correction went with it: the
-drawn-versus-routed voltage offset at the knee is 24.3 mV and about
-150 Ohm, interpolated between sweep points, not the 17 mV and ~100 Ohm
-the scratch note here had.
+In simulation, both are listed in its own "Still to do, in simulation". The
+`ratio` 1-4 sweep is four netlist and route runs rather than one deck,
+since `ratio` is a device property that changes the bitstream. The nested
+`dc` sweep over `ibias_amps` is one run and gives the family of curves --
+its measured counterpart is now done (7 points, 24-154 uA, giving
+out = 1.9127 x in - 0.508 uA), so this is what that would be compared
+against.
 
-14. no example exercises mosbius_ptail. Its orientation was fixed on
+On the bench, ratio linearity is the last unrun experiment on that example,
+and the only one immune to the demoboard's uncalibrated bias source, since
+a ratio of two currents from the same reference cancels it. Everything
+measured there so far was taken at `ratio=2`, and `ratio` and the bias
+current enter the answer only as a product, so nothing yet confirms the
+mirror-ratio bits mean what the bit map says.
+`tools/measure_currentsource_ad3.py --mode ratio` takes the four routed
+designs and reads each ratio back out of its own bitstream rather than its
+filename.
+
+The rest of what this item and the bench-plan item used to cover is done.
+Both examples are in
+`examples/README.md` and in `.github/workflows/spice-regression.yml`; the
+I-V analysis is folded into the example's README (with the correction that
+the drawn-versus-routed offset at the knee is 24.3 mV and about 150 Ohm,
+not the 17 mV and ~100 Ohm a scratch note here had); the ibias calibration
+sweep that item 15 called "the valuable one" was run on 2026-08-29; and
+otabuf's slew-versus-tail was run the same day.
+
+11 no example exercises mosbius_ptail. Its orientation was fixed on
 2026-08-28 -- it had been drawn upside down, a PMOS with a ground symbol
 under it, and its pin moved from (0,-40) to (0,+40) -- so nothing but the
 test suite has ever placed one. A PMOS differential pair mirroring
 `examples/diffamp/` would cover it, and would be the cheapest of the
 example ideas that came out of that session.
 
-15. the bench plans in the two new examples are written but unrun, and now
-runnable: real silicon was programmed and read back on 2026-08-28. Both
-READMEs carry an "On the bench" section. The valuable one is
-`examples/currentsource/`'s ibias calibration sweep -- `program.py`'s
-level-to-amps constant is marked approximate in its own source, and that
-sweep turns it into a real number that every other analog measurement on
-this chip depends on. Ratio linearity and slew-versus-tail are both ratio
-measurements, so they survive the uncalibrated source and can be done
-first.
-
-16. look at combining the tests with the github tests and the spice regression and the AD3 tests. at
+12 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
 the moment I think they're all a bit separate. possiblity to reuse
 
-17. `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
+13 `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
 cannot build. `XM5` and `XM6` land on diff-pair halves, whose geometry is
 fixed in silicon at `w=4`; the sheet draws `w=1`. The router already says
 so -- `WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and
@@ -104,7 +126,7 @@ the circuit the chip actually builds. Against that: it moves
 it silences a router warning that is currently doing its job, which is
 worth being deliberate about.
 
-18. the unit tests build their netlists as hand-written strings, and 20 of
+14 the unit tests build their netlists as hand-written strings, and 20 of
 them describe designs `mosbius route` would reject. Investigated
 2026-08-28; the numbers below are measured, not estimated.
 
@@ -156,9 +178,37 @@ The difference is that a fixture is declared to be a snapshot and has a
 job policing it. Related to the question about combining the test suites
 that the item above raises.
 
-19. do a curve tracer experiement
+15 do a curve tracer experiment. Scoped on 2026-08-29 but not built; the
+analysis is worth keeping so it is not re-derived.
 
-20. put `.github/workflows/spice-regression.yml` back on its monthly
+The hard part is not the sweep, it is that every FET terminal reaches its
+pad through a crosspoint switch and a pad model -- together on the order of
+150-200 Ohm, and voltage-dependent. For a current source that costs almost
+nothing, which is why `examples/currentsource/` measured cleanly: a current
+source is indifferent to what is in series with it. For a FET it is fatal,
+because the resistance sits between the instrument and the drain, so the
+Vds you set is not the Vds the device sees. At `w=1` the NMOS is W=10/L=0.5
+and a few hundred microamps is tolerable; at `w=4` and Vgs=3.3 the drop is
+hundreds of millivolts and the trace is substantially of the switch.
+
+Three ways out; take the first and third. Compare against the routed deck
+rather than the drawn one -- it already contains every switch and pad, so
+no correction is needed and it fits the drawn/routed/measured framing the
+other examples use. Stay at `w=1` and modest Vgs for anything to be called
+"the transistor". And Kelvin-sense the drain on a second `ua` pin:
+crosspoints are independent switches, so one terminal can close two and
+bring the same node out on a pad carrying no current. Whether `route.py`
+can express two `ua` pins on one net is unchecked.
+
+Vg, Vd and Id do not fit in the AD3's two scope channels, so it needs two
+passes over a deterministic sweep, or the gate taken from W1's setpoint at
++/-25 mV. `tools/measure_currentsource_ad3.py` already has the reusable
+half: the differential shunt read, the common-mode zero check (-9.7 mV/V on
+this instrument), the pin-servoing sweep, and `--mode background` for what
+the pad node draws on its own (487 kOhm to the channel offset, ie the two
+scope inputs).
+
+16 put `.github/workflows/spice-regression.yml` back on its monthly
 schedule. It was switched to run on every push on 2026-08-29, deliberately
 and temporarily, because the examples are changing daily and a break is
 worth hearing about the same day. It costs about five minutes per push --
