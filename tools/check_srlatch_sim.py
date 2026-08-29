@@ -28,10 +28,16 @@ meaningless.
 
 There is deliberately no "routed must be slower than drawn" check here,
 unlike the inverter and ring scripts. treset_routed does come out faster
-(10.94ns against 18.79ns) and the README says plainly that this is not yet
-explained -- a latch's reset delay depends on the state it starts from,
-and the two instances need not power up in the same one. Asserting an
-ordering nobody has justified would bake a guess into the regression.
+(10.94ns against 18.79ns), and as of 2026-08-29 that is explained rather
+than mysterious: XM5 and XM6 are drawn w=1 where the differential-pair
+halves they land on are fixed at w=4 in silicon, so the as-drawn deck
+resets through write transistors four times too weak. Widen those two and
+treset_drawn becomes 1.82ns, faster than the routed 10.94ns, which is the
+ordering every other example shows. The check stays absent because the
+committed sheet still draws w=1, so the ordering it produces really is
+inverted -- asserting the physical ordering against a deck that does not
+model the physical device would fail for the right reason and be useless.
+See examples/srlatch/README.md, "Timing the reset".
 """
 
 from __future__ import annotations

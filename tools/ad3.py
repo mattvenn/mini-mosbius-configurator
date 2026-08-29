@@ -74,7 +74,16 @@ def open_device():
 
 def wavegen(h, ch=0, func=funcDC, freq=1000.0, amp=0.0, offset=0.0, enable=True):
     """Drive W1 (ch=0) / W2 (ch=1). Keep `offset + amp` inside the chip's
-    supply: driving a pin above VAPWR conducts through its ESD diode."""
+    supply: driving a pin above VAPWR conducts through its ESD diode.
+
+    **This makes levels, not edges.** Changing a DC output's offset is
+    slewed over milliseconds, so calling this to step a pin from 0 to 3.3 V
+    produces a slow ramp, not a transition -- fine for a static level, and
+    useless for anything being timed. It does not announce itself: the
+    capture comes back full of a clean, plausible, entirely wrong edge. To
+    drive a real edge, configure a waveform (funcSquare/funcPulse/funcCustom)
+    and let the generator clock it out; see tools/measure_srlatch_edge_ad3.py.
+    """
     dwf.FDwfAnalogOutNodeEnableSet(h, c_int(ch), c_int(0), c_int(1 if enable else 0))
     dwf.FDwfAnalogOutNodeFunctionSet(h, c_int(ch), c_int(0), c_ubyte(func))
     dwf.FDwfAnalogOutNodeFrequencySet(h, c_int(ch), c_int(0), c_double(freq))

@@ -83,19 +83,26 @@ simulating the `w=1` circuit, so for this one example "as drawn" is not
 the ideal version of the same circuit, it is a different circuit with 4x
 weaker write transistors.
 
-This may also explain something the README and `tools/check_srlatch_sim.py`
-both record as unexplained: `treset_routed` comes out *faster* than
-`treset_drawn`, the opposite of the inverter's result, and
-`check_srlatch_sim.py` declines to assert an ordering because of it. A
-reset through a transistor four times weaker than the one on the chip
-would do that. Worth measuring at `w=4` to find out.
+This explained something the README and `tools/check_srlatch_sim.py` both
+recorded as unexplained, and that half is now closed (measured
+2026-08-29): `treset_routed` came out *faster* than `treset_drawn`, the
+opposite of the inverter's result, and the cause is exactly this width
+mismatch. Widen `XM5`/`XM6` to `w=4` and the sheet's own deck gives
+`treset_drawn` = 1.82 ns against the routed 10.94 ns, the ordering every
+other example shows. Under the bench's own 20 ns stimulus edge at `ss`
+(`sh tools/run_srlatch_measured_edge.sh ss --drawn-w4`) the same change
+takes as-drawn from 40.70 ns to 9.07 ns, against 21.30 ns as routed and
+24.46 ns measured on silicon. So nearly all of the as-drawn deck's error
+was this one discrepancy. Both READMEs and `check_srlatch_sim.py` now say
+so.
 
-Drawing `w=4` on those two devices is a one-character change each. What
-makes it a decision rather than a fix is that it moves `treset_drawn`, a
-published number, in the README, in `check_srlatch_sim.py`'s references
-and in the monthly regression -- and it silences a router warning that is
-currently doing its job, which is worth being deliberate about.
-
+What is left is only the decision. Drawing `w=4` on those two devices is a
+one-character change each, and it would make the as-drawn branch simulate
+the circuit the chip actually builds. Against that: it moves
+`treset_drawn`, a published number, in `examples/srlatch/README.md`, in
+`check_srlatch_sim.py`'s references and in the monthly regression -- and
+it silences a router warning that is currently doing its job, which is
+worth being deliberate about.
 
 18. the unit tests build their netlists as hand-written strings, and 20 of
 them describe designs `mosbius route` would reject. Investigated

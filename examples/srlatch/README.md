@@ -235,11 +235,180 @@ output to the rail, RESET returns it to ground, and both survive the pulse
 ending.
 
 `treset_routed` coming out *faster* than `treset_drawn` is the opposite of
-the inverter's result and is not yet explained. A latch's reset delay
-depends on the state it starts from, and the two instances need not power
-up in the same one, so this may not be a like-for-like comparison at all.
-Do not read it as the routed chip being quicker than the ideal circuit
-until someone has checked the starting states.
+the inverter's result, and it is explained: `XM5` and `XM6` are drawn
+`w=1` where the differential-pair halves they land on are fixed at `w=4`
+in silicon, so the as-drawn deck resets through write transistors four
+times too weak. Widen those two and `treset_drawn` becomes 1.82 ns, faster
+than the routed 10.94 as expected. See "Timing the reset" below, where the
+same comparison is made against silicon. (An earlier guess here -- that
+the two instances might power up in different states -- was wrong, and the
+`.ic` lines in the sheet rule it out anyway.)
+
+## On the bench
+
+Measured 2026-08-29 on a TTDBv3 [3.2] demoboard with a ttsky25a chip, with
+a calibrated Analog Discovery 3: `python3 tools/measure_srlatch_ad3.py`
+loads this example's bitstream, walks the latch through the same sequence
+the testbench simulates -- SET, release, RESET, release -- and reads the
+output at each step. The pad letters come out of `mosbius/pads.py`
+(**C** = `ua1` SET, **J** = `ua2` RESET, **D** = `ua3` Q); W1 and W2 drive
+the two inputs and scope channel 2 watches Q.
+
+![SR latch measured on silicon beside the same circuit simulated: on the
+left, Q captured over 200 ms rising when SET is held and staying high
+after SET is released, then falling when RESET is held and staying low
+after RESET is released; on the right, the same sequence simulated as
+drawn and as routed over 300 ns](srlatch_three_ways.png)
+
+The shaded bands are the intervals when SET and then RESET are actually
+held high. The flat stretches to the right of each band, with nothing
+driving Q, are the stored state -- that is the measurement, and a plot of
+Q alone would not show it, since high-while-driven is what any gate does.
+The two time axes differ by six orders of magnitude because the bench
+drives at milliseconds and the sheet pulses at nanoseconds. Every edge in
+the left panel is the generator's DC offset slewing, not the latch
+switching -- that is how the levels are driven, and "Timing the reset"
+below is the measurement that does capture the latch's own edge. Redraw
+it with `python3 tools/plot_srlatch_comparison.py`.
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| Q holding a 1, once settled | 3.2999 V | 3.2998 V | 3.3079 V |
+| Q holding a 0, once settled | 0.0000 V | -0.0003 V | 0.0000 V (reference) |
+
+**The latch works, and holds.** Both states survive their writing pulse
+ending, and each held reading is the mean of 4000 samples over 40 ms that
+is flat to about 5 mV peak-to-peak -- so a stored level decaying while it
+was held would have shown as a slope rather than being averaged away. It
+holds far longer than that: the second run of the script did not
+reprogram the chip and found the latch still holding the 0 the first run
+had left in it minutes earlier. That is the property this example exists
+to demonstrate, it is the one none of the other five examples can show,
+and the routed switch matrix does not lose it.
+
+**The silicon column is a swing, not two levels.** A held-low output is a
+pull-down with nothing drawing on it (the probe is 10 MOhm), so the chip
+really is at ground there, and whatever the scope reads instead is that
+channel's residual offset -- -17 mV on this run. Subtracting it is the
+only offset correction a two-reading measurement affords, and it is worth
+doing: across three runs the raw high reading wandered 5.2 mV (3.2856 to
+3.2908 V) while the corrected swing moved 0.5 mV (3.3077 to 3.3082 V), so
+the wander is the instrument drifting common-mode and the swing is real.
+The swing lands 8 mV above a nominal 3.3 V rail, which is the instrument's
+own accuracy and the rail's actual value between them, not a measurement
+of anything in the circuit.
+
+**The two decks agree here, so this separates nothing -- and the reason is
+worth following.** `tools/check_srlatch_sim.py`'s references have
+`qr_after_set` at 3.110 V against `qd_after_set` at 3.300 V, a 190 mV
+drawn-versus-routed gap that looks like exactly the sort of thing a bench
+measurement should adjudicate. It is not a level. The sheet samples at
+110 ns, 9 ns after SET releases, and at that instant the routed instance
+is still charging its 10 pF probe through the matrix's pass gates: it
+reads 3.110 V there, 3.2238 V at 120 ns and 3.2998 V by 200 ns. So the
+gap is a settling *time*, and the two models predict the same steady
+state to within 0.1 mV. A reading taken 50 ms after the pulse can only see
+that steady state. It confirms both models -- a matrix that dropped a
+volt would have shown up plainly -- and tells them apart not at all.
+
+**What state it comes up in.** Immediately after programming, Q read
+-0.0176 V -- a stored 0. That is one observation of something the
+simulation says is genuinely undefined, so it is recorded rather than
+concluded: the chip was not power-cycled, only reconfigured, and one
+sample of an arbitrary state says nothing about the next one.
+
+### Timing the reset
+
+`tools/measure_srlatch_edge_ad3.py` times RESET crossing mid-rail to Q
+crossing it -- `tb_srlatch.sch`'s `treset`, measured on the chip. It needs
+the orange **1+** lead moved onto pad **J** alongside W2, so the stimulus
+is measured where it arrives at the chip rather than where it is
+commanded.
+
+![the reset transition on a nanosecond axis: RESET rising through mid-rail
+at t=0, Q on silicon crossing mid-rail at about 24 ns, the as-routed deck
+at about 21 ns and the as-drawn deck at about 41 ns, all four traces
+aligned on RESET's own crossing](srlatch_reset_edge.png)
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| `treset`, `tt` | 49.14 ns | 19.89 ns | 24.46 ns |
+| `treset`, `ss` | 40.70 ns | **21.30 ns** | **24.46 ns** |
+
+**The as-routed model wins this by a factor of two.** Silicon lands 3.2 ns
+from as-routed at `ss` (13%) and 16 ns from as-drawn (66%). That is the
+third independent confirmation of `mosbius simulate`'s switch matrix on
+this chip, after the inverter's trip point and the ring's frequency, and
+the first one that is a delay rather than a level or a rate. `ss` is the
+corner this chip measured at; see `examples/ringosc/README.md` for the
+two-circuit argument that establishes it. It moves the routed number the
+right way but only from 19% low to 13% low, so unlike the ring it does not
+close the gap on its own.
+
+**As drawn is slow because it is not the same circuit, and that is now
+measured rather than suspected.** The router warns that `XM5` and `XM6`
+land on differential-pair halves, whose geometry is fixed in silicon at
+`w=4` while the sheet draws `w=1` -- so the as-drawn deck resets through
+write transistors four times weaker than the ones the chip builds. Widen
+just those two and the same deck, same stimulus, same corner, gives
+**9.07 ns** instead of 40.70. Nearly all of as-drawn's error was that one
+discrepancy, and with it removed the three numbers order themselves the
+way every other example here does: as drawn 9.07 ns, as routed 21.30 ns,
+silicon 24.46 ns -- ideal wiring fastest, the matrix's parasitics next,
+silicon slowest. Reproduce with `sh tools/run_srlatch_measured_edge.sh ss
+--drawn-w4`. Whether the schematic should be changed to match is a
+separate decision, since it moves published numbers; `TODO.md` holds it.
+
+**That also explains the anomaly this example has carried since it was
+written.** `treset_routed` coming out *faster* than `treset_drawn` --
+10.94 ns against 18.79 ns on the sheet's own stimulus, the opposite of the
+inverter's result -- was recorded here and in `tools/check_srlatch_sim.py`
+as unexplained, with a guess about the two instances powering up in
+different states. It was the width mismatch: at `w=4` the sheet's own deck
+gives `treset_drawn` = 1.82 ns, comfortably faster than the routed 10.94,
+so the ordering was never wrong, the drawn circuit was just crippled.
+
+**Why the numbers here are not the sheet's 18.79 and 10.94 ns.** Those are
+under a 1 ns RESET step, which no signal generator can produce. The Analog
+Discovery's edge measured 20.2 ns 10%-90% at the pad, and a latch driven
+by a 20 ns ramp does not switch when one driven by a 1 ns step does -- so
+`tools/run_srlatch_measured_edge.sh` re-runs both decks with a PULSE whose
+`tr` reproduces the measured edge (25.3 ns, since a PULSE's `tr` is the
+full 0-100% transition and 10%-90% is 0.8 of it) and with the flywires'
+1 MOhm / 24 pF in place of the sheet's 10x probe. The committed sheet is
+untouched and still publishes its own numbers; this is a netlist rewrite,
+in the manner of `tools/sweep_corners.sh`.
+
+**A trap that produced a completely believable wrong answer.** The first
+attempt at this drove RESET by changing a wavegen's DC offset, which is
+how the levels script works. An Analog Discovery slews an offset change
+over *milliseconds*, so the latch was being dragged down a ramp thousands
+of times slower than the event being timed. Nothing failed: the captures
+were clean, the shape was plausible, and the delays came out scattered
+across +/-70 ns. The tells were that the stimulus channel never reached
+either rail anywhere in the buffer, and that both channels were still
+moving at both ends of it. Drive an edge as a waveform -- a square wave,
+a pulse, a custom shape -- and let the generator clock it out.
+
+**The spread is not the accuracy.** Twenty captures agree to 0.05 ns
+standard deviation, which looks far better than a 10 ns sample interval
+should allow, and it is not a measure of how right the number is: the
+generator and the scope share one clock inside the instrument, so every
+capture samples the same event at the same phase and the quantisation
+error repeats rather than averaging away. Interpolating each crossing
+between its two straddling samples is what buys real resolution here; the
+residual systematic is a few nanoseconds, which is the same size as the
+gap to the as-routed model. Reading the 3.2 ns as physics would be
+over-reading it.
+
+**Reproducing it**
+
+```bash
+python3 tools/measure_srlatch_edge_ad3.py            # on the host, needs USB
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+    --skip bash -lc 'sh tools/run_srlatch_measured_edge.sh ss'
+python3 tools/plot_srlatch_comparison.py             # draws both figures
+```
 
 ## Power-up state
 
