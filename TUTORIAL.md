@@ -227,6 +227,12 @@ Pads in use -- tt_um_tnt_mosbius on ttsky25a
   J         ua2          nmos_a drain, pmos_a drain
 ```
 
+Under the table is a picture of the demoboard's ANALOG header with those
+pads bracketed, because a letter on its own does not find a hole: the pads
+are small, the silkscreen smaller, and the sequence skips I and O so
+counting along goes wrong. The picture also draws the ground squares, which
+is the other lead you have to place.
+
 Only the pins this bitstream actually wires up are listed -- the bench
 state is the configuration in the socket, not everything the chip has --
 and `ibias` appears only when some device really draws on the bias
@@ -249,10 +255,14 @@ either way you could not have programmed the bitstream to that chip in the
 first place. To read the table away from the bench, name the chip yourself:
 `mosbius pads <bitstream> --shuttle ttsky25a`.
 
-The pad letters themselves come from that shuttle's index
-(https://index.tinytapeout.com/ttsky25a.json), cached under `build/`. On a
-bench with no internet, save that file as `build/shuttle_<shuttle>.json`
-and it works offline.
+The pad letters themselves are read off the project's own page --
+https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius, whose Analog pins
+table gives `ua` -> PCB Pin directly -- and cached under `build/`. Nothing
+here computes a letter, because nothing can: which pad a `ua[k]` reaches
+depends both on where the project sits on that shuttle and on how that
+shuttle's carrier is wired, so the same design on ttsky26b may well come
+out somewhere else entirely. On a bench with no internet, save that page as
+`build/pads_<shuttle>_<macro>.html` and it works offline.
 
 ## Where to go next
 

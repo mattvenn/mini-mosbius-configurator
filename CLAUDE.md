@@ -83,19 +83,42 @@ fitting a corner to digital speed alone would call `fs` -- by 105 mV of
 trip point, fifty times the measurement's repeatability. One chip is one
 sample; this says nothing about the shuttle.
 
-**Which PCB pad a design's `ua[k]` comes out on is per shuttle, and is
-not derivable from the pin number.** The chip's analog pins are muxed, so
-the internal analog index a project's `ua[k]` lands on depends on where
-that project sits on that shuttle: for `tt_um_tnt_mosbius` on ttsky25a
-the project page's Analog pins table gives ua0-ua5 -> pads K, C, J, D, G,
-F. The machine-readable half is the shuttle index
-(https://index.tinytapeout.com/ttsky25a.json), whose `analog_pins:
-[5, 0, 4, 1, 3, 2]` is ua -> internal index; lining that up against the
-page gives index -> pad 0=C 1=D 2=F 3=G 4=J 5=K, the carrier's analog
-pads in letter order. That last step is inferred from one project's table
-rather than read from a Tiny Tapeout spec, so `tools/` writes the mapping
-out per shuttle rather than computing it. Telling a user to "connect to
-ua1" is useless -- nothing on the board is labelled that way.
+**Which PCB pad a design's `ua[k]` comes out on is looked up, never
+computed (rewritten 2026-08-29).** It is fixed by the project and the
+shuttle together: the chip's analog pins are muxed, so which internal
+analog index a `ua[k]` lands on depends on where that project sits on that
+shuttle, and which pad an index reaches depends on how that shuttle's
+carrier is wired. Both halves are free to change, so the same design on
+ttsky26b may come out on entirely different letters, and nothing in this
+repo may assume otherwise. `mosbius/pads.py` reads the answer off the
+project's own page --
+https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius, whose Analog
+pins table has `ua` / PCB Pin / Internal index columns already composed --
+and caches it as `build/pads_<shuttle>_<macro>.html`. For
+`tt_um_tnt_mosbius` on ttsky25a that is ua0-ua5 -> K, C, J, D, G, F, of
+which three are confirmed on silicon (ua1->C, ua2->J, ua3->D).
+
+Two things that look like sources and are not. The shuttle index
+(https://index.tinytapeout.com/ttsky25a.json) publishes `analog_pins:
+[5, 0, 4, 1, 3, 2]`, which is ua -> internal index and carries no letters
+at all; the demoboard's own copy is stripped further still, a `Design`
+there having macro/name/clock_hz/address and no `analog_pins` (checked on
+hardware 2026-08-29). An earlier version of this file composed those two
+with a hard-coded `PAD_LETTERS = "CDFGJK"`, described as "the carrier's
+six analog pads in letter order, skipping E, H and I". That description
+was wrong: the demoboard's ANALOG header letters **22** pads, A..X with
+only I and O left out, and E and H are both real pads on it. The six are a
+per-shuttle selection out of 22, not a complete run with gaps, so their
+being in ascending letter order was a coincidence of this placement and
+not a rule to extend. `PAD_LETTERS` is gone.
+
+Telling a user to "connect to ua1" is useless -- nothing on the board is
+labelled that way -- so the output draws the ANALOG header itself
+(`pads.ANALOG_HEADER`, read off a physical TT demoboard ETR v3.2), with
+the pads in use bracketed and the ground squares shown. That layout is
+data, not a rule: 16 columns, a ground every fourth column in each row and
+the rows offset by two, so `B` is not under `A` but under the gap to its
+right.
 
 **The meter is in the testbench now, as `rprobe`/`cprobe` (2026-08-28).**
 Each `tb_*.sch` carries `Rprobe_drawn`/`Cprobe_drawn` and
