@@ -157,3 +157,13 @@ job policing it. Related to the question about combining the test suites
 that the item above raises.
 
 19. do a curve tracer experiement
+
+20. put `.github/workflows/spice-regression.yml` back on its monthly
+schedule. It was switched to run on every push on 2026-08-29, deliberately
+and temporarily, because the examples are changing daily and a break is
+worth hearing about the same day. It costs about five minutes per push --
+the six jobs run in parallel, and most of each one is ngspice parsing
+sky130A's model library rather than simulating anything. Flip it back once
+the examples settle -- delete the bare `push:` trigger and the note above
+it; the `schedule:` and `workflow_dispatch:` entries are still there
+untouched.

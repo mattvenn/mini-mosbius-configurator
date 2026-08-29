@@ -1,9 +1,15 @@
 name: Spice Regression
 
-# ngspice runs against sky130A take ~1-2 minutes each just to load the
-# model library (see CLAUDE.md), so this is deliberately not on every push
-# -- just a monthly canary, plus workflow_dispatch for an on-demand check.
+# **Temporarily on every push, while the examples are still being
+# developed (2026-08-29).** The steady state for this workflow is the
+# monthly canary below: the decks rarely change, and most of each job is
+# ngspice parsing sky130A's model library rather than simulating anything
+# (see CLAUDE.md). It is on push for now because they are changing daily
+# and a break is worth hearing about the same day -- the six jobs run in
+# parallel, so that costs about five minutes of waiting. TODO.md carries
+# the item to put it back.
 on:
+  push:
   schedule:
     - cron: "0 6 1 * *"
   workflow_dispatch:
