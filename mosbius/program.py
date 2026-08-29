@@ -1,17 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Load a SwitchConfig onto the real chip (SPEC.md Sec 3.5, M4).
 
-IMPORTANT -- unlike every other module in this package, this one has not
-been run against real hardware. mosbius/bitmap.py through mosbius/route.py
-were all cross-checked against the submodule, the netlist, or each other;
-none of that is possible here without a demoboard plugged in, which this
-environment doesn't have. What follows is built from the TinyTapeout
-tt-micropython-firmware SDK's actual source (read directly from
-https://github.com/TinyTapeout/tt-micropython-firmware -- demoboard.py,
-pins/analog_current_source.py, pins/manual_clock.py -- not guessed), but
-it needs real bring-up before anyone trusts it. Sec 8.4's exit criterion
-("--verify readback matches at least once during bring-up") exists
-exactly to catch what can only be caught this way.
+This module has run against real hardware: a TTDBv3 [3.2] demoboard with a
+ttsky25a chip, 2026-08-28, where `--verify` read back exactly what was sent
+-- SPEC.md Sec 8.4's exit criterion. The SDK calls it makes come from the
+TinyTapeout tt-micropython-firmware source (demoboard.py,
+pins/analog_current_source.py, pins/manual_clock.py), and the attributes it
+reads off a board are noted with the date they were read.
 
 Architecture: the actual bit-shifting happens ON the RP2040, not by
 round-tripping each of 192 bits over USB serial from the host -- that
@@ -51,6 +46,33 @@ class ProgramError(Exception):
     """Programming was refused or failed, explained in SPEC.md Sec 1.1 terms."""
 
 
+# Device-side: read what chip is actually in the socket. Pasted into every
+# generated script rather than duplicated, so `program` and `pads` cannot
+# disagree about where the shuttle name comes from.
+#
+# The chip carries its own ROM and ttboard reads it at boot; tt.chip_ROM
+# exposes .shuttle ('ttsky25a'), .repo ('TinyTapeout/tinytapeout-sky-25a')
+# and .commit -- all three read off a real part 2026-08-29. tt.shuttle.run
+# carries the same shuttle string by another route and is the fallback.
+# Everything is getattr-guarded: an identity we could not read is worth a
+# note, never a failed upload.
+_IDENTITY_SNIPPET = """
+def _read_identity(tt):
+    found = {}
+    rom = getattr(tt, 'chip_ROM', None)
+    for key in ('shuttle', 'repo', 'commit'):
+        value = getattr(rom, key, None)
+        if isinstance(value, str) and value:
+            found[key] = value
+    if 'shuttle' not in found:
+        value = getattr(tt.shuttle, 'run', None)
+        if isinstance(value, str) and value:
+            found['shuttle'] = value
+    found['identity_source'] = 'chip ROM' if rom is not None else 'shuttle index'
+    return found
+"""
+
+
 def _ibias_level(amps: float) -> int:
     level = round(amps / _APPROX_MAX_IBIAS_AMPS * _IBIAS_LEVEL_MAX)
     return max(0, min(_IBIAS_LEVEL_MAX, level))
@@ -84,7 +106,7 @@ DemoboardDetect.probe()
 
 from ttboard.demoboard import DemoBoard
 from ttboard.mode import RPMode
-
+{_IDENTITY_SNIPPET}
 BITS = "{bit_string}"  # MSB first: BITS[0] is bit 191, BITS[191] is bit 0
 PROJECT = {project!r}
 DO_RESET = {reset!r}
@@ -146,14 +168,14 @@ try:
         result["captured"] = captured_str
 
     # Which pad each ua[k] comes out on depends on where this project sits
-    # on the shuttle, so the shuttle is worth reporting back rather than
-    # assuming host-side. Guarded on its own: the SDK's attribute name for
-    # it is not something to bet a working upload on.
-    for attr in ("run", "name", "shuttle"):
-        value = getattr(tt.shuttle, attr, None)
-        if isinstance(value, str) and value:
-            result["shuttle"] = value
-            break
+    # on the shuttle, so read the shuttle off the chip in the socket rather
+    # than assuming it host-side. The chip carries its own ROM, and ttboard
+    # exposes it as tt.chip_ROM -- .shuttle, .repo and .commit, all verified
+    # against a ttsky25a part 2026-08-29. tt.shuttle.run is the same string
+    # by another route, kept as a fallback for firmware that predates
+    # chip_ROM. Guarded on its own so a renamed attribute cannot turn a
+    # working upload into a failure.
+    result.update(_read_identity(tt))
 
     result["ok"] = True
 except Exception as e:
@@ -163,10 +185,13 @@ print("MOSBIUS_RESULT:" + json.dumps(result))
 '''
 
 
-def _run_mpremote(script: str, *, port: str | None) -> dict:
+def _run_mpremote(script: str, *, port: str | None, what: str = "CAN'T PROGRAM") -> dict:
+    """Run one generated script on the board. `what` heads any failure, so
+    a read-only identity lookup doesn't report itself as a failed upload.
+    """
     if shutil.which("mpremote") is None:
         raise ProgramError(
-            "CAN'T PROGRAM -- mpremote isn't installed\n\n"
+            f"{what} -- mpremote isn't installed\n\n"
             "  program.py drives the demoboard through mpremote, the official\n"
             "  MicroPython tool. Install it with 'pip install mpremote' and try\n"
             "  again."
@@ -190,7 +215,7 @@ def _run_mpremote(script: str, *, port: str | None) -> dict:
     )
     if result_line is None:
         raise ProgramError(
-            f"CAN'T PROGRAM -- no result from the board\n\n"
+            f"{what} -- no result from the board\n\n"
             f"  mpremote exited with code {proc.returncode} and didn't print a "
             f"result line.\n"
             f"  This usually means the board isn't connected, is running the "
@@ -198,6 +223,69 @@ def _run_mpremote(script: str, *, port: str | None) -> dict:
             f"{proc.stdout}\n{proc.stderr}"
         )
     return json.loads(result_line[len("MOSBIUS_RESULT:"):])
+
+
+def generate_identity_script(project: str | None = None) -> str:
+    """The read-only counterpart of generate_device_script(): ask the board
+    what chip is in the socket, and change nothing.
+
+    Nothing here enables a project, touches `enable`, or clocks the chip --
+    it reads the ROM the demoboard already parsed at boot. `project`, if
+    given, is only looked up in the shuttle index so the caller can say
+    "that macro isn't on this chip" instead of printing a pad table for a
+    design that was never taped out on it.
+    """
+    return f'''\
+# Generated by mosbius/program.py -- read-only board identity, no config change.
+import json
+
+# Same reason as the programming script: mpremote's soft reset leaves the
+# RP2350's GPIO driven, so the boot-time carrier detection can conclude
+# there is no chip and leave the shuttle as `unknown`. Probe again from a
+# known state BEFORE anything creates the DemoBoard singleton.
+from ttboard.boot.demoboard_detect import DemoboardDetect
+DemoboardDetect.probe()
+
+from ttboard.demoboard import DemoBoard
+{_IDENTITY_SNIPPET}
+PROJECT = {project!r}
+
+result = {{"ok": False, "error": None}}
+try:
+    tt = DemoBoard.get()
+    result.update(_read_identity(tt))
+    if PROJECT is not None:
+        result["has_project"] = bool(tt.shuttle.has(PROJECT))
+    result["ok"] = True
+except Exception as e:
+    result["error"] = str(e)
+
+print("MOSBIUS_RESULT:" + json.dumps(result))
+'''
+
+
+def read_board_identity(*, project: str | None = None, port: str | None = None) -> dict:
+    """Which chip is in the socket, read from its own ROM.
+
+    Returns at least {'shuttle': ...}; usually 'repo' and 'commit' too, and
+    'has_project' when `project` was given. Raises ProgramError if the board
+    can't be reached -- callers that only want the pad table should catch
+    that and fall back, since a pad lookup is not worth failing over.
+    """
+    result = _run_mpremote(
+        generate_identity_script(project), port=port, what="CAN'T READ THE BOARD",
+    )
+    if not result.get("ok"):
+        raise ProgramError(f"CAN'T READ THE BOARD -- {result.get('error')}")
+    if not result.get("shuttle"):
+        raise ProgramError(
+            "CAN'T READ THE BOARD -- it answered, but reported no shuttle\n\n"
+            "  The demoboard reads the shuttle from the chip carrier's own ROM\n"
+            "  at boot. Getting nothing back usually means no carrier is seated,\n"
+            "  or the firmware is older than chip ROM support. Pass --shuttle\n"
+            "  yourself to carry on regardless."
+        )
+    return result
 
 
 def program(

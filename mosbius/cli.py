@@ -25,7 +25,7 @@ from mosbius.pads import (
     PadLookupError,
     format_pad_table,
 )
-from mosbius.program import ProgramError, program
+from mosbius.program import ProgramError, program, read_board_identity
 from mosbius.route import (
     RouteError,
     format_device_roles,
@@ -132,6 +132,55 @@ def cmd_decode(args: argparse.Namespace) -> int:
     return 0
 
 
+def _shuttle_for(args: argparse.Namespace) -> str:
+    """Which shuttle's pad mapping to use: what the user said, else what
+    the chip in the socket says about itself.
+
+    Asking the board is the right answer because the pad letters follow
+    from where the project sits on *that* shuttle, and the chip carries
+    that in its own ROM -- so a different chip in the socket gives a
+    different table without anyone having to remember a flag.
+
+    There is no fallback, and that is deliberate. A pad table is an
+    instruction to clip a probe onto a specific letter, so a guessed one is
+    worse than none: it reads exactly like a measured one and sends someone
+    probing a pad with nothing on it. Both ways of not knowing -- no board
+    answering, or a board whose chip does not carry this project -- are
+    also both ways of not being able to program the bitstream in the first
+    place, so failing here says the same thing `mosbius program` would say
+    a moment later. Working away from the bench is still fine; it just has
+    to name the chip it means, with --shuttle.
+
+    Raises PadLookupError, which cmd_pads already reports properly.
+    """
+    if args.shuttle:
+        return args.shuttle
+    try:
+        identity = read_board_identity(project=args.project, port=getattr(args, "port", None))
+    except ProgramError as e:
+        raise PadLookupError(
+            f"can't ask the board which chip is in the socket, and which PCB pad\n"
+            f"  each ua[k] comes out on depends on that -- Tiny Tapeout muxes the\n"
+            f"  analog pins, so the same design on another shuttle lands on other\n"
+            f"  pads. Guessing would print a table that looks measured and sends\n"
+            f"  you to the wrong pad, so here is the underlying problem instead:\n\n"
+            f"  {e}\n\n"
+            f"  If you are away from the bench and just want to read the table,\n"
+            f"  name the chip yourself:\n\n"
+            f"    mosbius pads {args.bitstream} --shuttle {DEFAULT_SHUTTLE}"
+        ) from e
+    if identity.get("has_project") is False:
+        raise PadLookupError(
+            f"the chip in the socket is from shuttle {identity['shuttle']}, and\n"
+            f"  {args.project} is not on it. There are no pads to name, because\n"
+            f"  this bitstream cannot be programmed to that chip at all --\n"
+            f"  `mosbius program` would stop with the same thing.\n\n"
+            f"  Either put the right chip in, or say which project you mean with\n"
+            f"  --project (it defaults to {DEFAULT_PROJECT}, this repo's own macro)."
+        )
+    return identity["shuttle"]
+
+
 def cmd_pads(args: argparse.Namespace) -> int:
     try:
         config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
@@ -139,7 +188,7 @@ def cmd_pads(args: argparse.Namespace) -> int:
         print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
         return 1
     try:
-        print(format_pad_table(config, args.shuttle, args.project))
+        print(format_pad_table(config, _shuttle_for(args), args.project))
     except PadLookupError as e:
         print(f"CAN'T WORK OUT THE PADS\n\n  {e}", file=sys.stderr)
         return 1
@@ -254,11 +303,32 @@ def cmd_program(args: argparse.Namespace) -> int:
     print(f"OK -- uploaded to {args.project}" + (" (verified)" if result.get("verify_ok") else ""))
     # The upload is only half of what someone at the bench needs: the
     # other half is where to put the probe, and the schematic cannot say
-    # it (nothing on the board is labelled "ua2"). The board reports its
-    # own shuttle where it can, since that is the thing the pad letters
-    # depend on; --shuttle covers the case where it cannot.
+    # it (nothing on the board is labelled "ua2"). Which pad each ua[k] is
+    # on depends on the shuttle, so the upload reads that off the chip's
+    # own ROM on the way past.
+    shuttle = args.shuttle or result.get("shuttle")
+    if args.shuttle:
+        print(f"   shuttle {shuttle} (from --shuttle, not from the chip)")
+    elif shuttle:
+        repo, commit = result.get("repo"), result.get("commit")
+        provenance = f"read from the chip in the socket ({result.get('identity_source', 'chip ROM')})"
+        print(f"   shuttle {shuttle} -- {provenance}")
+        if repo:
+            print(f"   chip {repo}" + (f" @ {commit}" if commit else ""))
+    if not shuttle:
+        # The bits are on the chip, so this is not a failed upload -- but a
+        # pad table for a guessed shuttle would look exactly like a real one
+        # and send someone probing a pad with nothing on it, so say nothing
+        # rather than guess.
+        print(
+            "\n  (uploaded fine, but the board reported no shuttle, so which PCB\n"
+            "   pad each ua[k] comes out on can't be worked out -- that mapping\n"
+            "   is per shuttle. Re-run with --shuttle to get the table:\n\n"
+            f"     mosbius pads {args.bitstream} --shuttle {DEFAULT_SHUTTLE})",
+            file=sys.stderr,
+        )
+        return 0
     print()
-    shuttle = args.shuttle or result.get("shuttle") or DEFAULT_SHUTTLE
     try:
         print(format_pad_table(config, shuttle, args.project))
     except PadLookupError as e:
@@ -278,13 +348,15 @@ def build_parser() -> argparse.ArgumentParser:
     def add_ibias(p):
         p.add_argument("--ibias", type=float, default=DEFAULT_IBIAS, help="bias current in amps (default: 100uA)")
 
-    def add_board(p, *, shuttle_default=DEFAULT_SHUTTLE):
+    def add_board(p):
         p.add_argument("--project", default=DEFAULT_PROJECT, help=f"project macro name (default: {DEFAULT_PROJECT})")
         p.add_argument(
-            "--shuttle", default=shuttle_default,
-            help="shuttle the chip came from -- decides which pad each ua[k] is on"
-                 + (f" (default: {shuttle_default})" if shuttle_default else " (default: whatever the board reports)"),
+            "--shuttle", default=None,
+            help="shuttle the chip came from -- decides which pad each ua[k] is on "
+                 "(default: read off the chip in the socket; without a board, pass "
+                 f"e.g. --shuttle {DEFAULT_SHUTTLE})",
         )
+        p.add_argument("--port", default=None, help="serial port, e.g. /dev/ttyACM0 (default: mpremote autodetects)")
 
     p = sub.add_parser("decode", help="show the circuit a 48-hex-char bitstream configures")
     p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
@@ -323,11 +395,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("program", help="upload a bitstream to real hardware (SPEC.md Sec 3.5, M4)")
     p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
     add_ibias(p)
-    add_board(p, shuttle_default=None)
+    add_board(p)
     p.add_argument("--force", action="store_true", help="upload even if check() finds an error")
     p.add_argument("--no-reset", action="store_true", help="skip the known-state reset before shifting")
     p.add_argument("--verify", action="store_true", help="shift the bits back out and compare")
-    p.add_argument("--port", default=None, help="serial port, e.g. /dev/ttyACM0 (default: mpremote autodetects)")
     p.set_defaults(func=cmd_program)
 
     return ap

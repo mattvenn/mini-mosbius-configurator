@@ -233,10 +233,26 @@ and `ibias` appears only when some device really draws on the bias
 reference. Ground every instrument to a GND pin on the demoboard; the
 analog pads carry the signal only.
 
-The pad letters come from that shuttle's index
+Which shuttle to look those letters up on is read off the chip in the
+socket, not assumed: the carrier carries its own ROM, the demoboard parses
+it at boot, and `mosbius pads` asks the board for it (`--port` if mpremote
+needs telling which serial port). Put a different chip in and the table
+follows it. `mosbius program` reads the same ROM on the way past and says
+what it found, so the pad table it prints after an upload is for the chip
+that upload went to.
+
+With no board plugged in -- or with a chip in the socket that does not
+carry this project -- `mosbius pads` stops instead of guessing. A pad table
+tells you to clip a probe onto a particular letter, so a guessed one reads
+exactly like a measured one and sends you to a pad with nothing on it; and
+either way you could not have programmed the bitstream to that chip in the
+first place. To read the table away from the bench, name the chip yourself:
+`mosbius pads <bitstream> --shuttle ttsky25a`.
+
+The pad letters themselves come from that shuttle's index
 (https://index.tinytapeout.com/ttsky25a.json), cached under `build/`. On a
 bench with no internet, save that file as `build/shuttle_<shuttle>.json`
-and it works offline; `--shuttle` and `--project` cover a different chip.
+and it works offline.
 
 ## Where to go next
 

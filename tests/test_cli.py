@@ -14,6 +14,7 @@ import pytest
 
 from mosbius import pads
 from mosbius.cli import main
+from mosbius.program import ProgramError
 
 INVERTER_NETLIST = """
 nfeta_0 ua1 ua2 VGND VGND mosbius_nmos w=1
@@ -34,6 +35,25 @@ def offline_shuttle_index(tmp_path, monkeypatch):
     (tmp_path / "shuttle_ttsky25a.json").write_text(json.dumps(
         {"projects": [{"macro": "tt_um_tnt_mosbius", "analog_pins": [5, 0, 4, 1, 3, 2]}]}
     ))
+
+
+@pytest.fixture(autouse=True)
+def board_in_the_socket(monkeypatch):
+    """And no test here may reach a real demoboard either. `pads` asks the
+    chip in the socket which shuttle it came from, which would otherwise
+    shell out to mpremote -- and pass or fail depending on whether the
+    machine running the tests happens to have hardware plugged in.
+
+    The default here is the ordinary bench case: a ttsky25a part carrying
+    this project. Tests for the two ways of not knowing patch over it.
+    """
+    monkeypatch.setattr(
+        "mosbius.cli.read_board_identity",
+        lambda **kw: {
+            "shuttle": "ttsky25a", "has_project": True, "identity_source": "chip ROM",
+            "repo": "TinyTapeout/tinytapeout-sky-25a", "commit": "85e372cf",
+        },
+    )
 
 
 def test_decode_prints_devices(capsys):
@@ -292,3 +312,80 @@ def test_a_bare_bitstream_is_still_not_treated_as_a_path(capsys):
         mock_program.return_value = {"ok": True, "verify_ok": None}
         assert main(["program", INVERTER_BITSTREAM]) == 0
     assert mock_program.called
+
+
+def test_pads_reads_the_shuttle_off_the_chip_in_the_socket(capsys, monkeypatch, tmp_path):
+    """Which pad a ua[k] comes out on depends on the shuttle, and the chip
+    carries its own shuttle in ROM -- so put a different chip in the socket
+    and the table follows it, with no flag to remember.
+    """
+    (tmp_path / "shuttle_ttsky99z.json").write_text(json.dumps(
+        {"projects": [{"macro": "tt_um_tnt_mosbius", "analog_pins": [5, 0, 4, 1, 3, 2]}]}
+    ))
+    monkeypatch.setattr(
+        "mosbius.cli.read_board_identity",
+        lambda **kw: {"shuttle": "ttsky99z", "has_project": True, "identity_source": "chip ROM"},
+    )
+    rc = main(["pads", INVERTER_BITSTREAM])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "ttsky99z" in out
+
+
+def test_pads_fails_rather_than_guessing_when_no_board_answers(capsys, monkeypatch):
+    """A pad table is an instruction to clip a probe onto a letter, so a
+    guessed one is worse than none -- and a chip you can't reach is a chip
+    you couldn't have programmed either. It must name --shuttle as the way
+    to read the table away from the bench.
+    """
+    def refuse(**kw):
+        raise ProgramError("CAN'T READ THE BOARD -- no result from the board")
+    monkeypatch.setattr("mosbius.cli.read_board_identity", refuse)
+    rc = main(["pads", INVERTER_BITSTREAM])
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "ttsky25a" not in captured.out  # no guessed table at all
+    assert "--shuttle" in captured.err and "CAN'T READ THE BOARD" in captured.err
+
+
+def test_pads_fails_when_the_project_is_not_on_the_chip_present(capsys, monkeypatch):
+    """Same reasoning the other way round: the board answered, but this
+    bitstream could not be programmed to that chip, so there are no pads.
+    """
+    monkeypatch.setattr(
+        "mosbius.cli.read_board_identity",
+        lambda **kw: {"shuttle": "ttsky25a", "has_project": False},
+    )
+    rc = main(["pads", INVERTER_BITSTREAM])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "is not on it" in err and "cannot be programmed" in err
+
+
+def test_program_says_where_the_shuttle_came_from(capsys):
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {
+            "ok": True, "verify_ok": True, "shuttle": "ttsky25a",
+            "repo": "TinyTapeout/tinytapeout-sky-25a", "commit": "85e372cf",
+            "identity_source": "chip ROM",
+        }
+        rc = main(["program", INVERTER_BITSTREAM])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "read from the chip in the socket" in out
+    assert "TinyTapeout/tinytapeout-sky-25a" in out and "85e372cf" in out
+
+
+def test_program_prints_no_pad_table_when_the_board_reported_no_shuttle(capsys):
+    """The bits are on the chip, so this is not a failed upload -- but the
+    pad letters are per shuttle, and a guessed table looks exactly like a
+    measured one.
+    """
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {"ok": True, "verify_ok": None}
+        rc = main(["program", INVERTER_BITSTREAM])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "OK -- uploaded" in captured.out
+    assert "PCB pad" not in captured.out
+    assert "--shuttle" in captured.err

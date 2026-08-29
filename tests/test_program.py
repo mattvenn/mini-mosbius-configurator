@@ -33,7 +33,9 @@ from mosbius.program import (
     _ibias_level,
     _run_mpremote,
     generate_device_script,
+    generate_identity_script,
     program,
+    read_board_identity,
 )
 
 from .conftest import make_inverter_config
@@ -232,3 +234,72 @@ def test_run_mpremote_passes_port_when_given():
         _run_mpremote("print('hi')", port="/dev/ttyACM0")
         cmd = mock_run.call_args[0][0]
         assert "connect" in cmd and "/dev/ttyACM0" in cmd
+
+
+# ---------------------------------------------------------------------------
+# read_board_identity() -- which chip is actually in the socket
+#
+# The shuttle decides which PCB pad each ua[k] comes out on, so reading it
+# off the chip's own ROM is what stops `mosbius pads` from printing a table
+# for a chip that isn't there. The device half was checked on a real
+# demoboard (chip_ROM.shuttle == 'ttsky25a', 2026-08-29); these cover the
+# host half with mpremote mocked.
+# ---------------------------------------------------------------------------
+
+def _fake_board(payload):
+    proc = type("P", (), {
+        "stdout": f"MOSBIUS_RESULT:{json.dumps(payload)}\n", "stderr": "", "returncode": 0,
+    })()
+    return (
+        patch("mosbius.program.shutil.which", return_value="/usr/bin/mpremote"),
+        patch("mosbius.program.subprocess.run", return_value=proc),
+    )
+
+
+def test_identity_script_is_valid_python_and_changes_nothing():
+    script = generate_identity_script("tt_um_tnt_mosbius")
+    compile(script, "identity", "exec")
+    # Reading which chip is present must not touch the chip's state: no
+    # enable, no clocking, no project selection, no bias.
+    for forbidden in ("ui_in", "clock_project_once", "reset_project", "enable()", "analog_current_source"):
+        assert forbidden not in script, forbidden
+    assert "DemoboardDetect.probe()" in script  # still needed after mpremote's soft reset
+
+
+def test_identity_script_omits_project_lookup_when_not_asked():
+    assert "PROJECT = None" in generate_identity_script()
+
+
+def test_read_board_identity_returns_what_the_rom_said():
+    payload = {
+        "ok": True, "error": None, "shuttle": "ttsky25a",
+        "repo": "TinyTapeout/tinytapeout-sky-25a", "commit": "85e372cf",
+        "identity_source": "chip ROM", "has_project": True,
+    }
+    which, run = _fake_board(payload)
+    with which, run:
+        assert read_board_identity(project="tt_um_tnt_mosbius") == payload
+
+
+def test_read_board_identity_explains_a_board_that_reports_no_shuttle():
+    which, run = _fake_board({"ok": True, "error": None})
+    with which, run:
+        with pytest.raises(ProgramError, match="reported no shuttle"):
+            read_board_identity()
+
+
+def test_read_board_identity_does_not_call_itself_a_failed_upload():
+    # It reads; it never programs. Saying "CAN'T PROGRAM" here would send
+    # someone hunting for a bad bitstream.
+    proc = type("P", (), {"stdout": "boot noise\n", "stderr": "", "returncode": 1})()
+    with patch("mosbius.program.shutil.which", return_value="/usr/bin/mpremote"), \
+         patch("mosbius.program.subprocess.run", return_value=proc):
+        with pytest.raises(ProgramError) as excinfo:
+            read_board_identity()
+    assert "CAN'T READ THE BOARD" in str(excinfo.value)
+    assert "CAN'T PROGRAM" not in str(excinfo.value)
+
+
+def test_device_script_reads_the_identity_it_reports_back():
+    script = generate_device_script(make_inverter_config(), project="tt_um_tnt_mosbius")
+    assert "chip_ROM" in script and "_read_identity(tt)" in script

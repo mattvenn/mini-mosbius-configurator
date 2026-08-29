@@ -12,8 +12,14 @@ shuttle -- so nothing here hard-codes it. Two lookups compose:
    Published in the shuttle index, e.g.
    https://index.tinytapeout.com/ttsky25a.json, as each project's
    `analog_pins` list. The copy of the index on the demoboard itself is
-   stripped to address/clock_hz/macro/title, so this comes over HTTP and
-   is cached under `build/`.
+   stripped -- a `Design` there carries macro/name/clock_hz/address and no
+   `analog_pins`, checked on a real board 2026-08-29 -- so this comes over
+   HTTP and is cached under `build/`.
+
+   *Which* shuttle, though, does not have to be assumed: the chip carrier's
+   ROM names it, and mosbius/program.py's read_board_identity() reads it
+   back over the demoboard. Callers should pass what the board reported
+   where they can get it.
 
 2. **internal analog index -> PCB pad letter**, a property of the *board*,
    identical for every design on it. That is PAD_LETTERS below.
@@ -46,6 +52,15 @@ PAD_LETTERS = "CDFGJK"
 # What is in the socket unless someone says otherwise: this project's macro,
 # on the shuttle it was taped out with. Kept here rather than in the CLI so
 # `mosbius program` and `mosbius pads` cannot drift apart.
+#
+# DEFAULT_SHUTTLE is never used as a silent fallback. The chip carrier has
+# its own ROM naming the shuttle it came from, the demoboard parses it at
+# boot, and mosbius/program.py's read_board_identity() reads it back, so
+# the shuttle is a measurement rather than an assumption. When that read
+# fails the CLI stops rather than guessing -- a pad table names a physical
+# pad to clip onto, and a wrong one reads exactly like a right one -- so
+# this constant only appears in help text and in the `--shuttle ttsky25a`
+# the failure suggests for working away from the bench.
 DEFAULT_PROJECT = "tt_um_tnt_mosbius"
 DEFAULT_SHUTTLE = "ttsky25a"
 INDEX_URL = "https://index.tinytapeout.com/{shuttle}.json"
