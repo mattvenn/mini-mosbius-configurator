@@ -22,14 +22,10 @@ Four changes, and nothing else:
   four times longer than the sheet's, so only the four nodes that are
   measured are saved.
 
-An optional fifth change, `--drawn-w4`, widens `XM5` and `XM6` in the
-as-drawn block from `w=1` to `w=4`. The router already warns that those
-two land on differential-pair halves, whose geometry is fixed in silicon
-at `w=4`, so the drawn deck as committed simulates a reset written through
-transistors four times weaker than the ones the chip builds -- see
-TODO.md's SR latch item. This flag asks what the drawn deck says with that
-one discrepancy removed, without touching the schematic that publishes the
-committed numbers.
+The `--drawn-w4` option this script used to carry is gone (2026-08-29):
+it widened `XM5`/`XM6` in the as-drawn block from `w=1` to `w=4`, and
+`examples/srlatch/srlatch.sch` draws them `w=4` itself now, so the flag
+would rewrite a line that no longer exists.
 
 The measurements themselves stay the definition the sheet uses: RESET
 crossing mid-rail rising to the output crossing it falling, which is also
@@ -45,10 +41,10 @@ from pathlib import Path
 STIMULUS_TR = "25.3n"
 SET_AT, RESET_AT, PULSE_WIDTH, PERIOD = "100n", "600n", "300n", "5u"
 
-# The traces go to a different prefix under --drawn-w4, so the two
-# experiments cannot overwrite each other's output: they differ only in a
-# device width, and a figure redrawn from the wrong one would look
-# entirely reasonable.
+# One prefix, since there is one experiment now. There used to be two --
+# the sheet's w=1 write transistors and a widened w=4 variant -- kept
+# apart because they differ only in a device width and a figure redrawn
+# from the wrong one would look entirely reasonable.
 ANALYSIS = """.control
   save v(set) v(reset) v(out_drawn) v(out_routed)
   tran 20p 1.2u
@@ -68,25 +64,8 @@ ANALYSIS = """.control
 
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    drawn_w4 = "--drawn-w4" in sys.argv[1:]
     source, target = Path(args[0]), Path(args[1])
     text = source.read_text()
-
-    if drawn_w4:
-        for device in ("XM5", "XM6"):
-            line = f"{device} "
-            hits = [ln for ln in text.splitlines()
-                    if ln.startswith(line) and ln.endswith("w=1")]
-            if len(hits) != 1:
-                raise SystemExit(
-                    f"expected exactly one '{device} ... w=1' line in {source}, "
-                    f"found {len(hits)}.\n"
-                    "  --drawn-w4 rewrites the two write transistors in the as-drawn\n"
-                    "  block; if the design has changed, check which devices land on\n"
-                    "  the differential-pair halves before widening anything."
-                )
-            text = text.replace(hits[0], hits[0][:-3] + "w=4")
-        print("  XM5 and XM6 widened to w=4 in the as-drawn block")
 
     text = text.replace(
         "Vset set VGND PULSE(0 3.3 60n 1n 1n 40n 1000n)",
@@ -101,7 +80,7 @@ def main() -> int:
 
     start = text.index(".control")
     end = text.index(".endc") + len(".endc\n")
-    prefix = "srlatch_edge_w4" if drawn_w4 else "srlatch_edge"
+    prefix = "srlatch_edge"
     text = text[:start] + ANALYSIS.format(prefix=prefix) + text[end:]
 
     target.write_text(text)

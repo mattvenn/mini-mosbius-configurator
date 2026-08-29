@@ -75,16 +75,13 @@ closed: 17.82 V/V fitted against 21.22 as drawn, a +18 mV input offset,
 and gain flat with tail current, all taken on the corrected library from
 the start.
 
-**The SR latch is the one that needs a decision, and the fix has made it
-sharper.** Its as-drawn branch no longer sets at all -- `qd_after_set`
-0.0009 V where it was 3.300 V -- so `treset_drawn` cannot be measured and
-`tools/check_srlatch_sim.sh` fails. The cause is the pre-existing `w=1` on
-`XM5`/`XM6` against diff-pair halves fixed at `w=4` in silicon (the item
-below): those write transistors are four times too weak, and the wrong
-model bin had been over-strengthening every device just enough to hide it.
-Probed without touching the sheet, `w=4` gives 3.2999 V and
-`treset_drawn` = 1.77 ns against the routed 10.94. Until that decision is
-taken, CI has one red job.
+The SR latch needed a design decision and got one the same day:
+`examples/srlatch/`'s `XM5`/`XM6` are drawn `w=4` now, matching what
+silicon builds, so its as-drawn branch sets again and `treset_drawn` is
+1.77 ns against the routed 10.94 -- the ordering every other example
+shows, and one the checker now asserts. The bitstream is byte-identical,
+since there were never any width bits behind the old request. CI is green
+across all seven examples.
 
 Two tables were not re-run and say so on their own pages: the diff amp's
 +-2/5/10/20/40 mV sweep (a one-off 13-level PWL deck, not the committed
@@ -122,56 +119,14 @@ not the 17 mV and ~100 Ohm a scratch note here had); the ibias calibration
 sweep this list once called "the valuable one" was run on 2026-08-29; and
 otabuf's slew-versus-tail was run the same day.
 
-6 `examples/srlatch/`'s as-drawn branch simulates a circuit the chip
-cannot build. `XM5` and `XM6` land on diff-pair halves, whose geometry is
-fixed in silicon at `w=4`; the sheet draws `w=1`. The router already says
-so -- `WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and
-ndiffpair- have a fixed width` -- but the as-drawn deck goes on
-simulating the `w=1` circuit, so for this one example "as drawn" is not
-the ideal version of the same circuit, it is a different circuit with 4x
-weaker write transistors.
-
-This explained something the README and `tools/check_srlatch_sim.py` both
-recorded as unexplained, and that half is now closed (measured
-2026-08-29): `treset_routed` came out *faster* than `treset_drawn`, the
-opposite of the inverter's result, and the cause is exactly this width
-mismatch. Widen `XM5`/`XM6` to `w=4` and the sheet's own deck gives
-`treset_drawn` = 1.82 ns against the routed 10.94 ns, the ordering every
-other example shows. Under the bench's own 20 ns stimulus edge at `ss`
-(`sh tools/run_srlatch_measured_edge.sh ss --drawn-w4`) the same change
-takes as-drawn from 40.70 ns to 9.07 ns, against 21.30 ns as routed and
-24.46 ns measured on silicon. So nearly all of the as-drawn deck's error
-was this one discrepancy. Both READMEs and `check_srlatch_sim.py` now say
-so.
-
-What is left is only the decision, and since 2026-08-29 it is no longer
-optional in the same way: with the model-binning fix in place (the item
-above), the as-drawn latch **does not set at all** -- `qd_after_set` reads
-0.0009 V where it read 3.300 V -- so `treset_drawn` cannot be measured and
-`tools/check_srlatch_sim.sh` fails. The wrong model bin had been making
-every as-drawn device stronger than silicon, which was just enough to let
-write transistors four times too weak flip the cell.
-
-Drawing `w=4` on those two devices is a one-character change each, and it
-would make the as-drawn branch simulate the circuit the chip actually
-builds. Probed on the netlist without touching the sheet it gives
-`qd_after_set` = 3.2999 V and `treset_drawn` = 1.77 ns against the routed
-10.94, the ordering every other example shows. Against it: it moves
-`treset_drawn`, a published number, in `examples/srlatch/README.md`, in
-`check_srlatch_sim.py`'s references and in the regression -- and it
-silences a router warning that is currently doing its job, which is worth
-being deliberate about. The alternative is to leave the sheet as the
-demonstration that the warning matters and let that job stay red, which is
-what it does today.
-
-7 make it easy for people to submit designs to the examples
+6 make it easy for people to submit designs to the examples
 
 ## Tests and CI
 
-8 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
+7 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
 the moment I think they're all a bit separate. possiblity to reuse
 
-9 the unit tests build their netlists as hand-written strings, and 20 of
+8 the unit tests build their netlists as hand-written strings, and 20 of
 them describe designs `mosbius route` would reject. Investigated
 2026-08-28; the numbers below are measured, not estimated.
 
@@ -223,7 +178,7 @@ The difference is that a fixture is declared to be a snapshot and has a
 job policing it. Related to the question about combining the test suites
 that the item above raises.
 
-10 put `.github/workflows/spice-regression.yml` back on its monthly
+9 put `.github/workflows/spice-regression.yml` back on its monthly
 schedule. It was switched to run on every push on 2026-08-29, deliberately
 and temporarily, because the examples are changing daily and a break is
 worth hearing about the same day. It costs about five minutes per push --
@@ -235,7 +190,7 @@ untouched.
 
 ## Tooling and library
 
-11 `route_rail_net()` picks a `cfg_bus_pwr` tap without looking at the row
+10 `route_rail_net()` picks a `cfg_bus_pwr` tap without looking at the row
 its `cfg_bus_short` will drag in on the other side, so which of two unrelated
 failures you get depends on the order xschem happened to list the instances
 in. Found 2026-08-29 while checking what `examples/pdiffamp/` would cover.
@@ -264,10 +219,10 @@ applies to two-sided nets -- rather than taking the lowest-numbered one. This
 is the rail-row twin of the instance-order dependence
 `_allocate_fets_by_constraint()` fixed for FET allocation on 2026-08-22.
 
-12 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+11 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
-13 the six `tools/plot_*_comparison.py` figures draw silicon in a green
+12 the six `tools/plot_*_comparison.py` figures draw silicon in a green
 that collides with the orange they draw "as routed" in. The dataviz
 palette validator scores that adjacent pair at Delta E 4.5 for protanopes,
 against a floor of 8, so the two series are not reliably separable for a
@@ -278,13 +233,13 @@ the other five over is a one-constant change each plus a re-run, and until
 it happens the figure set is inconsistent -- which is the only reason not
 to have done it at the time.
 
-14 check all the mosbius library symbols for cleanup
+13 check all the mosbius library symbols for cleanup
 
 ## Docs and user-facing text
 
-15 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+14 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-16 document what VDPWR is actually for. Nowhere says that the FETs a user
+15 document what VDPWR is actually for. Nowhere says that the FETs a user
 draws never see 1.8V: every analog device in the submodule (nmos_prog,
 pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
 VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only

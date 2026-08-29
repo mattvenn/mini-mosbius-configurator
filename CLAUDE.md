@@ -203,6 +203,25 @@ design whose FET *drain* needs a rail (any source follower) gets either a
 `DANGEROUS -- ua[5] shorted to VAPWR` or a spurious `DOESN'T FIT`,
 decided by the order xschem happened to list the instances in.
 
+**`examples/srlatch/` draws its write transistors `w=4` now, and the
+warning it used to provoke is asserted in the test suite instead
+(2026-08-29).** `XM5`/`XM6` land on diff-pair halves, whose width is fixed
+in silicon, so the sheet's old `w=1` was ignored by the router (with a
+warning) while the as-drawn deck went on simulating devices four times
+weaker than the chip builds. That was visible for weeks as
+`treset_drawn` = 18.79 ns coming out *slower* than `treset_routed` = 10.94
+ns, backwards from every other example and written up here as an anomaly.
+The model-binning fix then made it fatal: with correct devices the
+too-weak write pair could no longer overpower the keeper PMOS, and the
+as-drawn latch stopped setting at all (`qd_after_set` 0.0009 V against
+3.300 V). Drawing `w=4` gives `treset_drawn` = 1.77 ns, restores the
+ordering, and changes **no bit of the bitstream**, because there were
+never any width bits behind the request. Two things came with it:
+`tools/check_srlatch_sim.py` gained the "as drawn must be faster than as
+routed" assertion it could not make before, and
+`tools/run_srlatch_measured_edge.sh`'s `--drawn-w4` flag is gone, since
+the sheet is what that flag used to simulate.
+
 `TODO.md` holds deferred work. It is renumbered from 1 whenever items are
 removed, so a `TODO.md` §number goes stale the moment anything above it
 closes -- cite one only in `TODO.md` itself, and describe the item in
@@ -581,7 +600,11 @@ These were all got wrong once. The sources that look authoritative are not.
     bug showed up as the two branches disagreeing. Every bitstream is
     byte-identical before and after. The as-drawn *numbers* published in
     the inverter, ring, SR latch and diff amp READMEs were all computed in
-    the wrong bin and still need re-running; `TODO.md` carries that.
+    the wrong bin, and all four were re-run and updated the same day
+    (inverter `trise_drawn` 8.90 -> 8.16 ns and trip point 1.495 ->
+    1.605 V, ring 2.083 -> 2.289 GHz, diff amp base 1.985 -> 2.012 V;
+    otabuf and currentsource were inside tolerance, as their `ratio`/`tail`
+    sizing predicts). The SR latch needed a design change with it, below.
 
 ## Useful facts
 

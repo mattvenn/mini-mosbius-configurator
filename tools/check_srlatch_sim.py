@@ -2,15 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/srlatch/tb_srlatch.sch
 against the reference measurements in examples/srlatch/README.md ("Load
-capacitors in tb_srlatch.sch"), last measured 2026-08-27 at cprobe=10p (with rprobe=10meg):
+capacitors in tb_srlatch.sch"), last measured 2026-08-29 at cprobe=10p (with rprobe=10meg):
 
     qd_after_set   =  3.300V     qr_after_set   =  3.110V
     qd_after_reset = -0.0000V    qr_after_reset = -0.0026V
-    treset_drawn   = 18.79ns     treset_routed  = 10.94ns
+    treset_drawn   =  1.77ns     treset_routed  = 10.94ns
+
+treset_drawn was 18.79ns until 2026-08-29, when XM5/XM6 went from w=1 to
+w=4 on the sheet to match the fixed geometry of the diff-pair halves they
+land on. The bitstream is unchanged by that -- there were never width bits
+behind the request -- so nothing about the chip or its measurements moved.
 
 Run by tools/check_srlatch_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the
-inverter, ring, diff amp, OTA follower and current source checks.
+inverter, ring, both diff amps, OTA follower and current source
+checks.
 
 What this one guards that the others cannot is *state*. The inverter, the
 ring and the diff amp are all memoryless: drive them the same way twice
@@ -26,17 +32,17 @@ wider. The two after-reset levels get an absolute band instead: their
 references are ~0V and 2.6mV, where a percentage of the reference is
 meaningless.
 
-There is deliberately no "routed must be slower than drawn" check here,
-unlike the inverter and ring scripts. treset_routed does come out faster
-(10.94ns against 18.79ns), and as of 2026-08-29 that is explained rather
-than mysterious: XM5 and XM6 are drawn w=1 where the differential-pair
-halves they land on are fixed at w=4 in silicon, so the as-drawn deck
-resets through write transistors four times too weak. Widen those two and
-treset_drawn becomes 1.82ns, faster than the routed 10.94ns, which is the
-ordering every other example shows. The check stays absent because the
-committed sheet still draws w=1, so the ordering it produces really is
-inverted -- asserting the physical ordering against a deck that does not
-model the physical device would fail for the right reason and be useless.
+This script does assert "routed is slower than drawn", and only became
+able to on 2026-08-29. Until then the sheet drew XM5 and XM6 at w=1 where
+the differential-pair halves they land on are fixed at w=4 in silicon, so
+the as-drawn deck reset through write transistors four times too weak and
+came out *slower* than the routed one (18.79ns against 10.94ns) -- an
+inverted ordering that was a property of the drawing, not of the matrix.
+Asserting the physical ordering against a deck that does not model the
+physical device would have failed for the right reason and been useless.
+The sheet draws w=4 now, treset_drawn is 1.77ns, and the ordering is the
+one every other example shows, so the check is worth having: it is what
+would catch the routed matrix quietly getting faster than ideal wiring.
 See examples/srlatch/README.md, "Timing the reset".
 """
 
@@ -53,7 +59,7 @@ REFERENCE_LOW_V = {"qd_after_reset": -0.0000, "qr_after_reset": -0.0026}
 LOW_ABS_TOLERANCE_V = 0.05
 # Nanoseconds, from RESET crossing 1.65V rising to the output crossing
 # 1.65V falling.
-REFERENCE_NS = {"treset_drawn": 18.79, "treset_routed": 10.94}
+REFERENCE_NS = {"treset_drawn": 1.77, "treset_routed": 10.94}
 TOLERANCE = 0.05
 # Volts. How far apart the set and reset levels must stay for the latch to
 # be storing anything at all.
@@ -71,15 +77,13 @@ def _measurement(text: str, name: str, log_path: str) -> float | None:
         f"treset_* pair there are two known causes, both of which print "
         f"'trig(TARG) : out of interval'.\n\n"
         f"  1. The as-drawn latch never set, so there is no falling edge to "
-        f"time. This is the expected failure since 2026-08-29: XM5 and XM6 "
-        f"are drawn w=1 where the diff-pair halves they land on are fixed at "
-        f"w=4 in silicon (the router says so, as a WARNING), and once the "
-        f"model-binning fix stopped over-strengthening every as-drawn device, "
-        f"write transistors four times too weak stopped being able to flip "
-        f"the cell. Check qd_after_set in the log: near 0 V means this. The "
-        f"fix is w=1 -> w=4 on those two devices, which is a decision "
-        f"TODO.md carries rather than a regression -- see "
-        f"examples/srlatch/README.md, 'The as-drawn branch stopped working'.\n"
+        f"time. Check qd_after_set in the log: near 0 V means this. It is "
+        f"what happened on 2026-08-29 with XM5/XM6 still drawn w=1 against "
+        f"diff-pair halves fixed at w=4 in silicon -- write transistors four "
+        f"times too weak, which the wrong model bin had been masking by "
+        f"over-strengthening every as-drawn device. The sheet draws them w=4 "
+        f"now, so seeing this again means something has reopened that gap: "
+        f"check the router's warnings, which should be silent.\n"
         f"  2. A load big enough to stretch the reset edge past the "
         f"measurement window, which is what cprobe=100p used to do.\n\n"
         f"Tail of the log:\n"
@@ -160,6 +164,24 @@ def main() -> int:
                 f"{MIN_STATE_SEPARATION_V}V apart."
             )
             ok = False
+
+    # Structural: ideal wiring cannot be slower than the same circuit with
+    # the switch matrix's series resistance and capacitance added to it.
+    # This check was impossible while the sheet drew XM5/XM6 at w=1 -- see
+    # the note at the top -- and it is the one that would catch that gap
+    # reopening, or a routed model that has stopped adding anything.
+    if values["treset_drawn"] >= values["treset_routed"]:
+        print(
+            f"FAIL: the as-drawn reset ({values['treset_drawn']:.2f}ns) is "
+            f"not faster than the as-routed one "
+            f"({values['treset_routed']:.2f}ns). Ideal wiring should be the "
+            f"quicker of the two, since the routed branch adds series "
+            f"resistance and pad capacitance and nothing else. The known "
+            f"cause of an inversion here is the as-drawn deck simulating "
+            f"weaker devices than the chip builds: check the router's "
+            f"warnings for a dropped w= on XM5/XM6."
+        )
+        ok = False
 
     if not ok:
         print(

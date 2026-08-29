@@ -56,6 +56,6 @@ C {mosbius_pmos.sym} -50 10 0 0 {name=M1 w=1 b=VAPWR}
 C {mosbius_nmos.sym} -50 110 0 0 {name=M2 w=1 b=VGND}
 C {mosbius_pmos.sym} 80 10 0 0 {name=M3 w=1 b=VAPWR}
 C {mosbius_nmos.sym} 80 110 0 0 {name=M4 w=1 b=VGND}
-C {mosbius_nmos.sym} 0 230 0 0 {name=M5 w=1 b=VGND}
-C {mosbius_nmos.sym} 160 230 0 0 {name=M6 w=1 b=VGND}
+C {mosbius_nmos.sym} 0 230 0 0 {name=M5 w=4 b=VGND}
+C {mosbius_nmos.sym} 160 230 0 0 {name=M6 w=4 b=VGND}
 C {mosbius_bias.sym} -700 200 0 0 {name=BIAS}

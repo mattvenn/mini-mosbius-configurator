@@ -17,8 +17,8 @@ XM1 ua3  net1 VAPWR VAPWR mosbius_pmos w=1
 XM2 ua3  net1 VGND  VGND  mosbius_nmos w=1
 XM3 net1 ua3  VAPWR VAPWR mosbius_pmos w=1
 XM4 net1 ua3  VGND  VGND  mosbius_nmos w=1
-XM5 ua1  net1 VGND  VGND  mosbius_nmos w=1
-XM6 ua2  ua3  VGND  VGND  mosbius_nmos w=1
+XM5 ua1  net1 VGND  VGND  mosbius_nmos w=4
+XM6 ua2  ua3  VGND  VGND  mosbius_nmos w=4
 ```
 
 `XM1`/`XM2` form one inverter (input `ua3`, output `net1`); `XM3`/`XM4` form
@@ -93,9 +93,8 @@ relisted order, asserted to match.
 ## Routing
 
 ```
-$ python3 -m mosbius.cli route build/srlatch.spice
-WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
-           have a fixed width
+$ mosbius route build/srlatch.spice
+OK -- no errors or warnings (1 info note hidden, use --verbose).
 
 Device roles:
   XM1          -> pmos_a        w=1
@@ -108,13 +107,25 @@ Device roles:
 Bitstream: 0c008000c020008808000000008821000220200800000038
 ```
 
-No errors. The warning is the set and reset pull-downs landing on
-diff-pair halves, which have no width bits, so their `w=1` cannot be
-programmed and they are built at the fixed `w=4` instead. Benign here, and
-arguably what you want: a pull-down that forces the latch has to overpower
-the inverter's PMOS. But it is the sort of thing that used to be dropped
-in silence, so draw them knowing they are four times the width the
-schematic says.
+`w=4 (fixed)` on the last two is the point worth reading. The set and
+reset pull-downs land on differential-pair halves, which have **no width
+bits at all** -- their geometry is built into silicon -- so whatever the
+schematic asks for, the chip builds the equivalent of `w=4`. The sheet
+draws `w=4` to say so, which is why this routes silently.
+
+**It did not always.** Until 2026-08-29 the sheet drew those two at `w=1`
+and the router said so on every run:
+
+```
+WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
+           have a fixed width
+```
+
+That warning was correct and was ignored for a long time, and the section
+"Timing the reset" below is what it cost. `tests/test_check_routing.py`
+still asserts the warning fires, per device and merged, so nothing is lost
+by the sheet no longer provoking it -- an example whose as-drawn branch
+does not work teaches less than a test that pins the diagnostic.
 
 (This used to be two near-identical 23-line warnings, one per device, 21
 of those lines word-for-word the same -- `merge_findings` (TODO.md was
@@ -226,64 +237,71 @@ enough to stretch the reset past it. At 10pF, re-run 2026-08-27:
 ```
 qd_after_set     =  3.300V     qr_after_set     =  3.110V
 qd_after_reset   = -0.0000V    qr_after_reset   = -0.0026V
-treset_drawn     = 18.79ns
+treset_drawn     =  1.77ns
 treset_routed    = 10.94ns
 ```
 
-The stored-state measurements are unchanged in meaning: SET drives the
-output to the rail, RESET returns it to ground, and both survive the pulse
-ending.
+SET drives the output to the rail, RESET returns it to ground, and both
+survive the pulse ending -- which is what makes this a latch rather than
+two inverters.
 
-`treset_routed` coming out *faster* than `treset_drawn` is the opposite of
-the inverter's result, and it is explained: `XM5` and `XM6` are drawn
-`w=1` where the differential-pair halves they land on are fixed at `w=4`
-in silicon, so the as-drawn deck resets through write transistors four
-times too weak. Widen those two and `treset_drawn` becomes 1.77 ns, faster
-than the routed 10.94 as expected. See "Timing the reset" below, where the
-same comparison is made against silicon. (An earlier guess here -- that
-the two instances might power up in different states -- was wrong, and the
-`.ic` lines in the sheet rule it out anyway.)
+The reset times order themselves the way every other example's do: ideal
+wiring fastest, the same circuit through the matrix six times slower. That
+is the switch matrix's series resistance and the bond pad's capacitance,
+and nothing else, since a settled level is unaffected by either.
 
-### The as-drawn branch stopped working on 2026-08-29, and that is a real result
+**Both of those sentences were false until 2026-08-29**, and the story is
+in the next section.
 
-**The block above is the last run in which the as-drawn latch worked.**
-After the model-binning fix -- the ideal library had been handing sky130 a
-width expression naming the model subcircuit's own `w` parameter, and so
-selecting the wrong, stronger model bin
-([`../pdiffamp/README.md`](../pdiffamp/README.md) has the diagnosis) --
-the same sheet gives:
+### What `w=1` on the write transistors cost, and why the sheet now says `w=4`
 
-```
-qd_after_set     =  0.0009V    qr_after_set     =  3.110V
-treset_drawn     =  failed: trig(TARG) : out of interval
-treset_routed    = 10.94ns
-```
+`XM5` and `XM6` were drawn `w=1` from the day this example was written,
+and the router warned about it on every run. Two things came out of
+ignoring that warning, and both are worth reading before dismissing a
+warning of your own.
 
-The as-drawn latch **no longer sets at all**. The as-routed branch is
-untouched to the last digit, because the routed decks write literal widths
-and were never affected.
+**First, `treset_drawn` was 18.79 ns and came out slower than
+`treset_routed`'s 10.94 ns** -- backwards from every other example, where
+ideal wiring beats the matrix. That was recorded here for weeks as an
+anomaly, with a guess about the two instances powering up in different
+states. The guess was wrong (the sheet's `.ic` lines rule it out). The
+cause was the width: the as-drawn deck was resetting through write
+transistors four times weaker than the ones the chip builds, so "as drawn"
+was not the ideal version of this circuit, it was a different and worse
+one.
 
-This is the same `w=1`-against-fixed-`w=4` mismatch as above, no longer
-survivable. `XM5`/`XM6` are drawn four times too weak, and the wrong model
-bin had been making every transistor stronger than it should be -- just
-enough to let the too-weak write pair flip the cell. With correct devices
-it cannot. So the router's standing warning --
+**Second, on 2026-08-29 the as-drawn latch stopped working altogether.**
+The model-binning fix (`../pdiffamp/README.md` has the diagnosis) made the
+as-drawn NMOS weaker and the PMOS stronger -- visible independently in
+`../inverter/`, whose trip point rose 1.495 -> 1.605 V and whose rise time
+fell 8.90 -> 8.16 ns. Writing this cell is a fight between a write NMOS
+and the keeper PMOS holding the node up, and both of those changes push
+against the write. On top of a 4x width deficit, the write lost:
+`qd_after_set` read 0.0009 V where it had read 3.300 V, the SET pulse no
+longer flipped the cell, and `treset_drawn` had no falling edge to
+measure. The wrong model bin had been supplying just enough margin to hide
+a circuit the chip cannot build.
 
-```
-WARNING -- XM5 and XM6 had their w=1 ignored: ndiffpair+ and ndiffpair-
-           have a fixed width
-```
+So the sheet now draws `w=4`, which is what the hardware builds either
+way. The consequences, all verified:
 
--- was never cosmetic: the as-drawn deck has been simulating a circuit the
-chip cannot build, and now it simulates one that does not work.
+| | before | after |
+|---|---|---|
+| `treset_drawn` | 18.79 ns | **1.77 ns** |
+| `treset_routed` | 10.94 ns | 10.94 ns |
+| `qd_after_set` | 3.300 V | 3.300 V |
+| bitstream | `0c008000...038` | **identical** |
+| router | one WARNING | silent |
 
-The fix is one character on each of two devices, `w=1` -> `w=4`, and it is
-deliberately **not** applied here, because it moves a published number and
-silences a warning that is doing its job. Probed on the netlist without
-touching the sheet, `w=4` gives `qd_after_set` = 3.2999 V and
-`treset_drawn` = **1.77 ns** against the routed 10.94 ns, which is the
-ordering every other example shows. `TODO.md` carries the decision, and
-`tools/check_srlatch_sim.sh` fails until it is made.
+**The bitstream does not change**, because there were never any width bits
+behind that request -- which is the whole point. The change makes the
+simulation honest about what silicon does; it does not change what silicon
+does.
+
+It also let `tools/check_srlatch_sim.py` gain a check it could not have
+before: as-drawn must be *faster* than as-routed. That assertion is only
+meaningful once the as-drawn deck models the device the chip builds, and
+it is what would catch this gap reopening.
 
 ## On the bench
 
@@ -368,13 +386,13 @@ commanded.
 
 ![the reset transition on a nanosecond axis: RESET rising through mid-rail
 at t=0, Q on silicon crossing mid-rail at about 24 ns, the as-routed deck
-at about 21 ns and the as-drawn deck at about 41 ns, all four traces
-aligned on RESET's own crossing](srlatch_reset_edge.png)
+close behind it at about 21 ns, and the as-drawn deck far ahead of both at
+about 9 ns, all four traces aligned on RESET's own crossing](srlatch_reset_edge.png)
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| `treset`, `tt` | 49.14 ns | 19.89 ns | 24.46 ns |
-| `treset`, `ss` | 40.70 ns | **21.30 ns** | **24.46 ns** |
+| `treset`, `tt` | 8.28 ns | 19.89 ns | 24.46 ns |
+| `treset`, `ss` | 8.80 ns | **21.30 ns** | **24.46 ns** |
 
 **The as-routed model wins this by a factor of two.** Silicon lands 3.2 ns
 from as-routed at `ss` (13%) and 16 ns from as-drawn (66%). That is the
@@ -386,30 +404,28 @@ two-circuit argument that establishes it. It moves the routed number the
 right way but only from 19% low to 13% low, so unlike the ring it does not
 close the gap on its own.
 
-**As drawn is slow because it is not the same circuit, and that is now
-measured rather than suspected.** The router warns that `XM5` and `XM6`
-land on differential-pair halves, whose geometry is fixed in silicon at
-`w=4` while the sheet draws `w=1` -- so the as-drawn deck resets through
-write transistors four times weaker than the ones the chip builds. Widen
-just those two and the same deck, same stimulus, same corner, gives
-**9.07 ns** instead of 40.70. Nearly all of as-drawn's error was that one
-discrepancy, and with it removed the three numbers order themselves the
-way every other example here does: as drawn 9.07 ns, as routed 21.30 ns,
-silicon 24.46 ns -- ideal wiring fastest, the matrix's parasitics next,
-silicon slowest. Reproduce with `sh tools/run_srlatch_measured_edge.sh ss
---drawn-w4`. Whether the schematic should be changed to match is a
-separate decision, since it moves published numbers; `TODO.md` holds it.
+**The as-drawn column was 49.14 and 40.70 ns until 2026-08-29**, and both
+numbers were artifacts. `XM5`/`XM6` were drawn `w=1` against diff-pair
+halves the chip fixes at `w=4`, so the as-drawn deck reset through write
+transistors four times too weak, and the model-binning fix
+(`../pdiffamp/README.md`) had been separately over-strengthening every
+as-drawn device. With the sheet at `w=4` and correct model bins, the same
+decks give 8.28 and 8.80 ns -- and the as-routed column did not move at
+all, which is the tell that the fix touched only the ideal side.
 
-**That also explains the anomaly this example has carried since it was
-written.** `treset_routed` coming out *faster* than `treset_drawn` --
-10.94 ns against 18.79 ns on the sheet's own stimulus, the opposite of the
-inverter's result -- was recorded here and in `tools/check_srlatch_sim.py`
-as unexplained, with a guess about the two instances powering up in
-different states. It was the width mismatch: at `w=4` the sheet's own deck
-gives `treset_drawn` = 1.77 ns, comfortably faster than the routed 10.94,
-so the ordering was never wrong, the drawn circuit was just crippled.
+That reorders the whole comparison the way every other example here reads:
+**as drawn 8.80 ns, as routed 21.30 ns, silicon 24.46 ns** at `ss`. Ideal
+wiring fastest, the matrix's parasitics next, silicon slowest. Reproduce
+with `sh tools/run_srlatch_measured_edge.sh ss`.
 
-**Why the numbers here are not the sheet's 18.79 and 10.94 ns.** Those are
+**That also explained the anomaly this example carried from the day it was
+written**, and closed it: `treset_routed` coming out faster than
+`treset_drawn` was the width mismatch, not a power-up race. At `w=4` the
+sheet's own deck gives `treset_drawn` = 1.77 ns against the routed
+10.94 ns, so the ordering was never wrong -- the drawn circuit was
+crippled.
+
+**Why the numbers here are not the sheet's 1.77 and 10.94 ns.** Those are
 under a 1 ns RESET step, which no signal generator can produce. The Analog
 Discovery's edge measured 20.2 ns 10%-90% at the pad, and a latch driven
 by a 20 ns ramp does not switch when one driven by a 1 ns step does -- so

@@ -26,7 +26,6 @@
 # Takes an optional process corner, default tt:
 #
 #   sh tools/run_srlatch_measured_edge.sh ss
-#   sh tools/run_srlatch_measured_edge.sh ss --drawn-w4
 #
 # This chip measured as an ss part -- see examples/ringosc/README.md for
 # the two-circuit argument that establishes that -- so ss is the corner to
@@ -35,7 +34,6 @@
 set -e
 
 CORNER=${1:-tt}
-EXTRA=${2:-}          # pass --drawn-w4 to widen XM5/XM6 in the as-drawn block
 
 cd "$(dirname "$0")/.."
 mkdir -p build
@@ -61,7 +59,7 @@ grep -q 'IS MISSING' build/tb_srlatch.spice && {
 
 echo "== rewriting the stimulus, the probe and the analysis"
 python3 tools/rewrite_srlatch_measured_edge.py \
-    build/tb_srlatch.spice build/tb_srlatch_measured_edge.spice $EXTRA
+    build/tb_srlatch.spice build/tb_srlatch_measured_edge.spice
 if [ "$CORNER" != "tt" ]; then
     echo "== switching the model library to $CORNER"
     sed -i "s|\(sky130.lib.spice\) tt|\1 $CORNER|" build/tb_srlatch_measured_edge.spice
