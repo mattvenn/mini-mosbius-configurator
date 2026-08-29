@@ -104,10 +104,45 @@ def scope_setup(h, rate=1e5, nsamples=4000, rng=CHIP_RANGE, offset=CHIP_OFFSET,
     dwf.FDwfAnalogInBufferSizeSet(h, c_int(nsamples))
     dwf.FDwfAnalogInConfigure(h, c_int(1), c_int(0))
     scope_setup.window = (offset - rng / 2, offset + rng / 2)
+    scope_setup.windows = {ch: scope_setup.window for ch in channels}
     time.sleep(settle)
 
 
-def acquire(h, nsamples=4000, channels=(0, 1), tag=""):
+def scope_setup_channels(h, specs, rate=1e5, nsamples=4000, settle=2.0):
+    """Like scope_setup(), but give each channel its own window.
+
+    `specs` maps channel index to (range, offset) in volts, where range is
+    the peak-to-peak SPAN -- see this module's docstring for the trap in
+    that word. The AD3 offers 5 V and 50 V and nothing in between, so the
+    span is barely a choice; the offset is, and it is what centres a
+    channel on the thing it is actually looking at.
+
+    scope_setup() puts both channels on one window, which is right when
+    both are watching chip pins. It is wrong for a current measurement,
+    where the two channels look at quantities that do not overlap: one
+    sits differentially across a sense resistor and sees a few hundred
+    millivolts about zero, while the other watches a pad swinging across
+    the whole supply. On the chip window the shunt channel would spend its
+    whole range on a signal that never leaves the bottom eighth of it, and
+    on the shunt's window the pad channel would clip immediately.
+    """
+    for ch, (rng, offset) in specs.items():
+        dwf.FDwfAnalogInChannelEnableSet(h, c_int(ch), c_int(1))
+        dwf.FDwfAnalogInChannelRangeSet(h, c_int(ch), c_double(rng))
+        dwf.FDwfAnalogInChannelOffsetSet(h, c_int(ch), c_double(offset))
+    dwf.FDwfAnalogInFrequencySet(h, c_double(rate))
+    dwf.FDwfAnalogInBufferSizeSet(h, c_int(nsamples))
+    dwf.FDwfAnalogInConfigure(h, c_int(1), c_int(0))
+    scope_setup.windows = {ch: (offset - rng / 2, offset + rng / 2)
+                           for ch, (rng, offset) in specs.items()}
+    # Kept for check_clipping()'s fallback and for anything that reads it:
+    # the widest of the per-channel windows, so it can only be pessimistic.
+    scope_setup.window = (min(lo for lo, _ in scope_setup.windows.values()),
+                          max(hi for _, hi in scope_setup.windows.values()))
+    time.sleep(settle)
+
+
+def acquire(h, nsamples=4000, channels=(0, 1), tag="", allow_flat=False):
     dwf.FDwfAnalogInConfigure(h, c_int(0), c_int(1))
     status = c_ubyte()
     while True:
@@ -120,14 +155,23 @@ def acquire(h, nsamples=4000, channels=(0, 1), tag=""):
         buf = (c_double * nsamples)()
         dwf.FDwfAnalogInStatusData(h, c_int(ch), buf, c_int(nsamples))
         out[ch] = list(buf)
-    return check_clipping(out, tag)
+    return check_clipping(out, tag, allow_flat=allow_flat)
 
 
-def check_clipping(samples, tag=""):
-    """Refuse a capture that ran into the range edge, or came back flat."""
-    lo, hi = getattr(scope_setup, "window", (-2.5, 2.5))
-    edge = 0.02 * (hi - lo)
+def check_clipping(samples, tag="", allow_flat=False):
+    """Refuse a capture that ran into the range edge, or came back flat.
+
+    `allow_flat` waives only the second test, and exists for the one
+    reading that is legitimately allowed to be a dead constant: a
+    deliberate zero, taken with the signal path disconnected, to measure a
+    channel's own offset. Everywhere else a perfectly flat capture is a
+    railed ADC and has to stay an error.
+    """
+    windows = getattr(scope_setup, "windows", {})
+    fallback = getattr(scope_setup, "window", (-2.5, 2.5))
     for ch, values in samples.items():
+        lo, hi = windows.get(ch, fallback)
+        edge = 0.02 * (hi - lo)
         if max(values) > hi - edge or min(values) < lo + edge:
             raise RuntimeError(
                 f"{tag}channel {ch + 1} reached {min(values):+.3f}..{max(values):+.3f} V, "
@@ -135,7 +179,7 @@ def check_clipping(samples, tag=""):
                 "  Widen the range or move the offset: past the edge the AD3 keeps\n"
                 "  reporting numbers, they are just the ceiling rather than the signal."
             )
-        if max(values) == min(values):
+        if max(values) == min(values) and not allow_flat:
             raise RuntimeError(
                 f"{tag}channel {ch + 1} is dead flat at {values[0]:+.4f} V over "
                 f"{len(values)} samples.\n"
@@ -211,6 +255,11 @@ def scope_setup_triggered(h, rate, nsamples, trigger_channel, trigger_level,
     dwf.FDwfAnalogInTriggerPositionSet(h, c_double(position))
     dwf.FDwfAnalogInConfigure(h, c_int(1), c_int(1))
     scope_setup.window = (offset - rng / 2, offset + rng / 2)
+    # Both, not just the first: check_clipping() prefers the per-channel
+    # dict, so leaving a stale one behind from an earlier
+    # scope_setup_channels() would let it check this capture against a
+    # window that is no longer set on the hardware.
+    scope_setup.windows = {ch: scope_setup.window for ch in channels}
 
 
 def square_wave(h, ch, low, high, freq, symmetry=50.0, phase=0.0):
