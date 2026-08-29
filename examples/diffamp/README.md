@@ -230,6 +230,118 @@ points" warning) is mechanical to generate but tedious to type by hand;
 build it with a short loop over `[0, 2, 5, 10, 20, 40, 0, -2, -5, -10,
 -20, -40, 0]` rather than transcribing it.
 
+## On silicon
+
+**Measured 2026-08-29** on a ttsky25a part with an Analog Discovery 3.
+Fifth example on real hardware, and the second needing a bias current --
+which came from a supply through a 20 kOhm resistor into pad K, since this
+demoboard has no bias circuit of its own. See "Feeding it by hand, when the
+board can't" in [`../README.md`](../README.md).
+
+![gain three ways, and gain against tail current](diffamp_three_ways.png)
+
+**This also confirmed `ua4` -> pad G**, which had never been checked on
+silicon. The output sat at about 2.07 V with the inputs balanced, against a
+simulated base of 1.985 V as drawn and 2.020 V as routed -- a pad tied to
+ground would have read 0 V and an unconnected one would not have moved.
+Five of the six analog pads are now confirmed; only `ua5` -> F is not.
+
+### Gain
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| small-signal gain | 19.8 V/V | 19.80 V/V | **16.19 V/V** |
+| output base | 1.985 V | 2.020 V | ~2.07 V |
+
+Silicon is **18% below** the as-drawn small-signal gain. Two known effects
+account for part of that before anything else is invoked. The AD3's 1 MOhm
+input sits across this amplifier's ~20 kOhm output and is worth about 2%,
+and every simulated number on this page is at `rprobe=10meg cprobe=10p`;
+re-running the testbench at the instrument's own 1meg/24p was deliberately
+skipped here, so that 2% is uncorrected.
+
+**The larger candidate is the corner.** This part is `ss`, established from
+the ring oscillator and the inverter, while every published number here is
+`tt` -- and gain is exactly the sort of quantity a corner moves.
+`tools/sweep_corners.sh` re-runs a testbench at `ss` without touching the
+committed schematics. That is the next test, not a conclusion to draw yet.
+
+Worth recording that **`examples/otabuf/` came out the same way the same
+day**: its closed-loop shortfall from unity was 1.38x the routed model's,
+which also means less gain on silicon than modelled. Two independent
+circuits on one part, same sign.
+
+### Gain against tail current
+
+The bias comes from a supply this tooling can set, so measuring at three
+currents costs almost nothing -- and it is a ratio, so the resistor's
+tolerance and the scope's channel offsets both drop out.
+
+| tail current | gain | fit residual | ua1 at out = 2.0 V |
+|---|---|---|---|
+| 55.5 uA | 16.64 V/V | 8.9 mV rms | 1.4987 V (-1.3 mV) |
+| 100.0 uA | 16.19 V/V | 8.3 mV rms | 1.5057 V (+5.7 mV) |
+| 145.4 uA | 15.71 V/V | 7.2 mV rms | 1.5105 V (+10.5 mV) |
+
+**Gain barely moves: 1.059x across 2.6x of current.** Strong-inversion
+square law predicts 1.619x -- gain is `gm x Rout`, `gm` goes as sqrt(I) and
+`Rout` as 1/I, so gain goes as 1/sqrt(I). Gain roughly flat with current is
+instead what *moderate* inversion gives, where `gm` is proportional to I
+rather than its square root and the two dependencies cancel. That is an
+inference from one part measured once, not something verified here, and the
+lower panel of the figure plots both predictions against the three points
+so a reader can judge it.
+
+Residuals under 10 mV rms over more than a volt of output swing: the
+amplifier is very linear across the window swept, and the 1 mV input steps
+resolve it. A coarser sweep would not have -- the whole transition is about
+80 mV wide, which is what 20 V/V on 3.3 V rails means.
+
+The operating point shifts about 12 mV across that bias range. Read it as
+an observation rather than as the pair's input offset voltage: which input
+counts as "centred" depends on what output level you nominate, and this one
+nominates 2.0 V. What is solid is that the offset is *small*, a few
+millivolts, against a simulated sheet whose offset is exactly zero by
+construction -- perfectly symmetric, and ngspice is noiseless. It is the
+one quantity on this page the model cannot produce at all.
+
+### Two analysis mistakes worth not repeating
+
+Both were caught before the numbers above, and both would have looked
+plausible if they had not been.
+
+**Peak local slope is not the gain here.** The first pass took the largest
+local slope over a +/-4 mV least-squares window and called it peak gain,
+getting 17.78 V/V. But the local slope scatters about +/-0.8 V/V point to
+point, so its maximum is a noise pick; and it rises monotonically from
+about 14 to 17 V/V across the swept window, so there is no peak in there to
+find. Fitting the whole linear region is well conditioned and reproducible.
+
+**The centring rule was wrong, and the output level said so.** The
+operating point was first taken as the input where the output sits midway
+between the extremes of the coarse sweep -- which landed 15 to 32 mV from
+where the gain actually peaks, because this amplifier's swing is not
+symmetric about its bias point. The tell was the output level: the wrong
+rule put it at 1.82 V, the peak-gain point puts it at 2.07 V, and the sheet
+predicts 1.985/2.020 V. That mattered beyond the offset number, because the
+`+/-N mV` gain chords are measured *from* the centre, so a misplaced centre
+made them spuriously asymmetric -- it reported the positive side steeper
+where both simulated branches say the negative side is.
+
+### Not measured
+
+Bandwidth and settling, which need a real edge rather than the levels
+`ad3.wavegen()` produces -- the same gap as `examples/otabuf/`, and one
+triggered-capture script could serve both.
+
+To reproduce:
+
+```bash
+python3 tools/measure_ibias_clamp_ad3.py --resistor 20000   # confirm pad K, set the rail
+python3 tools/measure_diffamp_ad3.py                        # programs, sweeps, reports
+python3 tools/plot_diffamp_comparison.py                    # redraws the figure
+```
+
 ## Load capacitors in `tb_diffamp.sch`
 
 The usual pair, both `'cprobe'` (plus a matching `'rprobe'`) with `.param cprobe=10p` -- see

@@ -91,10 +91,12 @@ internal analog pin reaches depends on how that shuttle's chip carrier is
 wired to the demoboard. Both halves are free to change, so the same design
 on ttsky26b may come out on entirely different letters, and nothing in this
 repo may assume otherwise. For `tt_um_tnt_mosbius` on ttsky25a the answer is
-ua0-ua5 -> K, C, J, D, G, F, of which four are confirmed on silicon
-(ua0->K, ua1->C, ua2->J, ua3->D). ua0->K was confirmed 2026-08-29 by
-sweeping a supply into pad K through 20 kOhm and watching it clamp --
-`tools/measure_ibias_clamp_ad3.py`, written up in `examples/README.md`.
+ua0-ua5 -> K, C, J, D, G, F, of which five are confirmed on silicon
+(ua0->K, ua1->C, ua2->J, ua3->D, ua4->G); only ua5->F is not. ua0->K was
+confirmed 2026-08-29 by sweeping a supply into pad K through 20 kOhm and
+watching it clamp -- `tools/measure_ibias_clamp_ad3.py`, written up in
+`examples/README.md` -- and ua4->G the same day by `examples/diffamp/`'s
+output sitting at 2.07 V against a simulated base of 1.985/2.020 V.
 
 *Half one is an API.* `mosbius/pads.py` fetches
 https://index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json -- the Tiny

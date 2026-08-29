@@ -36,13 +36,13 @@ uses. It exposes the same nine-pin port list as a hand-drawn design
 (`ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`), so it drops into a
 testbench in place of the ideal block.
 
-**Measured on silicon** is a number from real hardware. Four of the six
+**Measured on silicon** is a number from real hardware. Five of the six
 have one, taken here with an Analog Discovery 3: the inverter, the ring
-oscillator, the SR latch and the OTA follower. In the ring's case it is a
-*different bitstream* from the committed schematic. The otabuf one needed a
-bias current before it could be taken at all, which is what "Feeding it by
-hand, when the board can't" below is about; diffamp and currentsource mirror
-`ibias` too and are still unmeasured.
+oscillator, the SR latch, the OTA follower and the differential amplifier.
+In the ring's case it is a *different bitstream* from the committed
+schematic. The last two needed a bias current before they could be measured
+at all, which is what "Feeding it by hand, when the board can't" below is
+about; only currentsource is left.
 
 The expected ordering is as drawn faster than as routed faster than
 silicon: the drawn model omits the most, the routed model omits less, the
