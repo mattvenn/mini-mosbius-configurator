@@ -255,14 +255,21 @@ either way you could not have programmed the bitstream to that chip in the
 first place. To read the table away from the bench, name the chip yourself:
 `mosbius pads <bitstream> --shuttle ttsky25a`.
 
-The pad letters themselves are read off the project's own page --
-https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius, whose Analog pins
-table gives `ua` -> PCB Pin directly -- and cached under `build/`. Nothing
-here computes a letter, because nothing can: which pad a `ua[k]` reaches
-depends both on where the project sits on that shuttle and on how that
-shuttle's carrier is wired, so the same design on ttsky26b may well come
-out somewhere else entirely. On a bench with no internet, save that page as
-`build/pads_<shuttle>_<macro>.html` and it works offline.
+The pad letters themselves are composed from two halves, because which pad
+a `ua[k]` reaches depends both on where the project sits on that shuttle
+and on how that shuttle's chip carrier is wired -- so the same design on
+ttsky26b may well come out somewhere else entirely. The first half is
+looked up in the Tiny Tapeout shuttle index,
+https://index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json, whose
+`analog_pins` gives `ua` -> internal analog pin; it is cached under
+`build/`, so on a bench with no internet, save that file as
+`build/pads_<shuttle>_<macro>.json` and it works offline. The second half,
+internal analog pin -> pad letter, is the carrier's own wiring, which no
+API publishes; `mosbius/pads.py` carries it, read off the KiCad layouts of
+the chip carrier and the demoboard and checked against three pads measured
+on silicon. If you would rather just read the answer, the project's own
+page has it composed already:
+https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius.
 
 ## Where to go next
 

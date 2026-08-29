@@ -15,7 +15,7 @@ import urllib.error
 import pytest
 
 from mosbius import pads
-from tests.test_pads import REAL_PAGE as ANALOG_PINS_PAGE
+from tests.test_pads import REAL_ENTRY as ANALOG_PINS_ENTRY
 from mosbius.cli import main
 from mosbius.program import ProgramError
 
@@ -28,25 +28,25 @@ INVERTER_BITSTREAM = "080000004010000001000000000000000040000400000000"
 
 
 @pytest.fixture(autouse=True)
-def offline_project_page(tmp_path, monkeypatch):
+def offline_project_entry(tmp_path, monkeypatch):
     """No test here may reach the network. `program` and `pads` both print
-    the pad table, whose letters come off the project's own page, so every
-    test in this file gets a cached copy -- the same file a bench with no
-    internet saves by hand (mosbius/pads.py).
+    the pad table, whose ua -> analog pin half comes off the Tiny Tapeout
+    shuttle index, so every test in this file gets a cached copy -- the same
+    file a bench with no internet saves by hand (mosbius/pads.py).
     """
     monkeypatch.setattr(pads, "CACHE_DIR", tmp_path)
 
-    # Belt and braces: a cached page only covers the macro it was written
+    # Belt and braces: a cached entry only covers the macro it was written
     # for, so a test naming an unknown project would otherwise fall through
-    # to a real fetch -- and tinytapeout.com answers 200 with a page that
-    # has no analog table, so it would pass while quietly hitting the
-    # network. Block the socket outright.
+    # to a real fetch of the shuttle index. Block the socket outright.
     def no_network(*args, **kwargs):
         raise urllib.error.URLError("network disabled in tests")
     monkeypatch.setattr(pads.urllib.request, "urlopen", no_network)
 
     def install(shuttle="ttsky25a", macro="tt_um_tnt_mosbius"):
-        (tmp_path / f"pads_{shuttle}_{macro}.html").write_text(ANALOG_PINS_PAGE)
+        (tmp_path / f"pads_{shuttle}_{macro}.json").write_text(
+            json.dumps(ANALOG_PINS_ENTRY)
+        )
 
     install()
     return install
@@ -213,14 +213,16 @@ def test_pads_prints_the_bench_wiring_table(capsys):
 
 
 def test_pads_explains_an_unknown_project_rather_than_tracebacking(capsys):
-    """A macro with no page has no pads, and the message has to name the URL
-    that would have had them -- the letters live nowhere else.
+    """A macro with no cached index entry (and, here, no network to fetch
+    one) has no pads, and the message has to name the URL that would have
+    had them plus where to save it.
     """
     rc = main(["pads", INVERTER_BITSTREAM, "--project", "tt_um_not_here"])
     err = capsys.readouterr().err
     assert rc == 1
     assert "CAN'T WORK OUT THE PADS" in err
-    assert "https://tinytapeout.com/chips/ttsky25a/tt_um_not_here" in err
+    assert "https://index.tinytapeout.com/ttsky25a/tt_um_not_here.json" in err
+    assert "pads_ttsky25a_tt_um_not_here.json" in err
 
 
 def test_program_prints_the_pad_table_after_uploading(capsys):
@@ -333,12 +335,12 @@ def test_a_bare_bitstream_is_still_not_treated_as_a_path(capsys):
     assert mock_program.called
 
 
-def test_pads_reads_the_shuttle_off_the_chip_in_the_socket(capsys, monkeypatch, offline_project_page):
+def test_pads_reads_the_shuttle_off_the_chip_in_the_socket(capsys, monkeypatch, offline_project_entry):
     """Which pad a ua[k] comes out on depends on the shuttle, and the chip
     carries its own shuttle in ROM -- so put a different chip in the socket
     and the table follows it, with no flag to remember.
     """
-    offline_project_page(shuttle="ttsky99z")
+    offline_project_entry(shuttle="ttsky99z")
     monkeypatch.setattr(
         "mosbius.cli.read_board_identity",
         lambda **kw: {"shuttle": "ttsky99z", "has_project": True, "identity_source": "chip ROM"},

@@ -1,57 +1,64 @@
 # SPDX-License-Identifier: Apache-2.0
 """Which PCB pad to clip a probe onto, looked up rather than remembered.
 
-A design's `ua[k]` is not a pad letter, and the relationship is fixed by
-neither the design nor the board alone. Tiny Tapeout muxes the chip's
-analog pins, so which internal analog index a project's `ua[k]` lands on
-depends on where that project was placed on that shuttle; and which PCB
-pad an internal index comes out on depends on how that shuttle's carrier
-is wired. Both halves can change from one shuttle to the next, so
-`tt_um_tnt_mosbius` on ttsky26b may well come out on different letters
-than the same design on ttsky25a. Nothing here can know that, and nothing
-here guesses it.
+A design's `ua[k]` is not a pad letter, and the answer is composed from two
+independent halves. Tiny Tapeout muxes the chip's analog pins, so which
+*internal analog index* a project's `ua[k]` lands on depends on where that
+project was placed on that shuttle; and which *PCB pad* an internal index
+comes out on depends on how that shuttle's chip carrier is wired to the
+demoboard. Both halves are free to change, so `tt_um_tnt_mosbius` on
+ttsky26b may well come out on different letters than the same design on
+ttsky25a. Nothing here guesses either half.
 
-**The lookup is one fetch: the project's own page.** Every project page
-carries an Analog pins table with exactly the three columns needed --
-`ua`, PCB Pin, Internal index -- already composed for that project on that
-shuttle, e.g.
+**Half one, the project: the shuttle index API.**
+https://index.tinytapeout.com/{shuttle}/{macro}.json publishes that
+project's `analog_pins`, a list indexed by `ua` whose values are internal
+analog indices -- for `tt_um_tnt_mosbius` on ttsky25a, `[5, 0, 4, 1, 3, 2]`,
+i.e. `ua0` is internal 5, `ua1` is internal 0, and so on. That is a
+documented JSON API (https://github.com/TinyTapeout/tinytapeout-index,
+index files CC0), it is per-project and per-shuttle, and it is the same data
+tinytapeout.com itself renders from.
 
-    https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius
+**Half two, the carrier: ETR_CARRIER_PADS below.** No API publishes the pad
+letters. tinytapeout.com's own Analog pins table composes them in the
+browser from a hard-coded twelve-entry array in the website's source
+(`functions/components/AnalogPinout.tsx` in TinyTapeout/tinytapeout_www),
+indexed by internal analog index. So a project page is not an independent
+source for the letters: it is this same table, rendered.
 
-    ua   PCB Pin   Internal index   Description
-    0    K         5                Reference Bias
-    1    C         0                Bus 1A
-    ...
+That array is reproduced here, but *verified from the boards themselves*
+rather than copied on trust (2026-08-29), by joining two KiCad layouts on
+the carrier connector's pin numbers:
 
-so `pad_map()` reads `ua` -> PCB Pin straight off it and never computes a
-letter. Both other candidate sources were tried and are not enough on
-their own: the shuttle index (https://index.tinytapeout.com/ttsky25a.json)
-publishes each project's `analog_pins`, which is `ua` -> internal index and
-carries no letters; and the copy of the index on the demoboard itself is
-stripped further still -- a `Design` there has macro/name/clock_hz/address
-and no `analog_pins` at all, checked on a real board 2026-08-29.
+  - TinyTapeout/breakout-ttsky-cob, connector `J1`
+    (HRS_DF12NB-60DS-0.5V): pin -> net `an0`..`an11`
+  - TinyTapeout/tt-demo-pcb, connector `J5` (TT_HRS_CARRIER_REVC), `L`
+    side: pin -> net `A`..`X`, the demoboard's ANALOG header letters
+
+Joining pin `N` to `L{N}` gives `an0..an11` -> C D F G J K X W U T R Q,
+matching the website's array exactly, and the same join lines up every
+`uio`, `ui_in`, `project_clk` and `project_rst` pin, so the alignment is
+not a coincidence. Two other facts fell out of it and are worth knowing at
+a bench: the ETR carrier routes only twelve of the header's twenty-two
+lettered pads to the chip at all, and on the ttsky carrier eight of the
+remaining ten (A, B, E, H, L, M, N, P) are tied straight to ground, so
+clipping a probe onto the wrong letter is not merely a dead node.
 
 *Which* shuttle to ask about does not have to be assumed: the chip
 carrier's ROM names it, and mosbius/program.py's read_board_identity()
 reads it back over the demoboard.
 
-This is plain server-rendered HTML rather than an API, so it is parsed by
-matching the table's own column headers rather than by position -- see
-_parse_analog_pins(). If Tiny Tapeout ever restyles those pages this is
-the thing that breaks, and it breaks loudly: a page that parses to no rows
-raises rather than returning a partial map.
-
-Verified against hardware 2026-08-28, before any of it was fetched: `ua1`
+Verified against silicon 2026-08-28, before any of this was fetched: `ua1`
 -> pad C and `ua2` -> pad J measured a working inverter, `ua3` -> pad D a
-working ring oscillator. Those three agree with what the page now says,
-which is the only independent check this mapping has ever had.
+working ring oscillator. Those three agree with what this composes, which
+is the only end-to-end check the mapping has.
 """
 
 from __future__ import annotations
 
+import json
 import urllib.error
 import urllib.request
-from html.parser import HTMLParser
 from pathlib import Path
 
 from mosbius.decode import decode
@@ -72,8 +79,31 @@ from mosbius.route import TERMINAL_WORD
 # the failure suggests for working away from the bench.
 DEFAULT_PROJECT = "tt_um_tnt_mosbius"
 DEFAULT_SHUTTLE = "ttsky25a"
+PROJECT_INDEX_URL = "https://index.tinytapeout.com/{shuttle}/{macro}.json"
 PROJECT_PAGE_URL = "https://tinytapeout.com/chips/{shuttle}/{macro}"
 CACHE_DIR = Path("build")
+
+
+# Internal analog index -> PCB pad, for the two chip carriers Tiny Tapeout
+# has shipped. This is the carrier's wiring, not the chip's and not the
+# project's, which is why it is keyed by carrier and not by shuttle.
+#
+# ETR_CARRIER_PADS is verified from the two KiCad layouts named in the
+# module docstring; it is also, letter for letter, the array the website
+# renders its PCB Pin column from. Twelve entries, because the carrier
+# brings out twelve of the demoboard's twenty-two lettered analog pads.
+#
+# PRE_ETR_CARRIER_PADS covers the shuttles that predate the ETR demoboard,
+# whose breakout labelled its analog pins A0..A5 and B0..B5 rather than with
+# letters. Upstream's own website intends this split but never reaches it:
+# its check is `shuttle in nonETRShuttles` against a JavaScript *array*,
+# which tests indices rather than values and so is always false. So
+# tinytapeout.com currently prints ETR letters on tt06/tt07/tt08 project
+# pages, where they mean nothing. That is the second reason not to scrape
+# those pages, and the reason this does the split itself.
+ETR_CARRIER_PADS = ("C", "D", "F", "G", "J", "K", "X", "W", "U", "T", "R", "Q")
+PRE_ETR_CARRIER_PADS = tuple(f"A{i}" for i in range(6)) + tuple(f"B{i}" for i in range(6))
+PRE_ETR_SHUTTLES = frozenset({"tt06", "tt07", "tt08"})
 
 
 # The ANALOG breakout header as it is physically laid out on the demoboard,
@@ -92,13 +122,11 @@ CACHE_DIR = Path("build")
 #
 # The letters run A..X with I and O left out, the usual convention so they
 # cannot be misread as 1 and 0, so a gap in the sequence is normal and means
-# nothing. Only a handful of the twenty-two carry any one chip's analog
-# pins -- which handful is what pad_map() looks up, and it is not the same
-# from shuttle to shuttle; the rest belong to other things on the board.
-# That is
-# why the bench output draws the whole header rather than listing six
-# letters: a letter is only findable in relation to its neighbours and the
-# grounds beside it.
+# nothing. Only twelve of the twenty-two reach the chip at all through the
+# ETR carrier -- those in ETR_CARRIER_PADS -- and only as many of those as
+# the project has analog pins carry anything. That is why the bench output
+# draws the whole header rather than listing letters: a letter is only
+# findable in relation to its neighbours and the grounds beside it.
 GND_PAD = "gnd"
 ANALOG_HEADER = (
     ("A", "C", GND_PAD, "E", "G", "J", GND_PAD, "L", "N", "Q", GND_PAD, "S", "U", "W", GND_PAD, "3v3"),
@@ -110,145 +138,125 @@ class PadLookupError(Exception):
     """The pad mapping could not be established, explained in full."""
 
 
-class _AnalogPinsParser(HTMLParser):
-    """Pull the Analog pins table out of a Tiny Tapeout project page.
+def carrier_pads(shuttle: str) -> tuple[str, ...]:
+    """The chip carrier's internal-analog-index -> PCB pad wiring.
 
-    The page is server-rendered HTML, not an API, so this matches the
-    table by its own column headers rather than by position: it collects
-    every table on the page, then keeps the one whose header row contains
-    both `ua` and a PCB-pin column. A restyle that renames those headers
-    makes this find nothing, which raises -- far better than a restyle
-    that reorders the columns and silently hands back a wrong letter.
+    Which carrier a shuttle ships with is the only thing that has to be
+    decided from the shuttle's name, and there have been exactly two:
+    everything from the ETR demoboard onwards uses the lettered ANALOG
+    header, while tt06/tt07/tt08 predate it.
     """
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.tables: list[list[list[str]]] = []
-        self._table: list[list[str]] | None = None
-        self._row: list[str] | None = None
-        self._cell: list[str] | None = None
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "table":
-            self._table = []
-        elif tag == "tr" and self._table is not None:
-            self._row = []
-        elif tag in ("td", "th") and self._row is not None:
-            self._cell = []
-
-    def handle_endtag(self, tag):
-        if tag == "table" and self._table is not None:
-            self.tables.append(self._table)
-            self._table = None
-        elif tag == "tr" and self._row is not None:
-            self._table.append(self._row)
-            self._row = None
-        elif tag in ("td", "th") and self._cell is not None:
-            self._row.append("".join(self._cell).strip())
-            self._cell = None
-
-    def handle_data(self, data):
-        if self._cell is not None:
-            self._cell.append(data)
+    return PRE_ETR_CARRIER_PADS if shuttle in PRE_ETR_SHUTTLES else ETR_CARRIER_PADS
 
 
-def _parse_analog_pins(html: str, shuttle: str, macro: str) -> dict[str, str]:
-    """{'ibias': 'K', 'ua1': 'C', ...} from a project page's HTML.
+def _analog_pins(shuttle: str, macro: str) -> list[int]:
+    """`analog_pins` for one project, off the shuttle index API.
 
-    `ua` 0 is named `ibias` here because that is what this chip's bias
-    reference pin is called everywhere else in this package and on every
-    schematic -- the page calls it "Reference Bias" in its description
-    column. Every other `ua[k]` keeps its number.
+    The list is indexed by `ua` and its values are internal analog indices.
+    Cached under build/ on first fetch, so a bench with no internet needs
+    one download or one manual save.
     """
-    parser = _AnalogPinsParser()
-    parser.feed(html)
+    cache = CACHE_DIR / f"pads_{shuttle}_{macro}.json"
+    url = PROJECT_INDEX_URL.format(shuttle=shuttle, macro=macro)
 
-    def column(header_row, *wanted):
-        for i, cell in enumerate(header_row):
-            text = cell.strip().lower()
-            if any(w == text for w in wanted):
-                return i
-        return None
+    if cache.exists():
+        body = cache.read_text()
+    else:
+        try:
+            request = urllib.request.Request(
+                url, headers={"User-Agent": "mosbius-configurator"}
+            )
+            with urllib.request.urlopen(request, timeout=20) as response:
+                body = response.read().decode()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise PadLookupError(
+                    f"the shuttle index has no project {macro} on shuttle {shuttle}.\n\n"
+                    f"  That usually means the chip in the socket is not the one this\n"
+                    f"  design was taped out on, or --project names a macro that is not\n"
+                    f"  on this shuttle. The demoboard reports its shuttle from the\n"
+                    f"  chip's own ROM, so check --project first. The index is public,\n"
+                    f"  so you can look for yourself:\n"
+                    f"      {url}"
+                ) from exc
+            raise PadLookupError(
+                f"can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
+                f"  It is where the ua -> analog pin numbering comes from, and which\n"
+                f"  PCB pad to probe is built from that.\n"
+                f"  Save {url}\n"
+                f"  as {cache} and re-run to work offline."
+            ) from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            raise PadLookupError(
+                f"can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
+                f"  Which PCB pad a design's ua[k] comes out on depends on where the\n"
+                f"  project sits on that shuttle, so it cannot be assumed -- the same\n"
+                f"  design on the next shuttle can come out on different pads. Two\n"
+                f"  ways forward:\n"
+                f"    - save {url}\n"
+                f"      as {cache} and re-run, or\n"
+                f"    - read the Analog pins table off the project's own page, which\n"
+                f"      has the same answer already composed:\n"
+                f"      {PROJECT_PAGE_URL.format(shuttle=shuttle, macro=macro)}"
+            ) from exc
+        CACHE_DIR.mkdir(exist_ok=True)
+        cache.write_text(body)
 
-    for table in parser.tables:
-        if not table:
-            continue
-        header = table[0]
-        ua_col = column(header, "ua")
-        pad_col = column(header, "pcb pin", "pcb pad", "pin")
-        if ua_col is None or pad_col is None:
-            continue
-        found = {}
-        for row in table[1:]:
-            if max(ua_col, pad_col) >= len(row):
-                continue
-            number, pad = row[ua_col].strip(), row[pad_col].strip()
-            if not number.isdigit() or not pad:
-                continue
-            found["ibias" if number == "0" else f"ua{number}"] = pad
-        if found:
-            return found
+    try:
+        entry = json.loads(body)
+        analog_pins = entry["analog_pins"]
+        pins = [int(index) for index in analog_pins]
+    except (ValueError, TypeError, KeyError) as exc:
+        raise PadLookupError(
+            f"{cache if cache.exists() else url} is not a project entry this can\n"
+            f"  read ({exc}). It should be one project's JSON from the shuttle\n"
+            f"  index, with an `analog_pins` list in it -- ua -> internal analog\n"
+            f"  pin number. If you saved it by hand, check you saved\n"
+            f"      {url}\n"
+            f"  and not the whole-shuttle index or the project's web page."
+        ) from exc
 
-    raise PadLookupError(
-        f"{macro}'s page on {shuttle} has no Analog pins table this can read.\n\n"
-        f"  That table is where the PCB pad letters come from -- it is the only\n"
-        f"  place that publishes them, so there is nothing to fall back on.\n"
-        f"  Either the project has no analog pins (a purely digital design has\n"
-        f"  nothing to probe), or Tiny Tapeout has restyled the page and\n"
-        f"  mosbius/pads.py's _parse_analog_pins() needs updating. Check by eye:\n"
-        f"      {PROJECT_PAGE_URL.format(shuttle=shuttle, macro=macro)}"
-    )
+    if not pins:
+        raise PadLookupError(
+            f"{macro} on {shuttle} has no analog pins, so there is nothing to\n"
+            f"  probe. A purely digital project has none; if you expected this one\n"
+            f"  to have some, check --project names the macro you meant. The index\n"
+            f"  entry this read is public:\n"
+            f"      {url}"
+        )
+    return pins
 
 
 def pad_map(shuttle: str, macro: str) -> dict[str, str]:
     """{'ibias': 'K', 'ua1': 'C', ...} for one design on one shuttle.
 
-    Read off that project's own page, because the answer is a property of
-    the project *and* the shuttle together and neither this package nor the
-    demoboard holds it. The page is cached under build/ on first fetch, so
-    a bench with no internet needs one download or one manual save.
+    Composed from the two halves in the module docstring: the index API for
+    ua -> internal analog pin, and the carrier's own wiring for internal
+    analog pin -> PCB pad.
+
+    `ua` 0 is named `ibias` here because that is what this chip's bias
+    reference pin is called everywhere else in this package and on every
+    schematic. Every other `ua[k]` keeps its number.
     """
-    cache = CACHE_DIR / f"pads_{shuttle}_{macro}.html"
-    if cache.exists():
-        return _parse_analog_pins(cache.read_text(), shuttle, macro)
+    pins = _analog_pins(shuttle, macro)
+    pads = carrier_pads(shuttle)
 
-    url = PROJECT_PAGE_URL.format(shuttle=shuttle, macro=macro)
-    try:
-        request = urllib.request.Request(url, headers={"User-Agent": "mosbius-configurator"})
-        with urllib.request.urlopen(request, timeout=20) as response:
-            body = response.read().decode()
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
+    mapping = {}
+    for ua, internal in enumerate(pins):
+        if not 0 <= internal < len(pads):
             raise PadLookupError(
-                f"there is no page for {macro} on shuttle {shuttle}.\n\n"
-                f"  That usually means the chip in the socket is not the one this\n"
-                f"  design was taped out on, or --project names a macro that is not\n"
-                f"  on this shuttle. The demoboard reports its shuttle from the\n"
-                f"  chip's own ROM, so check --project first:\n"
-                f"      {url}"
-            ) from exc
-        raise PadLookupError(
-            f"can't fetch {macro}'s page on {shuttle} ({exc}).\n\n"
-            f"  Its Analog pins table is where the PCB pad letters come from.\n"
-            f"  Save {url}\n"
-            f"  as {cache} and re-run to work offline."
-        ) from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise PadLookupError(
-            f"can't fetch {macro}'s page on {shuttle} ({exc}).\n\n"
-            f"  Which PCB pad a design's ua[k] comes out on depends on where the\n"
-            f"  project sits on that shuttle and how that shuttle's carrier is\n"
-            f"  wired, so it cannot be assumed -- the same design on the next\n"
-            f"  shuttle can come out on different letters. Two ways forward:\n"
-            f"    - save {url}\n"
-            f"      as {cache} and re-run, or\n"
-            f"    - read the Analog pins table off that page yourself; its\n"
-            f"      ua -> PCB Pin columns are exactly what this needs."
-        ) from exc
-
-    CACHE_DIR.mkdir(exist_ok=True)
-    cache.write_text(body)
-    return _parse_analog_pins(body, shuttle, macro)
+                f"{macro} on {shuttle} says its ua{ua} is analog pin {internal},\n"
+                f"  and the chip carrier this shuttle ships with only brings out\n"
+                f"  {len(pads)} of them ({', '.join(pads)}). Either the carrier is a\n"
+                f"  newer one than mosbius/pads.py knows about -- in which case its\n"
+                f"  wiring needs adding to mosbius/pads.py's carrier_pads(), from\n"
+                f"  that carrier's own KiCad layout -- or the index entry is not\n"
+                f"  the project you meant.\n"
+                f"  Nothing here will guess a pad letter, because a wrong one reads\n"
+                f"  exactly like a right one at the bench."
+            )
+        mapping["ibias" if ua == 0 else f"ua{ua}"] = pads[internal]
+    return mapping
 
 
 def pads_in_use(config: SwitchConfig, shuttle: str, macro: str) -> dict[str, str]:
@@ -397,10 +405,10 @@ def format_pad_table(config: SwitchConfig, shuttle: str, macro: str) -> str:
         lines.append(f"  Nothing is on the other analog pads: {which}.")
         lines.append("")
     lines += [
-        f"  These letters are for {macro} as placed on {shuttle}, and are read",
-        "  from that project's own page every time rather than remembered. The",
-        "  same design on another shuttle can come out on entirely different",
-        "  pads: both where the project sits on the shuttle and how that",
-        "  shuttle's carrier is wired are free to change.",
+        f"  These letters are for {macro} as placed on {shuttle}. Its ua ->",
+        "  analog pin numbering is looked up in the Tiny Tapeout shuttle index",
+        "  rather than remembered, and the analog pin -> pad letters are that",
+        "  chip carrier's own wiring. The same design on another shuttle can",
+        "  come out on entirely different pads: both halves are free to change.",
     ]
     return "\n".join(lines)

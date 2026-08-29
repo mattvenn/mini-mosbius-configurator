@@ -83,34 +83,61 @@ fitting a corner to digital speed alone would call `fs` -- by 105 mV of
 trip point, fifty times the measurement's repeatability. One chip is one
 sample; this says nothing about the shuttle.
 
-**Which PCB pad a design's `ua[k]` comes out on is looked up, never
-computed (rewritten 2026-08-29).** It is fixed by the project and the
-shuttle together: the chip's analog pins are muxed, so which internal
-analog index a `ua[k]` lands on depends on where that project sits on that
-shuttle, and which pad an index reaches depends on how that shuttle's
-carrier is wired. Both halves are free to change, so the same design on
-ttsky26b may come out on entirely different letters, and nothing in this
-repo may assume otherwise. `mosbius/pads.py` reads the answer off the
-project's own page --
-https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius, whose Analog
-pins table has `ua` / PCB Pin / Internal index columns already composed --
-and caches it as `build/pads_<shuttle>_<macro>.html`. For
-`tt_um_tnt_mosbius` on ttsky25a that is ua0-ua5 -> K, C, J, D, G, F, of
-which three are confirmed on silicon (ua1->C, ua2->J, ua3->D).
+**Which PCB pad a design's `ua[k]` comes out on is composed from two
+looked-up halves, never computed (rewritten 2026-08-29).** The chip's
+analog pins are muxed, so which *internal analog pin* a `ua[k]` lands on
+depends on where that project sits on that shuttle; and which *PCB pad* an
+internal analog pin reaches depends on how that shuttle's chip carrier is
+wired to the demoboard. Both halves are free to change, so the same design
+on ttsky26b may come out on entirely different letters, and nothing in this
+repo may assume otherwise. For `tt_um_tnt_mosbius` on ttsky25a the answer is
+ua0-ua5 -> K, C, J, D, G, F, of which three are confirmed on silicon
+(ua1->C, ua2->J, ua3->D).
 
-Two things that look like sources and are not. The shuttle index
-(https://index.tinytapeout.com/ttsky25a.json) publishes `analog_pins:
-[5, 0, 4, 1, 3, 2]`, which is ua -> internal index and carries no letters
-at all; the demoboard's own copy is stripped further still, a `Design`
-there having macro/name/clock_hz/address and no `analog_pins` (checked on
-hardware 2026-08-29). An earlier version of this file composed those two
-with a hard-coded `PAD_LETTERS = "CDFGJK"`, described as "the carrier's
-six analog pads in letter order, skipping E, H and I". That description
-was wrong: the demoboard's ANALOG header letters **22** pads, A..X with
-only I and O left out, and E and H are both real pads on it. The six are a
-per-shuttle selection out of 22, not a complete run with gaps, so their
-being in ascending letter order was a coincidence of this placement and
-not a rule to extend. `PAD_LETTERS` is gone.
+*Half one is an API.* `mosbius/pads.py` fetches
+https://index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json -- the Tiny
+Tapeout shuttle index, https://github.com/TinyTapeout/tinytapeout-index,
+index files CC0 -- whose `analog_pins: [5, 0, 4, 1, 3, 2]` is ua -> internal
+analog pin, and caches it as `build/pads_<shuttle>_<macro>.json`.
+
+*Half two is not published anywhere, and lives in `ETR_CARRIER_PADS`.*
+This file previously said `mosbius/pads.py` should read the letters off the
+project's own page instead, because that page's Analog pins table has a PCB
+Pin column. **That page is not an independent source and scraping it is
+gone (2026-08-29).** tinytapeout.com composes that column in the browser
+from exactly the same index `analog_pins`, indexed into a hard-coded
+twelve-entry array in `functions/components/AnalogPinout.tsx` in
+TinyTapeout/tinytapeout_www: `['C','D','F','G','J','K','X','W','U','T','R','Q']`.
+So the old code round-tripped through rendered HTML to recover a JSON field
+plus a constant, and inherited a bug while doing it: the website's own
+`shuttle in nonETRShuttles` check tests JavaScript array *indices*, not
+values, so it never fires, and tt06/tt07/tt08 project pages show ETR
+letters for a carrier that labelled its analog pins A0..A5 / B0..B5.
+`pads.carrier_pads()` makes that split itself.
+
+That constant is now verified from the boards rather than trusted
+(2026-08-29), by joining two KiCad layouts on the carrier connector's pin
+numbers: TinyTapeout/breakout-ttsky-cob `J1` (HRS_DF12NB-60DS-0.5V) gives
+pin -> `an0`..`an11`, TinyTapeout/tt-demo-pcb `J5` (TT_HRS_CARRIER_REVC),
+`L` side, gives pin -> the ANALOG header letters `A`..`X`. Pin `N` to
+`L{N}` yields an0..an11 -> C D F G J K X W U T R Q, matching the website
+letter for letter, and the same join lines up every `uio`, `ui_in`,
+`project_clk` and `project_rst` pin, so the alignment is not luck. Two
+facts fell out of that join and are worth knowing at a bench: the ETR
+carrier routes only **twelve** of the header's twenty-two lettered pads to
+the chip at all, and on the ttsky carrier eight of the other ten (A, B, E,
+H, L, M, N, P) are tied straight to **ground** -- so a probe on the wrong
+letter is not merely a dead node. (S and V go to resistor nets.)
+
+The demoboard's own copy of the index is a third thing that looks like a
+source and is not: a `Design` there has macro/name/clock_hz/address and no
+`analog_pins` at all (checked on hardware 2026-08-29). And an older
+`PAD_LETTERS = "CDFGJK"`, described as "the carrier's six analog pads in
+letter order, skipping E, H and I", was right about this project and wrong
+about everything else: those six are the first six of the carrier's twelve,
+not a run with gaps, and E and H are real pads. `ETR_CARRIER_PADS` is the
+whole table, keyed by carrier rather than by shuttle, which is what that
+constant should always have been.
 
 Telling a user to "connect to ua1" is useless -- nothing on the board is
 labelled that way -- so the output draws the ANALOG header itself

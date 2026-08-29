@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """mosbius/pads.py: deriving which PCB pad to probe, per shuttle.
 
-These tests never touch the network -- each writes a project page into a
-temporary cache directory, which is also the documented offline path for a
-bench with no internet (save the project's page as
-build/pads_<shuttle>_<macro>.html).
+These tests never touch the network -- each writes a project's shuttle-index
+entry into a temporary cache directory, which is also the documented offline
+path for a bench with no internet (save
+https://index.tinytapeout.com/<shuttle>/<macro>.json as
+build/pads_<shuttle>_<macro>.json).
 """
 
 
+import json
 import urllib.error
 
 import pytest
@@ -16,37 +18,27 @@ from mosbius import pads
 from mosbius.bitstream import unpack
 from mosbius.model import SwitchConfig
 
-# The Analog pins table exactly as tinytapeout.com serves it for
-# tt_um_tnt_mosbius on ttsky25a, copied verbatim on 2026-08-29. Kept as the
-# real markup rather than something hand-rolled: it is the only thing
-# standing between a restyle of those pages and a wrong pad letter at the
-# bench, so the parser is tested against the genuine article.
-REAL_PAGE_TABLE = (
-    "<h3>Analog pins</h3><table><thead><tr><th><code>ua</code></th>"
-    "<th>PCB Pin</th><th>Internal index</th><th>Description</th></tr></thead>"
-    "<tbody>"
-    "<tr><td>0</td><td>K</td><td>5</td><td>Reference Bias</td></tr>"
-    "<tr><td>1</td><td>C</td><td>0</td><td>Bus 1A</td></tr>"
-    "<tr><td>2</td><td>J</td><td>4</td><td>Bus 2A</td></tr>"
-    "<tr><td>3</td><td>D</td><td>1</td><td>Bus 3A</td></tr>"
-    "<tr><td>4</td><td>G</td><td>3</td><td>Bus 4A</td></tr>"
-    "<tr><td>5</td><td>F</td><td>2</td><td>Bus 5A</td></tr>"
-    "</tbody></table>"
-)
-
-# Project pages put the digital pinout table above the analog one, so a
-# parser that took "the first table" would read pad letters out of the
-# wrong one -- and its first column is `#` 0..7, which looks enough like a
-# ua column to be dangerous.
-DIGITAL_TABLE_BEFORE = (
-    "<table><thead><tr><th>#</th><th>Input</th><th>Output</th>"
-    "<th>Bidirectional</th></tr></thead><tbody>"
-    "<tr><td>0</td><td>data_in</td><td>data_out</td><td></td></tr>"
-    "<tr><td>1</td><td>enable</td><td></td><td></td></tr>"
-    "</tbody></table>"
-)
-
-REAL_PAGE = "<html><body>" + DIGITAL_TABLE_BEFORE + REAL_PAGE_TABLE + "</body></html>"
+# tt_um_tnt_mosbius's entry in the ttsky25a index, exactly as
+# https://index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json serves it,
+# fetched 2026-08-29. Trimmed to the fields this module reads plus enough
+# neighbours to keep it recognisable as the real document.
+REAL_ENTRY = {
+    "macro": "tt_um_tnt_mosbius",
+    "address": 239,
+    "title": "tnt's variant of SKY130 mini-MOSbius",
+    "author": "Sylvain Munaut",
+    "clock_hz": 0,
+    "tiles": "3x2",
+    "analog_pins": [5, 0, 4, 1, 3, 2],
+    "pinout": {
+        "ua[0]": "Reference Bias",
+        "ua[1]": "Bus 1A",
+        "ua[2]": "Bus 2A",
+        "ua[3]": "Bus 3A",
+        "ua[4]": "Bus 4A",
+        "ua[5]": "Bus 5A",
+    },
+}
 
 INVERTER = "080000004010000001000000000000000040000400000000"
 RING = "3f008803f004001401000210188406000050040100000019"
@@ -56,24 +48,12 @@ TNT_MOSBIUS_PADS = {
 }
 
 
-def page_with(rows, headers=("<code>ua</code>", "PCB Pin", "Internal index")):
-    """A project page carrying `rows` -- (ua, pad, index) triples."""
-    head = "".join(f"<th>{h}</th>" for h in headers)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{c}</td>" for c in row) + "</tr>" for row in rows
-    )
-    return (
-        "<html><body><table><thead><tr>" + head + "</tr></thead><tbody>"
-        + body + "</tbody></table></body></html>"
-    )
-
-
 @pytest.fixture
-def cached_page(tmp_path, monkeypatch):
-    """Install a project page in the cache, so no test reaches the network.
+def cached_entry(tmp_path, monkeypatch):
+    """Install an index entry in the cache, so no test reaches the network.
 
-    This is also the documented offline path: save the project's page as
-    build/pads_<shuttle>_<macro>.html and the lookup works with no internet.
+    This is also the documented offline path: save the project's JSON as
+    build/pads_<shuttle>_<macro>.json and the lookup works with no internet.
     """
     monkeypatch.setattr(pads, "CACHE_DIR", tmp_path)
 
@@ -81,58 +61,78 @@ def cached_page(tmp_path, monkeypatch):
         raise urllib.error.URLError("network disabled in tests")
     monkeypatch.setattr(pads.urllib.request, "urlopen", no_network)
 
-    def install(html=REAL_PAGE, shuttle="ttsky25a", macro="tt_um_tnt_mosbius"):
-        (tmp_path / f"pads_{shuttle}_{macro}.html").write_text(html)
+    def install(entry=REAL_ENTRY, shuttle="ttsky25a", macro="tt_um_tnt_mosbius"):
+        body = entry if isinstance(entry, str) else json.dumps(entry)
+        (tmp_path / f"pads_{shuttle}_{macro}.json").write_text(body)
     return install
 
 
-def test_pad_map_reads_the_pads_off_the_project_page(cached_page):
-    cached_page()
+def test_pad_map_composes_the_index_entry_with_the_carrier_wiring(cached_entry):
+    """analog_pins [5, 0, 4, 1, 3, 2] through the ETR carrier's
+    C D F G J K X W U T R Q gives K C J D G F -- the letters measured on
+    silicon, and the ones tinytapeout.com prints for this project.
+    """
+    cached_entry()
     assert pads.pad_map("ttsky25a", "tt_um_tnt_mosbius") == TNT_MOSBIUS_PADS
 
 
-def test_pad_map_ignores_the_digital_pinout_table_above_it(cached_page):
-    """The digital table comes first on the page and its `#` column also
-    counts 0..7, so picking a table by position rather than by its own
-    headers reads pad letters out of the wrong one.
+def test_the_carrier_wiring_matches_the_boards_it_was_read_off():
+    """The one hard-coded half, and the reason it is trusted.
+
+    Verified by joining TinyTapeout/breakout-ttsky-cob's J1 (pin -> an0..an11)
+    with TinyTapeout/tt-demo-pcb's J5 L-side (pin -> the ANALOG header
+    letters): an0..an11 come out on C D F G J K X W U T R Q. No API
+    publishes this, so if it ever changes it changes here, deliberately.
     """
-    cached_page()
-    assert pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")["ua1"] == "C"
+    assert pads.carrier_pads("ttsky25a") == (
+        "C", "D", "F", "G", "J", "K", "X", "W", "U", "T", "R", "Q"
+    )
+    # every letter the carrier can name is a real hole on the header
+    header = {cell for row in pads.ANALOG_HEADER for cell in row}
+    assert set(pads.carrier_pads("ttsky25a")) <= header
 
 
-def test_a_different_shuttle_can_give_entirely_different_pads(cached_page):
-    """The whole reason this is a lookup and not a constant. Both halves of
-    the answer -- where the project sits on the shuttle, and how that
-    shuttle's carrier is wired -- are free to change, so the letters for the
+def test_shuttles_before_the_etr_demoboard_use_the_old_breakout_labels():
+    """tt06/tt07/tt08 shipped a breakout labelled A0..A5 / B0..B5, not
+    letters. Upstream's website means to make this split and does not --
+    its `shuttle in nonETRShuttles` tests array indices, never values -- so
+    those project pages show ETR letters that mean nothing there. Doing the
+    split here is the reason not to scrape them.
+    """
+    assert pads.carrier_pads("tt07")[0] == "A0"
+    assert pads.carrier_pads("tt07")[6] == "B0"
+    assert pads.carrier_pads("ttsky25a")[0] == "C"
+
+
+def test_a_different_shuttle_can_give_entirely_different_pads(cached_entry):
+    """The whole reason this is a lookup and not a constant. Where the
+    project sits on the shuttle is free to change, so the letters for the
     same design on the next shuttle are not predictable from these ones.
     """
-    cached_page(
-        page_with([("0", "A", "0"), ("1", "S", "1"), ("2", "X", "2")]),
-        shuttle="ttsky26b",
-    )
+    cached_entry({"analog_pins": [1, 8, 11]}, shuttle="ttsky26b")
     assert pads.pad_map("ttsky26b", "tt_um_tnt_mosbius") == {
-        "ibias": "A", "ua1": "S", "ua2": "X",
+        "ibias": "D", "ua1": "U", "ua2": "Q",
     }
 
 
-def test_ua_zero_is_named_ibias(cached_page):
+def test_ua_zero_is_named_ibias(cached_entry):
     """Every schematic and every other module calls that pin ibias; the
-    page calls it ua 0 / "Reference Bias". Translate once, here.
+    index calls it ua 0 / "Reference Bias". Translate once, here.
     """
-    cached_page()
+    cached_entry()
     assert pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")["ibias"] == "K"
     assert "ua0" not in pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
 
 
-def test_pads_in_use_follows_the_bitstream(cached_page):
-    cached_page()
+def test_pads_in_use_follows_the_bitstream(cached_entry):
+    cached_entry()
     config = SwitchConfig(bits=unpack(INVERTER))
     # the inverter wires ua1 and ua2 only, and needs no bias current
     assert pads.pads_in_use(config, "ttsky25a", "tt_um_tnt_mosbius") == {"ua1": "C", "ua2": "J"}
 
 
-def test_pads_in_use_includes_the_ring_buffer_output(cached_page):
-    cached_page()
+def test_pads_in_use_includes_the_ring_buffer_output(cached_entry):
+    cached_entry()
     config = SwitchConfig(bits=unpack(RING))
     in_use = pads.pads_in_use(config, "ttsky25a", "tt_um_tnt_mosbius")
     assert in_use == {"ua1": "C", "ua2": "J", "ua3": "D"}
@@ -140,29 +140,39 @@ def test_pads_in_use_includes_the_ring_buffer_output(cached_page):
     assert "ibias" not in in_use
 
 
-def test_a_page_with_no_analog_table_is_explained(cached_page):
-    """A purely digital project, or a restyled page. Either way there is
-    nothing to fall back on, so it must say so rather than return nothing.
+def test_a_project_with_no_analog_pins_is_explained(cached_entry):
+    """A purely digital project has nothing to probe, and saying so beats
+    printing an empty table.
     """
-    cached_page("<html><body>" + DIGITAL_TABLE_BEFORE + "</body></html>",
-                macro="tt_um_digital")
-    with pytest.raises(pads.PadLookupError, match="no Analog pins table"):
+    cached_entry({"macro": "tt_um_digital", "analog_pins": []}, macro="tt_um_digital")
+    with pytest.raises(pads.PadLookupError, match="has no analog pins"):
         pads.pad_map("ttsky25a", "tt_um_digital")
 
 
-def test_a_renamed_pad_column_fails_loudly(cached_page):
-    """The parser matches the table's own column headers, so a restyle that
-    renames them finds nothing and raises -- which is the safe failure. A
-    restyle that reordered the columns would otherwise hand back a letter
-    from the wrong column, and a wrong pad reads as a probe on a dead node.
+def test_the_wrong_json_saved_by_hand_says_which_file_was_wanted(cached_entry):
+    """The offline path is "save this URL here", so the likely mistake is
+    saving the whole-shuttle index or the web page instead. That has to name
+    the file it wanted rather than raise a JSON traceback.
     """
-    cached_page(page_with([("1", "C", "0")], headers=("ua", "Breakout", "idx")))
-    with pytest.raises(pads.PadLookupError, match="no Analog pins table"):
+    cached_entry({"version": 3, "id": "ttsky25a", "projects": []})
+    with pytest.raises(pads.PadLookupError) as excinfo:
+        pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
+    assert "analog_pins" in str(excinfo.value)
+    assert "index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json" in str(excinfo.value)
+
+
+def test_an_analog_pin_the_carrier_cannot_reach_refuses_to_guess(cached_entry):
+    """A future carrier bringing out more analog pins than this one would
+    otherwise index off the end of the table. A pad letter is an instruction
+    to clip a probe somewhere, so this stops rather than inventing one.
+    """
+    cached_entry({"analog_pins": [0, 12]})
+    with pytest.raises(pads.PadLookupError, match="only brings out"):
         pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
 
 
-def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_page):
-    cached_page()
+def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_entry):
+    cached_entry()
     table = pads.format_pad_table(
         SwitchConfig(bits=unpack(INVERTER)), "ttsky25a", "tt_um_tnt_mosbius"
     )
@@ -175,10 +185,10 @@ def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_page):
     assert "G (ua4)" in table
 
 
-def test_pad_table_shows_the_bias_pad_only_when_something_draws_on_it(cached_page):
+def test_pad_table_shows_the_bias_pad_only_when_something_draws_on_it(cached_entry):
     """`ibias` is bench setup rather than a signal, and a design that draws
     no bias current does not need it wired at all."""
-    cached_page()
+    cached_entry()
     table = pads.format_pad_table(
         SwitchConfig(bits=unpack(INVERTER)), "ttsky25a", "tt_um_tnt_mosbius"
     )
@@ -252,8 +262,8 @@ def test_header_picture_rows_line_up_in_columns():
     assert top.index("[C]") % 4 == bottom.index("gnd") % 4
 
 
-def test_pad_table_draws_the_header(cached_page):
-    cached_page()
+def test_pad_table_draws_the_header(cached_entry):
+    cached_entry()
     config = SwitchConfig(bits=unpack(INVERTER))
     out = pads.format_pad_table(config, "ttsky25a", "tt_um_tnt_mosbius")
     assert "ANALOG header" in out
@@ -261,42 +271,45 @@ def test_pad_table_draws_the_header(cached_page):
     assert "ground to any square marked gnd" in out
 
 
-def test_an_unreachable_page_says_how_to_work_offline(cached_page):
-    """The letters are published in exactly one place, so there is no
-    fallback to offer -- only the URL to save and where to put it.
+def test_an_unreachable_index_says_how_to_work_offline(cached_entry):
+    """No internet at the bench. There is nothing to fall back on, so the
+    message has to be the URL to save and where to put it -- plus the
+    project's own page, which has the same answer already composed for
+    someone who would rather read it than save a file.
     """
-    cached_page(macro="tt_um_other")   # installs the fixture, not this macro
+    cached_entry(macro="tt_um_other")   # installs the fixture, not this macro
     with pytest.raises(pads.PadLookupError) as excinfo:
         pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
     message = str(excinfo.value)
+    assert "https://index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json" in message
+    assert "pads_ttsky25a_tt_um_tnt_mosbius.json" in message
     assert "https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius" in message
-    assert "pads_ttsky25a_tt_um_tnt_mosbius.html" in message
 
 
-def test_a_missing_page_names_the_project_and_shuttle(cached_page, monkeypatch):
+def test_a_missing_index_entry_names_the_project_and_shuttle(cached_entry, monkeypatch):
     """404 means this macro is not on this shuttle, which is a different
     problem from no internet and deserves a different sentence: the usual
     cause is the wrong chip in the socket or a mistyped --project.
     """
-    cached_page(macro="tt_um_other")
+    cached_entry(macro="tt_um_other")
 
     def not_found(*args, **kwargs):
         raise urllib.error.HTTPError("u", 404, "Not Found", {}, None)
     monkeypatch.setattr(pads.urllib.request, "urlopen", not_found)
 
-    with pytest.raises(pads.PadLookupError, match="no page for tt_um_tnt_mosbius"):
+    with pytest.raises(pads.PadLookupError, match="no project tt_um_tnt_mosbius"):
         pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
 
 
-def test_a_fetched_page_is_cached_for_next_time(cached_page, monkeypatch, tmp_path):
+def test_a_fetched_entry_is_cached_for_next_time(cached_entry, monkeypatch, tmp_path):
     """One download per project per shuttle: a bench with no internet needs
     the fetch to have happened once, not every run.
     """
-    cached_page(macro="tt_um_other")
+    cached_entry(macro="tt_um_other")
 
     class Response:
         def read(self):
-            return REAL_PAGE.encode()
+            return json.dumps(REAL_ENTRY).encode()
         def __enter__(self):
             return self
         def __exit__(self, *a):
@@ -304,4 +317,4 @@ def test_a_fetched_page_is_cached_for_next_time(cached_page, monkeypatch, tmp_pa
 
     monkeypatch.setattr(pads.urllib.request, "urlopen", lambda *a, **k: Response())
     assert pads.pad_map("ttsky25a", "tt_um_tnt_mosbius") == TNT_MOSBIUS_PADS
-    assert (tmp_path / "pads_ttsky25a_tt_um_tnt_mosbius.html").exists()
+    assert (tmp_path / "pads_ttsky25a_tt_um_tnt_mosbius.json").exists()
