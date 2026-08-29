@@ -21,22 +21,6 @@ adc / dac / ibias control to do automatic hil testing".)
 
 4 try to get coverage of all devices
 
-5 automatically label an xschem sheet with the PCB pad letters. The lookup
-half is done as of 2026-08-29: `mosbius/pads.py` composes the shuttle
-index's `analog_pins` with the carrier's own wiring, and
-`format_analog_header()` draws the ANALOG header with the pads in use
-bracketed, which `mosbius program` and five of the measurement scripts
-print. What is not done is putting those letters onto the schematic itself,
-so a sheet says "ua2 (pad J)" beside the pin rather than making the reader
-run a command to find out.
-
-Two items are closed by work already done and have been dropped rather
-than renumbered: "each new shuttle's mini mosbius will have pins tied to
-different lettered pcb pins", which `pad_map()` handles by composing the
-index with the carrier table; and "could we use the scope against
-simulation", which is what the seven measurement scripts in item 2 do,
-every one of them against the same design as drawn and as routed.
-
 6 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
