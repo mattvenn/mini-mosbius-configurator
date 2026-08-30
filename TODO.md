@@ -51,11 +51,27 @@ this instrument), the pin-servoing sweep, and `--mode background` for what
 the pad node draws on its own (487 kOhm to the channel offset, ie the two
 scope inputs).
 
+3 measure the inverter's rise time on silicon. `examples/inverter/`'s
+table has a hole in it: the 10%-90% rise row reads 8.16 ns as drawn and
+24.63 ns as routed, and "not measured" on the chip. It is the one row
+where the switch matrix makes a large difference, so it is the row worth
+having.
+
+Two things make it harder than the DC sweep already in
+`tools/measure_inverter_ad3.py`. The edge is a few tens of nanoseconds, so
+the stimulus needs a source with a much faster edge than the AD3's
+waveform generator, and its own settling has to be subtracted or ruled
+out; the AD3's digital output is one candidate and is untested here. And
+the meter is part of the circuit: the AD3's 1 MOhm / 24 pF input is a much
+heavier load than the 10 pF the committed testbench assumes, so the
+comparison has to be against a deck re-run at `rprobe=1meg cprobe=24p`,
+which the testbench already parameterises.
+
 ## Examples
 
-3 use haralds 50 nifty
+4 use haralds 50 nifty
 
-4 finish the fallout of the model-binning fix. Four of the five
+5 finish the fallout of the model-binning fix. Four of the five
 re-measures are done (2026-08-29); what is left is one design decision and
 two stale tables.
 
@@ -89,7 +105,7 @@ testbench) and its figure. Rebuilding that deck is the work; the settled
 table that `check_diffamp_sim.py` reproduces is the current source of
 truth either way.
 
-5 `examples/currentsource/` owes two simulation sweeps and one bench sweep,
+6 `examples/currentsource/` owes two simulation sweeps and one bench sweep,
 all three about `ratio`.
 
 In simulation, both are listed in its own "Still to do, in simulation". The
@@ -119,14 +135,14 @@ not the 17 mV and ~100 Ohm a scratch note here had); the ibias calibration
 sweep this list once called "the valuable one" was run on 2026-08-29; and
 otabuf's slew-versus-tail was run the same day.
 
-6 make it easy for people to submit designs to the examples
+7 make it easy for people to submit designs to the examples
 
 ## Tests and CI
 
-7 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
+8 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
 the moment I think they're all a bit separate. possiblity to reuse
 
-8 the unit tests build their netlists as hand-written strings, and 20 of
+9 the unit tests build their netlists as hand-written strings, and 20 of
 them describe designs `mosbius route` would reject. Investigated
 2026-08-28; the numbers below are measured, not estimated.
 
@@ -178,7 +194,7 @@ The difference is that a fixture is declared to be a snapshot and has a
 job policing it. Related to the question about combining the test suites
 that the item above raises.
 
-9 put `.github/workflows/spice-regression.yml` back on its monthly
+10 put `.github/workflows/spice-regression.yml` back on its monthly
 schedule. It was switched to run on every push on 2026-08-29, deliberately
 and temporarily, because the examples are changing daily and a break is
 worth hearing about the same day. It costs about five minutes per push --
@@ -190,7 +206,7 @@ untouched.
 
 ## Tooling and library
 
-10 `route_rail_net()` picks a `cfg_bus_pwr` tap without looking at the row
+11 `route_rail_net()` picks a `cfg_bus_pwr` tap without looking at the row
 its `cfg_bus_short` will drag in on the other side, so which of two unrelated
 failures you get depends on the order xschem happened to list the instances
 in. Found 2026-08-29 while checking what `examples/pdiffamp/` would cover.
@@ -219,10 +235,10 @@ applies to two-sided nets -- rather than taking the lowest-numbered one. This
 is the rail-row twin of the instance-order dependence
 `_allocate_fets_by_constraint()` fixed for FET allocation on 2026-08-22.
 
-11 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+12 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
-12 the six `tools/plot_*_comparison.py` figures draw silicon in a green
+13 the six `tools/plot_*_comparison.py` figures draw silicon in a green
 that collides with the orange they draw "as routed" in. The dataviz
 palette validator scores that adjacent pair at Delta E 4.5 for protanopes,
 against a floor of 8, so the two series are not reliably separable for a
@@ -233,13 +249,13 @@ the other five over is a one-constant change each plus a re-run, and until
 it happens the figure set is inconsistent -- which is the only reason not
 to have done it at the time.
 
-13 check all the mosbius library symbols for cleanup
+14 check all the mosbius library symbols for cleanup
 
 ## Docs and user-facing text
 
-14 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+15 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-15 document what VDPWR is actually for. Nowhere says that the FETs a user
+16 document what VDPWR is actually for. Nowhere says that the FETs a user
 draws never see 1.8V: every analog device in the submodule (nmos_prog,
 pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
 VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only

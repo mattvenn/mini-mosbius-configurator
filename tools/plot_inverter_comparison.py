@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/inverter's transfer curve three ways: as drawn, as routed,
-and as measured on silicon.
+"""Draw examples/inverter's transfer curve as drawn, as routed, and as
+measured on silicon.
 
 Inputs, all produced by other commands so this script only draws:
 
@@ -10,7 +10,7 @@ Inputs, all produced by other commands so this script only draws:
     build/inverter_silicon_dc.json   from tools/measure_inverter_ad3.py
     build/inverter_silicon_fine.json optional 4 mV sweep of the transition
 
-Writes examples/inverter/inverter_three_ways.png and prints the table that
+Writes examples/inverter/inverter_comparison.png and prints the table that
 goes with it.
 
 **Gain is fitted, not read off the steepest pair of points.** A peak slope
@@ -121,7 +121,7 @@ def main() -> None:
     zoom.grid(alpha=0.3)
     zoom.legend(loc="upper right", fontsize=9)
 
-    out = Path("examples/inverter/inverter_three_ways.png")
+    out = Path("examples/inverter/inverter_comparison.png")
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     print(f"\nwrote {out}")
