@@ -2,28 +2,18 @@
 
 [![Made with Claude](https://img.shields.io/badge/Made%20with-Claude-D97757?logo=anthropic&logoColor=white)](https://claude.com/claude-code)
 
-An xschem library and Python toolchain for [tnt's mini-MOSbius](https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius)
-(`tt_um_tnt_mosbius`, Sky130, Tiny Tapeout). Draw an analog circuit in
-xschem, check it fits and is safe, generate the 192-bit configuration
-bitstream, and upload it to the taped-out chip.
+This project is for people learning analog microelectronics.
 
-```
-design in xschem  ->  validate (fits? safe?)  ->  generate bitstream  ->  upload
-```
+An xschem library and Python toolchain for [mini-MOSbius](https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius)
 
-Upstream leaves this gap open in as many words: "the software suite to
-generate [the configuration bitstream] is yet to be written." A hand-built
-web configurator exists and works, but it is a clickable SVG, unconnected
-to simulation. This project closes the loop, for an audience of people
-learning analog design rather than people who already know the switch
-matrix.
+Draw an analog circuit in xschem, check it fits and is safe, generate the bitstream, and upload it to the chip.
 
 ## Start with the examples
 
 [`examples/`](examples/) is the way in. Seven circuits -- an inverter, a
 ring oscillator, an SR latch, two differential amplifiers, an OTA
 follower and a programmable current source -- each drawn in xschem,
-routed onto the chip, simulated twice and measured on real silicon. Every
+routed onto the chip, simulated twice and measured on silicon. Every
 symbol in the device library appears in at least one of them, and each
 page is short: what the circuit is, one figure comparing the three, and
 one experiment to try.
@@ -99,12 +89,6 @@ python3 -m pytest tests/ -q
 simulation -- on every push while the examples are still moving, monthly
 after that -- and checks the numbers on its page still hold.
 
-## Where the rest lives
+# Where to get help
 
-`SPEC.md` is the signed-off source of truth for the hardware model and the
-architecture. `CLAUDE.md` carries the verified corrections this project
-depends on -- several upstream sources look authoritative and are wrong in
-ways that were expensive to find. `TODO.md` holds the open work.
-
-Apache-2.0, matching upstream. Discussion is on the
 [Tiny Tapeout Discord](https://discord.com/channels/1009193568256135208/1502244680111362069).
