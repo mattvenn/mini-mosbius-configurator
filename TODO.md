@@ -164,7 +164,7 @@ the other five over is a one-constant change each plus a re-run, and until
 it happens the figure set is inconsistent -- which is the only reason not
 to have done it at the time.
 
-10 check all the mosbius library symbols for cleanup
+10 check all the schematic texts
 
 ## Docs and user-facing text
 
