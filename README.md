@@ -40,9 +40,9 @@ curve through the real switch matrix.
 Seven worked examples now carry that comparison through: each one is
 simulated **as drawn** (your schematic, ideal wires) and **as routed**
 (through the configured switch matrix, with its parasitics and pads -- what
-`mosbius simulate` builds), and five of them are **measured on silicon**
-as well, with the numbers and the disagreements written up in
-`examples/README.md`. Every symbol in the device library appears in at
+`mosbius simulate` builds), and all seven are **measured on silicon**
+as well, with the numbers on each example's own page and the background
+they share in `examples/README.md`. Every symbol in the device library appears in at
 least one of them. Two independent
 measurements -- a ring oscillator's frequency and the inverter's trip point
 -- put this chip at the PDK's `ss` corner, where the routed decks land
@@ -71,7 +71,7 @@ pip install -e '.[hardware,plots]'   # + mpremote, matplotlib
 # mosbius_ota/mosbius_ntail/mosbius_ptail devices from mosbius_lib to the
 # ports (ibias, ua1..ua5, VAPWR, VDPWR, VGND). examples/ has seven worked
 # circuits -- inverter, ringosc, srlatch, diffamp, pdiffamp, otabuf,
-# currentsource -- each simulated as drawn and as routed, and five of them
+# currentsource -- each simulated as drawn and as routed, and all of them
 # measured on silicon too (see
 # examples/README.md for the background they share), or follow TUTORIAL.md
 # end to end.

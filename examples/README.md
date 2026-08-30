@@ -1,499 +1,271 @@
 # Working with the examples
 
-*Seven circuits share one workflow, one testbench idiom, and one set of
+Seven circuits share one workflow, one testbench idiom and one set of
 traps. This page is the common ground; each example's own README covers
-only what is particular to that circuit.*
+only what is particular to that circuit.
+[`TUTORIAL.md`](../TUTORIAL.md) walks the inverter through from a blank
+sheet.
 
 | Example | Circuit | What it is for |
 |---|---|---|
-| [`inverter/`](inverter/) | Two FETs | The whole pipeline end to end, and the sharpest as-drawn/as-routed comparison. Start here. |
+| [`inverter/`](inverter/) | Two FETs | The whole pipeline end to end, and the sharpest as-drawn against as-routed comparison. Start here. |
 | [`srlatch/`](srlatch/) | Six FETs | State, plus a routing constraint that bites: which devices can take diff-pair halves. |
-| [`diffamp/`](diffamp/) | Five FETs + tail bank | Drawing a differential pair *as a pair*, with a real tail current. |
+| [`diffamp/`](diffamp/) | Five FETs + tail bank | Drawing a differential pair as a pair, with a real tail current. |
 | [`pdiffamp/`](pdiffamp/) | Five FETs + PMOS tail bank | The diff amp in the opposite polarity, and the only example that places a `mosbius_ptail`. |
-| [`currentsource/`](currentsource/) | Two mirror legs | `ibias` itself: what `ratio=` buys, and an I-V curve with a real compliance limit. The only example that measures a current. |
+| [`currentsource/`](currentsource/) | Two mirror legs | `ibias` itself, and the only example that measures a current. |
 | [`otabuf/`](otabuf/) | OTA: five FETs + tail bank | A feedback loop closed through the switch matrix, and the only example that uses `mosbius_ota`. |
-| [`ringosc/`](ringosc/) | Eight FETs | Every usable single FET on the chip at once, and how close the routed model gets to measured silicon. |
-
-[`TUTORIAL.md`](../TUTORIAL.md) at the repo root walks the inverter
-through from a blank sheet, one instruction at a time. This page is the
-other half: the reference you come back to once you are drawing your own
-circuits, and it assumes you have done that walkthrough once.
+| [`ringosc/`](ringosc/) | Eight FETs | Every usable single FET on the chip at once, and how close the routed model gets to silicon. |
 
 ## Three things a number can be
 
-Every measurement in these READMEs is one of three, and the difference
-between them is the point of the examples.
+**As drawn** is the schematic simulated directly: the real sky130 device
+sizing behind each `mosbius_*` symbol, wired net to net. No switch matrix,
+no bus rows, no pads. It is what the circuit does electrically, and it is
+optimistic.
 
-**As drawn** is your schematic simulated directly: the real sky130 device
-sizing behind each `mosbius_*` symbol, wired net-to-net with ideal wires.
-No switch matrix, no bus rows, no pads. It is what the circuit does
-electrically, and it is optimistic.
-
-**As routed** is the same design pushed through `mosbius route` and then
-`mosbius simulate`, which emits a self-contained `<name>_routed.spice`
-containing the actual configured switch matrix, its row-coupling and
-bus-wire capacitance, and a real pad model on every package pin the design
-uses. It exposes the same nine-pin port list as a hand-drawn design
-(`ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`), so it drops into a
+**As routed** is the same design through `mosbius route` and then
+`mosbius simulate`, which writes a self-contained `<name>_routed.spice`
+holding the configured switch matrix, its row-coupling and bus-wire
+capacitance, and a pad model on every package pin the design uses. It
+exposes the same nine pins as a hand-drawn design, so it drops into a
 testbench in place of the ideal block.
 
-**Measured on silicon** is a number from real hardware. Six of the seven
-have one, taken here with an Analog Discovery 3: the inverter, the ring
-oscillator, the SR latch, the OTA follower and both differential
-amplifiers. In the ring's case it is a *different bitstream* from the
-committed schematic. Three of those needed a bias current before they
-could be measured at all, which is what "Feeding it by hand, when the
-board can't" below is about; only the current source is left.
-
-Both amplifiers also have their step response measured, by one shared
-script, `tools/measure_settling_ad3.py`. Read the two examples' own pages
-for the results, but one lesson generalises: **a published figure taken at
-`cprobe=10p` is not comparable to a bench reading through a 24 pF
-instrument**, and the difference is not small -- it halves an expected slew
-rate and doubles an expected settling time constant. That script does the
-correction itself and prints it beside the measurement, because the
-uncorrected comparison shows a 1.5x-to-2x disagreement that is entirely the
-probe.
+**Measured on silicon** is a number from real hardware, taken here on a
+ttsky25a part with an Analog Discovery 3. All seven examples have one.
 
 The expected ordering is as drawn faster than as routed faster than
 silicon: the drawn model omits the most, the routed model omits less, the
-chip omits nothing. When an example violates that ordering it says so
-explicitly rather than smoothing it over.
+chip omits nothing. An example that violates it says so.
 
-There is no "Level 1"/"Level 2" here, and net names follow the same
-vocabulary: `out_drawn`/`out_routed`, `trise_drawn`/`trise_routed`.
+Net names follow the same words: `out_drawn` and `out_routed`,
+`trise_drawn` and `trise_routed`.
 
-## The side-by-side testbench
+## The testbench
 
-All seven testbenches have the same shape, and `xschem/mosbius_lib/tb_template.sch`
-is that shape with the circuit-specific parts removed. Two instances of
-one symbol -- `mini_mosbius.sym`, the chip as a nine-pin block, which is
-identical for every design -- differing only in what each stands for:
+Every testbench has the same shape, and
+`xschem/mosbius_lib/tb_template.sch` is that shape with the
+circuit-specific parts removed. Two instances of one symbol --
+`mini_mosbius.sym`, the chip as a nine-pin block -- differ only in what
+each stands for:
 
 | instance | `schematic=` | netlists as | is |
 |---|---|---|---|
-| `x1` | `tcleval([file normalize examples/<name>/<name>.sch])` | `.subckt <name>` | the design **as drawn** |
-| `x2` | `<name>_routed` (+ `spice_sym_def`) | `.subckt <name>_routed` | the same design **as routed** |
+| `x1` | `tcleval([file normalize examples/<name>/<name>.sch])` | `.subckt <name>` | the design as drawn |
+| `x2` | `<name>_routed` (+ `spice_sym_def`) | `.subckt <name>_routed` | the same design as routed |
 
 One stimulus and one set of rails feed both, so the only difference
-between `out_drawn` and `out_routed` is the chip. The current source's
-sheet varies most -- it reads currents through ammeters rather than a
-voltage at a probe, so it carries no probe model at all -- and it is
-still this same pair of instances off one stimulus. This is the same
-`spice_sym_def` swap-in used to compare a schematic against a post-layout
-extraction; here the "extraction" is `mosbius simulate`'s output.
+between `out_drawn` and `out_routed` is the chip. A net shared between the
+two instances carries no suffix; one that differs per instance carries
+`_drawn` or `_routed`.
 
-`x2`'s netlist lives in `build/`, which is generated and therefore absent
-from a fresh clone. Ctrl-click **generate routed spice** on any testbench
-sheet, or from the repo root:
+`x2`'s netlist lives in `build/`, which is generated and so absent from a
+fresh clone. Ctrl-click **generate routed spice** on the testbench sheet,
+or run:
 
 ```bash
 sh tools/regenerate_routed.sh examples/inverter/inverter.sch
 ```
 
 Then press Netlist again to pick it up. Netlist the testbench without
-doing this first and `xschemrc`'s `mosbius_routed_include` says so in the
-netlist and in a dialog, rather than leaving you to decode an ngspice
-error two steps later.
-
-### Net names
-
-A net **shared** between the two instances carries no suffix, because it
-is physically one net (`in`, `set`, `reset`, `inp`, `inm`). A net that
-differs per instance carries `_drawn` or `_routed`. Package pins a design
-does not use keep their pin name (`ua5_drawn`, `ua5_routed`), having no
-role to name them after. So the suffix tells you something real at a
-glance: no suffix means one net feeding both halves, a suffix means one
-per half.
+doing this and `xschemrc`'s `mosbius_routed_include` says so in the
+netlist and in a dialog, rather than leaving an ngspice error two steps
+later to be decoded.
 
 ## The probe
 
-Each testbench hangs a **probe model** on each output -- `Cprobe_drawn` /
-`Rprobe_drawn` and `Cprobe_routed` / `Rprobe_routed`, valued `'cprobe'`
-and `'rprobe'`, with `.param cprobe=10p` and `.param rprobe=10meg` in the
-sheet's ngspice block. Those two parameters turn out to be the largest
-lever on the conclusion a reader takes away, so they are worth spelling
-out.
-
-**The probe is the bench, not the chip**, which is why it is a pair of
-components in the testbench rather than anything the design or
-`mosbius simulate` knows about. Contrast the pads: every user of this
-chip has pads, so they are baked into the generated `<name>_routed.spice`
-and there is no flag to remove them. Nobody has *the same* probe, so the
-instrument is a parameter you set, and the defaults name an instrument
-rather than a round number:
+Each testbench hangs `Cprobe_drawn` / `Rprobe_drawn` and `Cprobe_routed` /
+`Rprobe_routed` on the outputs, valued `'cprobe'` and `'rprobe'`. The
+meter is part of the circuit, and unlike the pads -- which every user of
+this chip has, and which are therefore baked into the generated netlist --
+nobody has the same probe, so it is a parameter:
 
 | instrument | `rprobe` | `cprobe` |
 |---|---|---|
-| 10x passive probe (**the default**) | 10meg | 10p |
+| 10x passive probe (the default) | 10meg | 10p |
 | Analog Discovery 3 flywires | 1meg | 24p |
 | 1x passive probe | 1meg | 100p |
 
-Every published number in these READMEs is at the default. This repo's
-own silicon comparisons are taken with an AD3, and say so where they
-appear.
+Every published number in these READMEs is at the default. A figure taken
+at `cprobe=10p` is not comparable to a bench reading through a 24 pF
+instrument: the difference halves an expected slew rate and doubles an
+expected settling time constant, which is large enough to look like a
+disagreement with silicon.
 
-**Capacitance is the half that matters here.** None of these examples
-drives a node stiffer than about 50 kOhm, so swapping 10 MOhm for 1 MOhm
-costs a couple of percent at most, while the capacitance sets every rise
-time on the sheet. The resistor earns its place anyway: without it an
-output is a perfect open circuit, VOH lands exactly on the rail, and the
-sheet cannot reproduce a bench measurement of a level at all.
+Capacitance is the half that matters. Nothing here drives a node stiffer
+than about 50 kOhm, so 10 MOhm against 1 MOhm costs a couple of percent,
+while the capacitance sets every rise time on the sheet. The resistor
+earns its place anyway: without it an output is an open circuit, VOH lands
+exactly on the rail, and the sheet cannot reproduce a bench measurement of
+a level at all.
 
-Both are *controlled variables*, held identical on both instances so that
-the only difference between the two outputs is the chip itself. That
-identity is what makes subtracting one from the other mean anything.
+Both values are held identical on the two instances. That is what makes
+the difference between the two outputs mean something.
 
-Adding `rprobe` changed no published number: re-run 2026-08-28, all four
-regression checks pass unchanged (inverter 8.90/24.63 ns, SR latch
-18.78/10.94 ns, ring 2.083 GHz/43.89 MHz, diff amp within 2 mV on every
-level). That 2 mV on the diff amp is the whole visible effect of hanging
-10 MOhm on a ~15 kOhm node, and it is the reason the resistor is worth
-having anyway: it is the component that makes a *level* mean something.
+The routed side's extra delay is dominated by the bond pad rather than by
+the matrix: on the inverter it is about 10.8 pF of additional
+capacitance, against ~43 fF per switch of row coupling and ~0.9 pF per
+row of bus wiring. Which effect dominates depends on the circuit. The
+inverter drives a package pin into a probe; the ring oscillator's stages
+drive each other with no pad between them; the amplifiers lose bandwidth
+rather than gain, since at DC no current flows into a capacitor and series
+resistance drops no voltage.
 
-What each side then contains:
-
-| | contains |
-|---|---|
-| `x1`, as drawn | the FETs, ideal wires, probe straight on the drain |
-| `x2`, as routed | switch matrix + row coupling + bus-wire capacitance + `pad_model` (2pF board, 1 ohm + 1nH package, 3pF pad, the analog mux gate on plus 15 deselected ones), probe outside the pad |
-
-The probe lands on a different node in each -- on the drain in `x1`,
-outside the pad in `x2`. That asymmetry is correct: it is the same point
-on a real bench, and `x1` has no pad for the probe to sit outside of.
-`x1`'s missing pad is part of what is being measured, so it must not be
-compensated for by inflating `Cprobe_drawn`. For the same reason
-`Cprobe_routed` is not zero -- zero would mean measuring with no probe
-attached, leaving `out_routed` a node nobody could observe.
-
-Per-instance estimates (drawn carrying probe + PCB + pad + package,
-routed carrying probe only) would each be a better standalone prediction
-of the bench, and the difference between them would mean nothing, because
-you would have compensated the drawn side for the very effect the
-comparison exists to show.
-
-**The value changes the story, not just the numbers.** The inverter,
-measured at both loads:
-
-| load | `trise_drawn` | `trise_routed` | ratio |
-|---|---|---|---|
-| 100pF | 88.43 ns | 130.33 ns | 1.47 |
-| 10pF | 8.90 ns | 24.63 ns | 2.77 |
-
-A purely resistive difference would hold the ratio constant across loads
-and a purely capacitive one would shrink it at the larger load, so it is
-both: roughly 10.8pF of extra capacitance on the routed output plus a
-series switch resistance around 33% of the drive resistance. At 100pF the
-chip appears to cost 47%; at 10pF it costs 180%. Same circuit, same
-routing.
-
-That extra capacitance is dominated by the **bond pad**, not the switch
-matrix. Row coupling (~43fF per switch) and bus-wire capacitance (~900fF
-per row) are genuinely swamped by a heavy external load -- but a pad an
-order of magnitude larger than either sits in the path too, and an earlier
-version of the inverter's analysis missed it by measuring at 100pF.
-
-Which effect dominates depends on the circuit, and the examples cover both
-regimes. The inverter is pad-and-load-dominated: it drives a package pin
-into a probe. The ring oscillator is switch-matrix-dominated: its stages
-drive each other, with no pad between them. The diff amp is neither --
-its gain is unchanged to within 0.5% between drawn and routed, because at
-DC no current flows into a capacitor and series resistance drops no
-voltage, so the matrix costs it **bandwidth, not gain**. The current
-source and the OTA follower make that same point on two more DC
-quantities and from opposite ends: the mirror's output current is within
-1.3% of the drawn value and the follower's offset within about 5 mV,
-while the follower's slew rate -- a rate, not a level -- comes out 2.78x
-slower, the same factor the inverter's rise time gives at the same load.
-
-**A load inside a feedback path is not a probe model.** `tb_ring.sch`
-deliberately has no capacitor on its loop nodes: 100pF there stops the
-drawn ring oscillating outright, and even 1pF drags it from 2.5GHz to
-1.5GHz. That is why the ring has a buffer stage -- so the probe load lands
-outside the loop, on a node where it models a probe again.
-
-**Give the circuit time to settle before you measure it.** The diff amp's
-output is a ~9 kOhm node as drawn and ~15 kOhm as routed, so 10pF alone
-gives it a time constant of ~90ns and ~220ns respectively -- about 200ns
-and 470ns measured 10%-90%, which is how this was quoted before. An earlier version of that example held
-each input level for 100ns and reported gains between 0.03 and 7.8 V/V,
-all of them samples taken before the output had arrived, and all of them
-made the slower routed branch look like a worse amplifier when it is an
-equally good one. The tell was in the raw file: a measurement that is
-still moving while you take it is not a measurement.
+A load inside a feedback path is not a probe model. `tb_ring.sch` has no
+capacitor on its loop nodes: 100 pF there stops the drawn ring
+oscillating, and even 1 pF drags it from 2.5 GHz to 1.5 GHz. That is what
+the ring's buffer stage is for.
 
 ## The bias reference
 
-`ibias` (pin `ua[0]`) is a **current input**, not a voltage. On silicon it
-feeds one diode-connected NMOS -- `mirror_n`'s reference leg -- and every
-programmable mirror leg, differential-pair tail bank and the OTA's tail is
-a *slave* copying that one gate voltage. The PMOS side gets its own node,
-`ibias_p`, made by copying the reference 1:1 with an NMOS and pushing it
-through a PMOS diode. One reference per chip, two gate nodes, one per
-polarity.
+`ibias` (pin `ua[0]`) is a current input, not a voltage. On silicon it
+feeds one diode-connected NMOS, and every mirror leg, tail bank and the
+OTA's tail is a slave copying that gate voltage. The PMOS side gets its
+own node, `ibias_p`, made by copying the reference 1:1 and pushing it
+through a PMOS diode. One reference per chip, one gate node per polarity.
 
-The design sheets model that directly. `mini_mosbius.sch` -- and so every
-design copied from it -- carries one **`mosbius_bias`** block wired to the
-`ibias` pin. Inside it are the chip's three transistors at the sizes its
-own schematics use: an NMOS reference (L=1 W=10 nf=2), a 1:1 NMOS copy,
-and a PMOS diode (L=1 W=30 nf=4). It is part of the silicon rather than
-part of your circuit, which is why it is one block off to one side with a
-single wire to the pin, and why `ibias_p` never appears on your sheet --
-the block makes it, and `mosbius_psource`/`mosbius_ptail` find it by name.
+Every design sheet carries one `mosbius_bias` block wired to the `ibias`
+pin, holding the chip's own three transistors at the sizes its schematics
+use. It is part of the silicon rather than part of the circuit, which is
+why it sits off to one side with a single wire, and why `ibias_p` never
+appears on the sheet.
 
-**Keep exactly one.** Two generators halve the reference current between
-them, so every `ratio=` and `tail=` on the sheet comes out at half; none
-leaves every mirror gate wherever the DC solver puts it. `mosbius route`
-counts them and refuses a design with none or two (`B1`).
+Keep exactly one. Two generators halve the reference current between them,
+so every `ratio=` and `tail=` comes out at half; none leaves every mirror
+gate wherever the DC solver puts it. `mosbius route` counts them and
+refuses a design with none or two (`B1`).
 
-What that buys you is that the settings mean what they say: `ratio=N` on a
-`mosbius_nsink`/`mosbius_psource` is N x `ibias`, and `tail=N` on a
-`mosbius_ntail`/`mosbius_ptail`/`mosbius_ota` is N x `ibias`, which is
-also what the hardware's own 2/4/6/8 cycler encoding means. At the
-testbench default of 100 uA, `tail=4` is 400 uA.
-
-Two consequences worth knowing. Each instance in a testbench needs **its
-own** bias source: the sheets carry `Ibias_drawn` and `Ibias_routed`, both
-`'ibias_amps'`, for the same reason both probe capacitors are `'cprobe'` --
-one source shared between two chips gets divided between them, and the
-split depends on their input impedances, so both branches move. And
-sweeping `ibias_amps` scales every mirror, tail and OTA on the sheet at
-once, which is a first-class experiment rather than a nuisance -- on a
-demoboard that can make the current, it is programmable from the same host
-that loads the bitstream (`mosbius program --ibias`). Whether yours can is
-the subject of the next section.
-
-This was got wrong until 2026-08-28, in a way worth recognising if you
-meet an old sheet: each device symbol used to carry its *own* copy of the
-reference diode, so N devices split the reference N ways, and
-`mosbius_psource` referenced the NMOS node instead of `ibias_p`. Symptoms
-were currents that came out at 1/N of the request, or a lone
-`mosbius_psource` delivering picoamps.
+What that buys is that the settings mean what they say: `ratio=N` and
+`tail=N` are both N x `ibias`, which is what the hardware's 2/4/6/8 cycler
+encoding means. At the testbench default of 100 uA, `tail=4` is 400 uA.
+Each instance needs its own bias source -- the sheets carry `Ibias_drawn`
+and `Ibias_routed` -- because one source shared between two chips divides
+between them according to their input impedances, moving both branches.
 
 ### Feeding it by hand, when the board can't
 
 The RP2350-controlled circuit that makes this current arrived on the later
-ETR demoboards. On an older one `tt.analog_current_source` is `None`, there
-is no bias current at all, and `mosbius program` says so in as many words
-beside the upload -- the bits are still on the chip and still correct, but
-every `mosbius_nsink`, `mosbius_psource`, `mosbius_ntail`, `mosbius_ptail`
-and `mosbius_ota` in the design is referencing a current that isn't there.
-A design of plain `mosbius_nmos`/`mosbius_pmos` FETs neither notices nor
-cares, which is why the inverter, the SR latch and the ring oscillator were
-measured on silicon long before anyone found this.
+ETR demoboards. On an older one `tt.analog_current_source` is `None` and
+there is no bias current at all: the bits are still correct, but every
+mirror, tail and OTA in the design references a current that is not there.
+A design of plain FETs neither notices nor cares.
 
-The workaround is a bench supply and one resistor into the bias pad. It is
-cruder than a current source, and the crudeness is worth understanding
-rather than working around: what you control is a *voltage*, and the pin
-wants a *current*, so the resistor is what converts one to the other. The
-pin sets its own voltage; the resistor sees the difference.
+The workaround is a bench supply and one resistor into the bias pad. What
+is controlled is a voltage and the pin wants a current, so the resistor
+converts one to the other:
 
     V+  ---[ R ]--- ibias pad          I = (V+ - V_pad) / R
 
-**Which means the resistor should be large.** Pick it so most of the supply
-is dropped across it, because the part you did not choose -- what the bias
-pin settles at -- then matters proportionally less. With 20 kOhm at 100 uA
-the resistor takes 2.0 V and the pin about 1.3 V, so being 50 mV wrong
-about the pin is a 2.5% error in the current. With 4.7 kOhm the resistor
-takes only 0.47 V and the same 50 mV is a 10.6% error. Same current, four
-times the sensitivity to the half you know least well.
+Pick the resistor large, so that most of the supply drops across it and
+the part not chosen -- what the pad settles at -- matters proportionally
+less. At 100 uA through 20 kOhm the resistor takes 2.0 V and the pad about
+1.28 V, so being 50 mV wrong about the pad is a 2.5% error in the current;
+through 4.7 kOhm the same 50 mV is 10.6%.
 
-**Measure the pad; do not assume it.** `tools/measure_ibias_clamp_ad3.py`
-sweeps the supply and reads *both* ends of the resistor on the two scope
-channels, so the current is a difference between two measurements rather
-than a number derived from the supply's own idea of its output. It also
-answers a question you cannot answer with a multimeter: whether the pad is
-the bias pin at all. Three outcomes look alike at a single voltage and
-nothing alike across a sweep -- a pad that follows the supply 1:1 is
-connected to nothing, a pad pinned at 0 V is one of the eight header
-letters tied to ground, and a pad that holds its own voltage while the
-supply moves by volts is the reference.
+`tools/measure_ibias_clamp_ad3.py` sweeps the supply and reads both ends
+of the resistor, so the current is a difference between two measurements
+rather than a number derived from the supply's own idea of its output. It
+also identifies the pad, which a single-point measurement cannot: a pad
+that follows the supply 1:1 is connected to nothing, one pinned at 0 V is
+one of the header letters tied to ground, and one that holds its own
+voltage while the supply moves by volts is the reference. Measured on a
+ttsky25a part, that sweep fits a square law to an rms of 3.5 mV across a
+24x range of current, which is a diode-connected FET and not an ESD
+structure or a leakage path.
 
-#### What it measured
-
-Run on a ttsky25a part 2026-08-29, into pad K through 20 kOhm, 0.5 to 4.5 V:
-
-| | |
-|---|---|
-| pad voltage at 100 uA | 1.282 V |
-| moved, over 6.4 to 154 uA | 545 mV, against a 2.0 V move at the supply |
-| square-law fit, 15 points | Vth 0.744 V, 54.2 mV per sqrt(uA) |
-| fit residuals | -10.6 to +4.0 mV, rms 3.5 mV |
-
-**That fit is the identification.** A diode-connected FET in saturation has
-`Vgs = Vth + sqrt(2I/k)`, so plotting the square root of the current
-against the pad voltage should give a straight line -- and it does, to an
-rms of 3.5 mV across a 24x range of current. A pn junction would have been
-logarithmic instead, moving about 60 mV per decade, or ~83 mV over the 1.38
-decades swept; the pad moved 545 mV, six times stiffer. So this is not an
-ESD structure or a leakage path being mistaken for a reference, it is
-`mirror_n`'s M1, and the extracted 0.744 V is where a sky130
-`g5v0d10v5` HV NMOS threshold belongs.
-
-**It also confirmed a pad letter.** `ua[0]` -> K was composed from the
-shuttle index and the carrier's KiCad wiring and had never been checked at
-a bench; it now has been, joining ua1 -> C, ua2 -> J and ua3 -> D.
-
-**So, with 20 kOhm: set the supply to 3.28 V for the nominal 100 uA**, and
-5.0 V reaches about 178 uA, which is the ceiling with that resistor. Note
-that `tail=` and `ratio=` multiply *on the chip*, so 100 uA of reference is
-what `tail=4`'s 400 uA is built from -- the pad never carries it.
-
-One honest limit on those numbers. The pad voltage carries one scope
-channel's offset directly, so 1.282 V and the 0.744 V threshold are only as
-good as that channel's calibration -- tens of millivolts, uncalibrated. The
-*current* is a difference across the resistor and so carries only the
-difference of the two channels' offsets, which is the smaller error; the
-3.28 V setting is the more trustworthy half of this table. Calibrate the
-instrument (WaveForms -> Settings -> Device Manager -> Calibrate) before
-quoting the threshold anywhere.
-
+With 20 kOhm, set the supply to 3.28 V for the nominal 100 uA; 5.0 V
+reaches about 178 uA, the ceiling with that resistor. `tail=` and `ratio=`
+multiply on the chip, so the pad never carries the multiplied current.
 
 ## Gotchas
 
 These have each cost someone a day.
 
-**Launch xschem from the repo root.** It looks for `xschemrc` in its
-current working directory only -- not the schematic's directory, and it
-does not search upwards. From the repo root you get sky130A and
-`xschem/mosbius_lib` on the symbol path, the PDK variant pinned, and
-netlists in `build/`. From anywhere else you get the container's defaults:
-netlists in `simulations/`, and every device replaced by
-`* M1 - mosbius_nmos IS MISSING !!!!` -- a deck with no transistors that
-ngspice runs perfectly happily.
-
-**`schematic=` resolves relative to the *symbol's* directory, and a failed
-lookup falls back silently.** `mini_mosbius.sym` lives in
-`xschem/mosbius_lib/`, so `schematic=inverter` or `schematic=inverter.sch`
-on an instance looks for a file that is not there and falls back to the
-symbol's own empty body, emitting `.subckt inverter` with nothing in it.
-Use the absolute form,
-`schematic="tcleval([file normalize examples/inverter/inverter.sch])"`.
-The subcircuit name always follows the `schematic=` file, not the symbol.
-
-**A bare `"` inside a `code`/`code_shown` symbol's `value="..."` truncates
-the netlist there,** silently: the rest of your prose, the `.option`, the
-whole `.control` block, every `.meas`. The failure surfaces two steps
-later as ngspice's `no control job`. Quote prose with `'single quotes'` or
-escape as `\"`.
-
-**`Vgnd VGND 0 0` is not optional.** xschem emits ground as a named global
-net and never as SPICE node 0, so without that line the whole circuit
-floats. `.option rshunt` papers over it, but then the absolute level is
-set by shunt currents: one debugging session had the entire circuit
-floating at about -277kV with the real signals riding on top.
-
-**A `w=` on a diff-pair half is ignored.** Those halves have no width bits
--- their geometry is fixed at the equivalent of `w=4`. A circuit drawn at
-`w=1` throughout can therefore route as 1x/1x/4x while looking symmetric
-on screen. The router warns (`R1`) and reports the width every device is
-actually built at; read that, do not assume the schematic.
-
-**Diff-pair and OTA inputs reach only bus rows 1-3;** everything else
-reaches all six. Since `ua3`→`bus_A[5]` and `ua5`→`bus_B[4]` are outside
-that range, a gate on either cannot land on a half. Internal nets spanning
-both bus sides are forced onto row 6, which a diff-pair input can never
-reach. The router says which pins would have worked instead of failing
-opaquely.
-
-**A net is a package pin only if it is *named* one.** `ua1`..`ua5` are
-recognised by name; anything else, `out` included, is an ordinary internal
-net that simulates fine and is unobservable on silicon. Drawing an
-`iopin` on it does not change that.
-
-**A small tag reading "implicit port" is not a loose end.** You will see
-one on `ibias` and on the body ties inside the library's device
-schematics. Those symbols supply their bias and body connections through
-xschem's `extra` attribute rather than as drawn pins, and `extra` ports
-are invisible to xschem's connectivity check -- so without the tag it
-called them undriven and every netlist reported `Error: undriven node:
-ibias` on a design that was perfectly correct. The tag says the net leaves
-the block another way; it emits a comment and nothing else. Leave them
-where they are.
-
-**A differential pair's shared source can carry nothing else.** The two
-halves are wired together in silicon and that node has no switch onto the
-bus, so a third device drawn onto it -- or naming it `ua4` to measure the
-tail on a pin -- cannot be built. The router refuses it now; before
-2026-08-28 it routed clean and silently left the connection out, giving a
-bitstream identical to the one you get without it. What may sit there is
-nothing (with the net named `VGND`/`VAPWR`, which uses the pair's free
-rail tie) or a `mosbius_ntail`/`mosbius_ptail`.
-
-**A pair's tail current has no off state.** The bank's smallest setting is
-one always-on transistor, so the chip sinks 2 x `ibias` -- 200 uA at the
-usual 100 uA -- out of the shared source whatever your schematic says, and
-`decode` shows it as `tail=2`. That is invisible when the source is tied
-to its rail, because the tie shorts the bank out. Left floating on an
-internal net it is real, your as-drawn simulation does not have it, and
-the router warns (`R3`). Draw a tail bank and pick the current, or tie the
-source to the rail.
-
-**Which hardware slot each device gets is the allocator's choice,** and it
-is not stable against unrelated edits. Read the roles from the route
-output rather than assuming.
-
-**Budget two minutes for the model load.** sky130A's combined library
-takes ~2 minutes to parse regardless of circuit size, so a simulation is
-not hung just because nothing has happened yet. `.spiceinit` at the repo
-root has the small free speedups; copy it wherever ngspice actually runs,
-since it only reads that file from its own working directory. Setting
-`reltol=0.01` took the inverter testbench from ~110s to ~35s and moved
-both rise times by under 0.1%. Never set `ngbehavior=hsa`: it breaks bin
-selection for the PDK's binned HV FET models, and every instance then
-fails with "could not find a valid modelname".
+- **Launch xschem from the repo root.** It looks for `xschemrc` in its
+  current working directory only, and does not search upwards. From
+  anywhere else the netlists land in `simulations/` and every device comes
+  out as `* M1 - mosbius_nmos IS MISSING !!!!` -- a deck with no
+  transistors that ngspice runs perfectly happily.
+- **`schematic=` resolves relative to the symbol's directory, and a failed
+  lookup falls back silently** to the symbol's own empty body, emitting
+  `.subckt <name>` with nothing in it. Use the absolute form,
+  `schematic="tcleval([file normalize examples/inverter/inverter.sch])"`.
+  The subcircuit name always follows the `schematic=` file.
+- **A bare `"` inside a `code`/`code_shown` symbol's `value="..."`
+  truncates the netlist there,** silently, taking the `.option`, the whole
+  `.control` block and every `.meas` with it. It surfaces two steps later
+  as ngspice's `no control job`. Quote prose with `'single quotes'`.
+- **`Vgnd VGND 0 0` is not optional.** xschem emits ground as a named
+  global net and never as SPICE node 0, so without that line the whole
+  circuit floats.
+- **A `w=` on a diff-pair half is ignored.** Those halves have no width
+  bits; their geometry is fixed at the equivalent of `w=4`. A circuit
+  drawn at `w=1` throughout can route as 1x/1x/4x while looking symmetric
+  on screen. The router warns (`R1`) and reports the width every device is
+  actually built at.
+- **Diff-pair and OTA inputs reach only bus rows 1-3;** everything else
+  reaches all six. Since `ua3` and `ua5` are outside that range, a gate on
+  either cannot land on a half, and an internal net spanning both bus
+  sides is forced onto row 6, which an input can never reach.
+- **A net is a package pin only if it is named one.** `ua1`..`ua5` are
+  recognised by name; anything else, `out` included, is an internal net
+  that simulates fine and is unobservable on silicon. Drawing an `iopin`
+  on it does not change that.
+- **A tag reading "implicit port" is not a loose end.** Those nets leave
+  the block through xschem's `extra` attribute, which its connectivity
+  check cannot see; without the tag every netlist reported `undriven node:
+  ibias` on designs that were correct.
+- **A differential pair's shared source can carry nothing else.** That
+  node has no switch onto the bus, so a third device on it -- or naming it
+  `ua4` to measure the tail -- cannot be built. What may sit there is
+  nothing (with the net named `VGND`/`VAPWR`, which uses the pair's free
+  rail tie) or a `mosbius_ntail`/`mosbius_ptail`.
+- **A pair's tail current has no off state.** The bank's smallest setting
+  is one always-on transistor, so the chip sinks 2 x `ibias` out of the
+  shared source whatever the schematic says. Tying the source to its rail
+  shorts the bank out and hides this; left on an internal net it is real,
+  the as-drawn simulation does not have it, and the router warns (`R3`).
+- **Which hardware slot each device gets is the allocator's choice,** and
+  it is not stable against unrelated edits. Read the roles from the route
+  output.
+- **Budget two minutes for the model load.** sky130A's combined library
+  takes that long to parse regardless of circuit size. `.spiceinit` at the
+  repo root has the free speedups; copy it wherever ngspice runs, since it
+  reads that file only from its own working directory. Never set
+  `ngbehavior=hsa`: it breaks bin selection for the PDK's binned HV FET
+  models, and every instance then fails with "could not find a valid
+  modelname".
 
 ## Building your own
 
-[`TUTORIAL.md`](../TUTORIAL.md) has the click-by-click version of what
-follows; this is the same path at reference speed.
+Copy `xschem/mosbius_lib/mini_mosbius.sch` to a new file in the same
+directory -- schematics refer to symbols by bare name, so they resolve
+only while the file sits on xschem's library path. It arrives with the
+nine pins placed and the bias generator off to one side. Wire the circuit
+to those pins; there is nothing else to wire to, and no body or bias pin
+to draw.
 
-Copy `xschem/mosbius_lib/mini_mosbius.sch` to a new file **in the same
-directory** -- schematics refer to symbols by bare name, so they resolve
-only while the file sits somewhere on xschem's library path. It arrives
-with the nine pins already placed, and with the chip's bias generator off
-to one side (above). Wire your circuit to the pins; there is nothing else
-to wire to, and no body or bias pin to draw, since those are hard-wired on
-silicon and supplied by the symbols themselves.
-
-Netlist with xschem's Netlist button. Then, from the host:
+Netlist with xschem's Netlist button, then from the host:
 
 ```bash
 mosbius route build/my_design.spice --out build/my_design.mosbius.json
-```
-
-`--out` persists the routing decision, so re-running on an unchanged
-design reuses it verbatim rather than re-solving -- an unrelated edit
-elsewhere cannot silently relocate this circuit's rows and change its
-parasitics. Routing is deterministic, so deleting `build/` and starting
-again reproduces the same bitstream.
-
-**Then leave watch mode running while you draw:**
-
-```bash
 mosbius watch build/my_design.spice
 ```
 
-Every time you press Netlist, the watcher notices (it polls mtime, so it
-works across the Docker bind mount) and reprints the route and safety
-report within about a second. Draw, netlist, glance at the terminal, fix
-anything DANGEROUS or IMPOSSIBLE, repeat. This is where the iteration
-actually happens; running `route` by hand after every edit is the slow
-path.
+`--out` persists the routing decision, so an unchanged design reuses it
+verbatim rather than re-solving, and an unrelated edit elsewhere cannot
+silently relocate this circuit's rows. Watch mode reprints the route and
+safety report about a second after every Netlist press, which is where the
+iteration actually happens.
 
-To simulate as routed, copy `tb_template.sch` next to your design and
-replace `my_design.sch` and `my_design_routed` throughout with your own
-names. It ships without any `.meas` lines on purpose -- what is worth
-measuring depends on your circuit. Add them to the `.control` block,
-ctrl-click **generate routed spice**, and Netlist again.
-
-Finally, with a demoboard connected:
+To simulate as routed, copy `tb_template.sch` next to the design and
+replace `my_design.sch` and `my_design_routed` throughout. It ships
+without `.meas` lines on purpose. Then, with a demoboard connected:
 
 ```bash
 pip install mpremote   # once
 mosbius program <bitstream>
 ```
 
-which refuses to upload if the safety checker found an ERROR. Add
+which refuses to upload if the safety checker found an error. Add
 `--verify` to shift the bits back out and confirm the readback, at least
 once when setting up a new board.
