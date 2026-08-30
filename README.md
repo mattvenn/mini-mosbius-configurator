@@ -60,8 +60,6 @@ the Python tooling runs on the host (it needs USB serial access for
 `mosbius program`).
 
 ```bash
-git submodule update --init   # first time only
-
 # Install the command line (host, not the container). The routing/checking/
 # bitstream/simulation half is pure standard library; the extras are only for
 # talking to a demoboard and drawing comparison plots:
@@ -134,7 +132,15 @@ python3 -m pytest tests/ -q
 ## Ground rules
 
 - `ttsky-mini-mosbius/` is a **read-only git submodule** (upstream,
-  Apache-2.0). Never modify it.
+  Apache-2.0). Never modify it. You do not need it to use this project:
+  the two things derived from it -- `mosbius/bitmap.py` and
+  `mosbius/data/mosbius_device_library.spice` -- are committed, so the
+  `mosbius` command, the tests and the example simulations all run
+  without it (CI checks out neither). Run `git submodule update --init`
+  only to re-derive those from upstream (`tools/extract_bitmap.py`,
+  `tools/rebuild_mosbius_device_library.sh`) or to re-run the
+  `tools/run_ringo_*` experiments, which netlist upstream's own
+  testbench.
 - This project is Apache-2.0.
 - `build/` is gitignored -- it holds the netlists xschem generates and the
   routing output, never hand-edited or committed.

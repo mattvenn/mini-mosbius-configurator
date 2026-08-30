@@ -411,7 +411,14 @@ fix.
 ## Ground rules
 
 - `ttsky-mini-mosbius/` is a **read-only git submodule** (upstream, Apache-2.0).
-  Never modify it. `git submodule update --init` after cloning.
+  Never modify it. Nothing on the user path needs it: `mosbius/bitmap.py`
+  and `mosbius/data/mosbius_device_library.spice` are derived from it but
+  committed, so the CLI, `tests/` and the example simulations all run
+  without it, and neither CI workflow checks it out. `git submodule
+  update --init` is only for re-deriving those two
+  (`tools/extract_bitmap.py`, `tools/rebuild_mosbius_device_library.sh`)
+  or re-running the `tools/run_ringo_*` experiments, which netlist
+  upstream's own testbench.
 - This project is Apache-2.0.
 - **The audience is beginners learning analog design** (§1.1). Every diagnostic
   states what happened, why the hardware behaves that way, and what to try
