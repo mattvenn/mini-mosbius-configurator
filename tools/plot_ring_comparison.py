@@ -12,7 +12,7 @@ Inputs, all produced by other commands so this script only draws:
 Writes examples/ringosc/ring_comparison.png and prints the table.
 
 **Two panels, on two timebases, like the testbench's two `tran` runs.**
-As drawn the ring runs at 2.083 GHz and the other two near 40 MHz, a
+As drawn the ring runs at 2.289 GHz and the other two near 40 MHz, a
 factor of 53, so the drawn trace gets its own panel. As routed and on
 silicon are 11% apart, which one axis holds comfortably, so they overlay
 -- and an 11% period difference is something you can see.

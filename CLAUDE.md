@@ -99,7 +99,7 @@ ua0-ua5 -> K, C, J, D, G, F, of which five are confirmed on silicon
 confirmed 2026-08-29 by sweeping a supply into pad K through 20 kOhm and
 watching it clamp -- `tools/measure_ibias_clamp_ad3.py`, written up in
 `examples/README.md` -- and ua4->G the same day by `examples/diffamp/`'s
-output sitting at 2.07 V against a simulated base of 1.985/2.020 V.
+output sitting at 2.07 V against a simulated base of 2.012/2.018 V.
 
 *Half one is an API.* `mosbius/pads.py` fetches
 https://index.tinytapeout.com/ttsky25a/tt_um_tnt_mosbius.json -- the Tiny
@@ -196,12 +196,39 @@ quantity the sheet cannot produce at all, since both simulated branches
 are symmetric by construction.
 
 Two things it flushed out on the way, both worth not rediscovering: the
-model-binning trap in the list below, and a router limitation now in
-`TODO.md` -- `route_rail_net()` chooses a `cfg_bus_pwr` tap without
-checking which row its `cfg_bus_short` pulls in on the other side, so a
-design whose FET *drain* needs a rail (any source follower) gets either a
-`DANGEROUS -- ua[5] shorted to VAPWR` or a spurious `DOESN'T FIT`,
-decided by the order xschem happened to list the instances in.
+model-binning trap in the list below, and a router limitation, since
+fixed (below).
+
+**Nets route in order of how little choice they have, not alphabetically
+(2026-08-30).** A port net's row is a bond wire, not a switch, and if it
+spans both sides it needs that row number on the far side too for its
+`cfg_bus_short` -- it can trade neither. A rail net has a few taps; an
+internal net has any free row. Sorting nets by name put `outa` ahead of
+`ua1` and let it take a row `ua1` had no alternative to, so two source
+followers fitted or did not depending on instance order
+(`DOESN'T FIT -- bus_B[1] is needed by both 'ua1' and 'outa'`).
+`route_order()` in `route.py` is the three-tier key. Ports-then-rails-then-
+internal was measured against two finer variants (two-sided nets first
+within a tier, and two-sided first overall); all three score identically on
+every circuit tried, so the simplest one is in. Every example bitstream is
+byte-identical, and no example changes row assignment at all.
+
+**A rail tap now scores what its bridge costs on the far side, and a
+source follower routes (2026-08-30).** Reaching a `cfg_bus_pwr` tap from a
+terminal on the other bus side also closes `cfg_bus_short[row]`, which
+spends the same row *number* on the far side -- and two of the three VAPWR
+taps have a bond wire sitting there (bus_A[4] pairs with ua5's bus_B[4],
+bus_B[1] with ua1's bus_A[1]; VGND is the same shape, taps at bus_A[2],
+bus_B[5], bus_A[6]). `route_rail_net()` took the lowest-numbered tap on
+whichever side the first touch happened to be, so two source followers --
+a FET *drain* on a rail is what needs a tap at all; a source uses the
+device's own `ctrl_*_source` tie and costs no row -- came out either
+`DANGEROUS -- ua[5] shorted to VAPWR` or `DOESN'T FIT`, decided by
+instance order. It now ranks every tap on both sides by what the bridge
+drags in, so a two-sided rail net lands on row 6, the only row with no
+bond wire on either side. A one-sided rail net needs no bridge and is
+unchanged, still bus_A[4]. **Every example's bitstream is byte-identical**,
+which is the check that matters: no committed design had ever used a tap.
 
 **`examples/srlatch/` draws its write transistors `w=4` now, and the
 warning it used to provoke is asserted in the test suite instead

@@ -61,15 +61,15 @@ SETTLE = 0.03
 BIAS_RAILS = (2.25, 3.28, 4.30)     # ~55, ~100, ~145 uA through 20k
 NOMINAL_RAIL = 3.28
 
-# examples/diffamp/README.md, measured 2026-08-28 at cprobe=10p, rprobe=10meg.
+# examples/diffamp/README.md, re-run 2026-08-29 at cprobe=10p, rprobe=10meg.
 # NOTE those are 10 MOhm / 10 pF; an AD3 is 1 MOhm / 24 pF, and 1 MOhm across
 # this amp's ~20 kOhm output is worth a couple of percent of gain. The
 # comparison below is not corrected for that.
-SIM = {"drawn": {"base": 1.985, "plus40": 2.714, "minus40": 1.222,
-                 "gain_plus": 18.22, "gain_minus": 19.08},
-       "routed": {"base": 2.020, "plus40": 2.771, "minus40": 1.228,
-                  "gain_plus": 18.78, "gain_minus": 19.80}}
-SIM_SMALL_SIGNAL = 19.8    # as drawn, near the origin
+SIM = {"drawn": {"base": 2.012, "plus40": 2.744, "minus40": 1.237,
+                 "gain_plus": 18.31, "gain_minus": 19.35},
+       "routed": {"base": 2.018, "plus40": 2.769, "minus40": 1.227,
+                  "gain_plus": 18.78, "gain_minus": 19.77}}
+SIM_SMALL_SIGNAL = 19.5    # as drawn, near the origin
 
 
 def wiring_table(pads: dict[str, str]) -> str:
@@ -291,7 +291,7 @@ def report(record) -> None:
     which landed 15 to 32 mV away from where the gain actually peaks,
     because the amplifier's swing is not symmetric about its bias point.
     The output at the peak-gain point is about 2.07 V, which is the
-    simulated base (1.985 as drawn, 2.020 as routed) -- so the sheet was
+    simulated base (2.012 as drawn, 2.018 as routed) -- so the sheet was
     right about the operating point and the first centring rule was not.
     """
     good = [b for b in record["by_bias"] if b.get("fine")]

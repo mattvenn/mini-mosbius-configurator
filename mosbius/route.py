@@ -341,6 +341,11 @@ PORT_ROW: dict[str, tuple[str, int]] = {
     for pin, (side, row) in EXTERNAL_PINS.items()
 }
 
+# The same map read backwards: which ua[] pin's bond wire sits on a row.
+# Used to name the pin a rail bridge would short, in the user's own
+# vocabulary rather than as a bus coordinate.
+PIN_BY_ROW: dict[tuple[str, int], str] = {sr: pin for pin, sr in PORT_ROW.items()}
+
 # Every (side, row) that's either port-pinned or rail-tappable, i.e. NOT
 # free for an ordinary internal net without side effects (SPEC.md Sec
 # 2.10: the pinned and rail-tappable sets are disjoint and exhaustive
@@ -391,6 +396,17 @@ def _fmt_rows(rows) -> str:
     if len(rows) == 1:
         return f"row {rows[0]}"
     return "rows " + ", ".join(str(r) for r in rows[:-1]) + f" and {rows[-1]}"
+
+
+def _fmt_taps(taps) -> str:
+    """The (side, row) form of _fmt_rows, for lists that span both bus
+    sides and so cannot be written as bare row numbers."""
+    names = [f"bus_{s}[{r}]" for s, r in sorted(taps)]
+    if not names:
+        return "no tap at all"
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + f" and {names[-1]}"
 
 
 def _describe_touch(t: "_Touch") -> str:
@@ -1176,30 +1192,59 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         remaining = touches
         if not remaining:
             return
-        side = remaining[0].side
-        tappable = sorted(row for (s, row) in _TAPPABLE_ROWS if s == side
-                           and _PWR_TAP_BY_SIDE_ROW[(s, row)][1] == rail
-                           and row_owner.get((s, row)) in (None, net))
         reachable = _shared_reach(remaining)
-        usable = [row for row in tappable if row in reachable]
+
+        def bridge_cost(side: str, row: int) -> tuple[int, str]:
+            """What closing this tap drags in on the *other* bus side.
+
+            A tap is one bit, but reaching it from a terminal on the
+            opposite side also closes cfg_bus_short[row], and that joins
+            the same row *number* on both sides. So the row on the far
+            side is spent too, and it is not always spendable: bus_A[4]'s
+            partner bus_B[4] carries ua[5]'s bond wire, so bridging there
+            shorts a package pin to the rail. Returns a rank (lower is
+            better) and, when it is not free, why.
+            """
+            opposite = "B" if side == "A" else "A"
+            if not any(t.side == opposite for t in remaining):
+                return 0, ""            # no bridge, so no partner row at all
+            if (opposite, row) in _PINNED_ROWS:
+                pin = PIN_BY_ROW[(opposite, row)]
+                return 2, (f"bus_{opposite}[{row}] carries {pin}'s bond wire, so "
+                           f"bridging to it would short {pin} to {rail}")
+            owner = row_owner.get((opposite, row))
+            if owner is not None and owner != net:
+                return 2, f"bus_{opposite}[{row}] is already carrying '{owner}'"
+            return 1, ""                # bridge needed, and the far row is free
+
+        # Every tap for this rail, on *either* side: which side the tap is
+        # on decides which terminals need bridging, so the side is part of
+        # the choice rather than whichever instance xschem happened to
+        # list first. Ranked by what the bridge costs, then by how many
+        # rows the tap spends, then by row number so the answer is stable.
+        free = sorted((s, row) for (s, row) in _TAPPABLE_ROWS
+                      if _PWR_TAP_BY_SIDE_ROW[(s, row)][1] == rail
+                      and row_owner.get((s, row)) in (None, net))
+        usable = [(s, row) for (s, row) in free if row in reachable]
         if not usable:
             unreachable_note = ""
-            if tappable:
+            if free:
                 unreachable_note = (
-                    f"  The {rail} tap rows still free on side {side} are bus "
-                    f"{_fmt_rows(tappable)},\n  but these terminals can share only "
-                    f"bus {_fmt_rows(reachable)}:\n{_reach_lines(remaining)}\n\n"
+                    f"  The {rail} taps still free are {_fmt_taps(free)},\n"
+                    f"  but these terminals can share only bus "
+                    f"{_fmt_rows(reachable)}:\n{_reach_lines(remaining)}\n\n"
                     f"{_WHY_LIMITED_REACH}\n"
                 )
             raise RouteError(
-                f"DOESN'T FIT -- no usable {rail} tap on side {side} for '{net}'\n\n"
+                f"DOESN'T FIT -- no usable {rail} tap for '{net}'\n\n"
                 f"{unreachable_note}"
                 f"  {rail} can only be reached from specific bus rows "
                 f"(SPEC.md Sec 2.7),\n  and none of the ones this net could use is "
                 f"available. If the device\n  has a source terminal, tying it "
                 f"directly to {rail} costs no bus row\n  at all."
             )
-        row = usable[0]
+        usable.sort(key=lambda sr: (bridge_cost(*sr)[0], sr[1]))
+        side, row = usable[0]
         claim_row(side, row, net)
         bit, _ = _PWR_TAP_BY_SIDE_ROW[(side, row)]
         bits.add(bit)
@@ -1273,7 +1318,23 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             f"already claimed."
         )
 
-    for net in sorted(touches_by_net):
+    # -- Route in order of how little choice each net has, not
+    # alphabetically. A port net has none at all: its row is a bond wire,
+    # not a switch, and if it spans both sides it must also have that row
+    # number free on the far side for its cfg_bus_short. A rail net has a
+    # few cfg_bus_pwr taps. An internal net can take any free row. Routing
+    # alphabetically put internal nets like 'outa' ahead of the port net
+    # 'ua1' and let them take a row 'ua1' had no alternative to, so two
+    # source followers fitted or didn't depending on the order xschem
+    # happened to list the instances in (fixed 2026-08-30).
+    def route_order(net: str) -> tuple[int, str]:
+        if net in PORT_ROW:
+            return (0, net)
+        if net in ("VAPWR", "VGND"):
+            return (1, net)
+        return (2, net)
+
+    for net in sorted(touches_by_net, key=route_order):
         touches = touches_by_net[net]
         if net == "VDPWR":
             raise RouteError(

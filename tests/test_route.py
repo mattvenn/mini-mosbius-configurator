@@ -670,3 +670,58 @@ def test_r3_is_silent_when_the_tail_is_declared_or_tied():
     ):
         report = check_routing(route(parse_netlist(netlist)))
         assert [f for f in report.findings if f.code == "R3"] == []
+
+
+# ---------------------------------------------------------------------------
+# Rail taps: a cfg_bus_pwr tap reached from the other bus side also closes
+# cfg_bus_short[row], which spends the same row *number* on the far side.
+# Two of the three VAPWR taps have a ua[] bond wire on that far row
+# (bus_A[4] pairs with ua5's bus_B[4]; bus_B[1] with ua1's bus_A[1]), so
+# taking the lowest-numbered tap blind used to short a package pin to the
+# rail. Row 6 is the only row with no bond wire on either side.
+# ---------------------------------------------------------------------------
+
+# A source follower puts its FET *drain* on the rail, which is what needs a
+# tap: a source reaching a rail uses the device's own ctrl_*_source tie and
+# costs no bus row at all, which is why no example had ever exercised one.
+TWO_FOLLOWERS = """
+XF1 VAPWR ua1 outa VGND mosbius_nmos w=1
+XF2 VAPWR ua2 outb VGND mosbius_nmos w=1
+"""
+
+
+def test_a_two_sided_rail_net_taps_the_row_with_no_bond_wire():
+    routed = route(parse_netlist(TWO_FOLLOWERS))
+    assert routed.net_rows["VAPWR"] == {"A": 6, "B": 6}
+    # bus_A[4] is the lowest-numbered VAPWR tap and was what this used to
+    # pick; its cfg_bus_short partner is ua5's row, so check() called the
+    # result DANGEROUS.
+    assert check(routed.config).errors == []
+
+
+def test_a_one_sided_rail_net_still_takes_the_nearest_tap():
+    """No touch on the far side means no cfg_bus_short and no partner row,
+    so the bridge ranking must not push these off bus_A[4]."""
+    netlist = ("XF1 VAPWR ua1 outa VGND mosbius_nmos w=1\n"
+               "XS1 ua2 ibias VGND mosbius_nsink ratio=2\n")
+    routed = route(parse_netlist(netlist))
+    assert routed.net_rows["VAPWR"] == {"A": 4}
+    assert check(routed.config).errors == []
+
+
+def test_two_source_followers_route_whatever_order_they_are_listed_in():
+    """Nets are routed in order of how little choice they have, so a port
+    net gets the row (and the cfg_bus_short partner row) it cannot trade
+    before an internal net can take it. Routed alphabetically instead,
+    'outa' went first and one of these two orders died with
+    `bus_B[1] is needed by both 'ua1' and 'outa'`.
+
+    The two orders need not give the same bitstream -- which hardware slot
+    each follower gets is allowed to differ -- but both must route, and
+    neither may short a pin to a rail.
+    """
+    lines = TWO_FOLLOWERS.strip().splitlines()
+    for order in (lines, list(reversed(lines))):
+        routed = route(parse_netlist("\n".join(order) + "\n"))
+        assert check(routed.config).errors == []
+        assert routed.net_rows["VAPWR"] == {"A": 6, "B": 6}
