@@ -3,155 +3,108 @@
 [![Made with Claude](https://img.shields.io/badge/Made%20with-Claude-D97757?logo=anthropic&logoColor=white)](https://claude.com/claude-code)
 
 An xschem library and Python toolchain for [tnt's mini-MOSbius](https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius)
-(`tt_um_tnt_mosbius`, Sky130, Tiny Tapeout). Draw an analog circuit in xschem,
-validate it, generate the 192-bit configuration bitstream, and upload it to
-the taped-out chip.
-
-Upstream leaves this exact gap open: "the software suite to generate [the
-configuration bitstream] is yet to be written." There's a hand-built web
-configurator (a clickable SVG) that works, but it isn't connected to
-simulation and isn't a comfortable way to design a circuit. This project
-closes the loop:
+(`tt_um_tnt_mosbius`, Sky130, Tiny Tapeout). Draw an analog circuit in
+xschem, check it fits and is safe, generate the 192-bit configuration
+bitstream, and upload it to the taped-out chip.
 
 ```
 design in xschem  ->  validate (fits? safe?)  ->  generate bitstream  ->  upload
 ```
 
-**Read `SPEC.md` first.** It's the signed-off source of truth for the
-hardware model, the architecture, and the verified facts this tool is built
-on. This README is a map of what exists and how to run it; `SPEC.md` is
-where the *why* lives, and `TUTORIAL.md` is where the *how* lives for a
-first circuit end to end.
+Upstream leaves this gap open in as many words: "the software suite to
+generate [the configuration bitstream] is yet to be written." A hand-built
+web configurator exists and works, but it is a clickable SVG, unconnected
+to simulation. This project closes the loop, for an audience of people
+learning analog design rather than people who already know the switch
+matrix.
 
-Mini-MOSbius exists so people can learn analog design -- the audience here
-is beginners, not people who already know the switch matrix. Every error
-this tool produces is written to teach: what happened, why the hardware
-behaves that way, and what to try instead.
+## Start with the examples
 
-## Status
+[`examples/`](examples/) is the way in. Seven circuits -- an inverter, a
+ring oscillator, an SR latch, two differential amplifiers, an OTA
+follower and a programmable current source -- each drawn in xschem,
+routed onto the chip, simulated twice and measured on real silicon. Every
+symbol in the device library appears in at least one of them, and each
+page is short: what the circuit is, one figure comparing the three, and
+one experiment to try.
 
-All five milestones (M0-M4) are code-complete and tested, and **the whole
-loop has run on real silicon.** On 2026-08-28 a TTDBv3 [3.2] demoboard
-carrying a ttsky25a chip loaded `examples/inverter`'s bitstream with
-`mosbius program --verify`, the readback matched (SPEC.md Sec 8.4's exit
-criterion), and an Analog Discovery 3 then measured the inverter's transfer
-curve through the real switch matrix.
-
-Seven worked examples now carry that comparison through: each one is
-simulated **as drawn** (your schematic, ideal wires) and **as routed**
-(through the configured switch matrix, with its parasitics and pads -- what
-`mosbius simulate` builds), and all seven are **measured on silicon**
-as well, with the numbers on each example's own page and the background
-they share in `examples/README.md`. Every symbol in the device library appears in at
-least one of them. Two independent
-measurements -- a ring oscillator's frequency and the inverter's trip point
--- put this chip at the PDK's `ss` corner, where the routed decks land
-within 0.3% and 4 mV of the bench.
-
-Still open: `TODO.md`. The big ones are complete device coverage in the
-examples, automating the hardware-in-the-loop measurements (today every one
-asks a person to wire a rig), and a curve-tracer experiment.
+The three numbers each example carries are the point of the whole project:
+the design **as drawn** (ideal wires), the same design **as routed**
+(through the configured switch matrix, with its parasitics and pads) and
+**measured on silicon**. [`examples/README.md`](examples/README.md) is the
+common ground -- the testbench idiom, the probe model, the bias reference
+and the traps -- and [`TUTORIAL.md`](TUTORIAL.md) walks the inverter
+through from a blank sheet, one instruction at a time.
 
 ## Quickstart
 
-Nothing is installed natively -- xschem/ngspice run inside the
-[IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) Docker image;
-the Python tooling runs on the host (it needs USB serial access for
-`mosbius program`).
+Nothing is installed natively: xschem and ngspice run inside the
+[IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container,
+while the Python tooling runs on the host, where the USB serial port is.
 
 ```bash
-# Install the command line (host, not the container). The routing/checking/
-# bitstream/simulation half is pure standard library; the extras are only for
-# talking to a demoboard and drawing comparison plots:
-pip install -e .                     # gives you the `mosbius` command
-pip install -e '.[hardware,plots]'   # + mpremote, matplotlib
-
-# Draw a circuit: open xschem/mosbius_lib/mini_mosbius.sch (or copy
-# it), wire up mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/
-# mosbius_ota/mosbius_ntail/mosbius_ptail devices from mosbius_lib to the
-# ports (ibias, ua1..ua5, VAPWR, VDPWR, VGND). examples/ has seven worked
-# circuits -- inverter, ringosc, srlatch, diffamp, pdiffamp, otabuf,
-# currentsource -- each simulated as drawn and as routed, and all of them
-# measured on silicon too (see
-# examples/README.md for the background they share), or follow TUTORIAL.md
-# end to end.
-
-# Netlist it: press xschem's Netlist button. It writes build/your_design.spice
-# -- the repo-root xschemrc sets that up, so launch xschem from the top of
-# the repo. build/ is gitignored; nothing needs copying anywhere.
-
-# Route it (allocates devices onto real switch-matrix positions, checks for
-# safety hazards, emits the 192-bit bitstream) -- runs on the host:
-mosbius route build/your_design.spice \
-  --out build/your_design.mosbius.json
-
-# Upload it to a connected TT demoboard (needs the `hardware` extra above):
-mosbius program <the bitstream printed above>
-
-# ...which finishes by printing the bench wiring table: which PCB pad each
-# connected pin comes out on, and what the configuration put there. Ask for
-# it on its own any time with:
-mosbius pads build/your_design.mosbius.json
+pip install -e .                     # the `mosbius` command
+pip install -e '.[hardware,plots]'   # + mpremote and matplotlib, for a board and plots
 ```
 
-Not installing is fine too: every `mosbius <subcommand>` in these docs is exactly
-`python3 -m mosbius.cli <subcommand>` run from the repo root, which is the
-form the tool's own error messages print, since it works whether or not you
-have installed anything.
+Draw a circuit by copying `xschem/mosbius_lib/mini_mosbius.sch`, which
+arrives with the chip's nine pins already placed, and wiring
+`mosbius_nmos`, `mosbius_pmos`, `mosbius_nsink`, `mosbius_psource`,
+`mosbius_ota`, `mosbius_ntail` and `mosbius_ptail` between them. Press
+xschem's Netlist button -- launched from the repo root, so it reads the
+repo's own `xschemrc` -- and the netlist lands in `build/`. Then:
 
-`mosbius watch build/your_design.spice` re-runs
-route+check every time xschem re-netlists the file (polls the file's mtime, so it works across the
-Docker bind mount) -- keep it running in a terminal while you iterate in
-xschem, instead of re-running the netlist/route/check cycle by hand.
+```bash
+mosbius route build/my_design.spice --out build/my_design.mosbius.json
+mosbius watch build/my_design.spice     # re-routes and re-checks on every Netlist press
+mosbius simulate build/my_design.mosbius.json   # the design as routed, for a testbench
+mosbius program <bitstream>             # with a demoboard connected
+mosbius pads build/my_design.mosbius.json   # which PCB pad each pin comes out on
+```
+
+`route` allocates the drawn devices onto real switch-matrix positions,
+assigns nets to bus rows, runs the safety checker and prints the
+bitstream. `program` refuses to upload if that checker found an error.
+Every `mosbius <subcommand>` here is exactly
+`python3 -m mosbius.cli <subcommand>` from the repo root, which works
+whether or not anything is installed.
 
 ## The pipeline, module by module
 
 | Stage | Module | What it does |
 |---|---|---|
-| Bit map | `mosbius/bitmap.py` | All 192 chain bits, mapped to their pin/crosspoint/bus meaning. Generated once by `tools/extract_bitmap.py`; everything else is built on top of it. |
-| Core model | `mosbius/model.py` | `SwitchConfig` (the 192-bit set + ibias), the electrical graph the checker and decoder both walk. |
-| Bitstream | `mosbius/bitstream.py` | Pack/unpack between the bit set and the 48-hex-char string the chip actually shifts in. |
-| Safety checker | `mosbius/check.py` | Finds supply shorts, pin contention, floating nodes, and other hazards before anything reaches silicon (SPEC.md Sec 3.1). Runs as a mandatory gate before upload. |
-| Decoder | `mosbius/decode.py` | Bitstream -> circuit. The reverse path: reads back what a config actually wires up. |
-| xschem library | `xschem/mosbius_lib/` | Seven generic device symbols (`mosbius_nmos`, `mosbius_pmos`, `mosbius_nsink`, `mosbius_psource`, `mosbius_ota`, `mosbius_ntail`, `mosbius_ptail`) that netlist to the real sky130 transistor sizing behind each hardware block, plus `mini_mosbius.sym`/`mini_mosbius.sch` (the chip as a block: the nine real pins, one symbol for every design) and `tb_template.sch` for drawing and simulating a design. |
-| Parser | `mosbius/netlist.py` | xschem-netlisted SPICE -> `MosbiusDesign` (the in-memory circuit request). |
-| Router | `mosbius/route.py` | The forward path's hard part: allocates your devices onto real switch-matrix positions, assigns nets to bus rows, and emits the bitstream. Includes sticky routing (SPEC.md Sec 3.2b) -- an unchanged design reuses its exact prior routing instead of re-solving. |
-| Watcher | `mosbius/watch.py` | Polls a netlist file and re-runs route+check on every change. |
-| Bench wiring | `mosbius/pads.py` | Which PCB pad to clip a probe onto, per pin, per shuttle -- composed from the shuttle index and the board's pad lettering rather than hard-coded, since a design's `ua[k]` moves with its placement. |
-| Hardware upload | `mosbius/program.py` | Shifts the 192 bits onto a TT demoboard via `mpremote`, with the safety checker as a mandatory pre-upload gate. |
-| CLI | `mosbius/cli.py` | `decode` / `check` / `route` / `simulate` / `watch` / `program` / `pads` subcommands wrapping all of the above. |
+| Bit map | `mosbius/bitmap.py` | All 192 chain bits, mapped to their pin/crosspoint/bus meaning. Generated by `tools/extract_bitmap.py`; everything else is built on top of it. |
+| Core model | `mosbius/model.py` | `SwitchConfig` (the 192-bit set plus ibias), the electrical graph the checker and decoder both walk. |
+| Bitstream | `mosbius/bitstream.py` | Pack and unpack between the bit set and the 48-hex-character string the chip shifts in. |
+| Safety checker | `mosbius/check.py` | Supply shorts, pin contention, floating nodes and other hazards, before anything reaches silicon. A mandatory gate before upload. |
+| Decoder | `mosbius/decode.py` | Bitstream to circuit: reads back what a configuration actually wires up. |
+| xschem library | `xschem/mosbius_lib/` | Seven device symbols that netlist to the real sky130 sizing behind each hardware block, plus `mini_mosbius.sym`/`.sch` (the chip as a nine-pin block) and `tb_template.sch`. |
+| Parser | `mosbius/netlist.py` | xschem-netlisted SPICE to `MosbiusDesign`, the in-memory circuit request. |
+| Router | `mosbius/route.py` | Allocates devices onto hardware positions, assigns nets to bus rows, emits the bitstream. Sticky: an unchanged design reuses its prior routing rather than re-solving. |
+| Routed netlist | `mosbius/simulate.py` | Writes `<name>_routed.spice` -- the configured switch matrix, its parasitics and the pads -- with the same nine pins, so it drops into a testbench beside the ideal block. |
+| Watcher | `mosbius/watch.py` | Polls a netlist file and re-runs route and check on every change. |
+| Bench wiring | `mosbius/pads.py` | Which PCB pad to clip a probe onto, per pin, per shuttle -- composed from the shuttle index and the carrier's wiring, since a design's `ua[k]` moves with its placement. |
+| Hardware upload | `mosbius/program.py` | Shifts the 192 bits onto a demoboard through `mpremote`. |
+| CLI | `mosbius/cli.py` | `decode`, `check`, `route`, `simulate`, `watch`, `program` and `pads`. |
 
-## Running the test suite
+## Tests
 
-The Python tooling has no external dependencies beyond pytest:
+The Python tooling has no dependencies beyond pytest:
 
 ```bash
 python3 -m pytest tests/ -q
 ```
 
-## Ground rules
+`.github/workflows/spice-regression.yml` re-runs every example's
+simulation -- on every push while the examples are still moving, monthly
+after that -- and checks the numbers on its page still hold.
 
-- `ttsky-mini-mosbius/` is a **read-only git submodule** (upstream,
-  Apache-2.0). Never modify it. You do not need it to use this project:
-  the two things derived from it -- `mosbius/bitmap.py` and
-  `mosbius/data/mosbius_device_library.spice` -- are committed, so the
-  `mosbius` command, the tests and the example simulations all run
-  without it (CI checks out neither). Run `git submodule update --init`
-  only to re-derive those from upstream (`tools/extract_bitmap.py`,
-  `tools/rebuild_mosbius_device_library.sh`) or to re-run the
-  `tools/run_ringo_*` experiments, which netlist upstream's own
-  testbench.
-- This project is Apache-2.0.
-- `build/` is gitignored -- it holds the netlists xschem generates and the
-  routing output, never hand-edited or committed.
-- `xschemrc` at the repo root is what points xschem at both symbol
-  libraries and sends netlists to `build/`. It only takes effect if xschem
-  is launched from the repo root; xschem does not search upwards for it.
+## Where the rest lives
 
-See `CLAUDE.md` for the full list of verified corrections ("traps") this
-project's bit map and architecture depend on -- several look authoritative
-from upstream sources but are wrong in ways that were expensive to find.
+`SPEC.md` is the signed-off source of truth for the hardware model and the
+architecture. `CLAUDE.md` carries the verified corrections this project
+depends on -- several upstream sources look authoritative and are wrong in
+ways that were expensive to find. `TODO.md` holds the open work.
 
-## Testing
-
-* Thread on TT discord: https://discord.com/channels/1009193568256135208/1502244680111362069
+Apache-2.0, matching upstream. Discussion is on the
+[Tiny Tapeout Discord](https://discord.com/channels/1009193568256135208/1502244680111362069).
