@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/otabuf three ways: as drawn, as routed, on silicon.
+"""Draw examples/otabuf as drawn, as routed, and on silicon.
 
 Inputs, all produced by other commands so this script only draws:
 
@@ -8,7 +8,7 @@ Inputs, all produced by other commands so this script only draws:
                                    tools/check_otabuf_sim.sh
     build/otabuf_silicon_dc.json   from tools/measure_otabuf_ad3.py
 
-Writes examples/otabuf/otabuf_three_ways.png.
+Writes examples/otabuf/otabuf_comparison.png.
 
 **Two panels, because one cannot show this.** The follower's whole job is
 that output equals input, so on a 3 V transfer curve all three traces lie
@@ -45,7 +45,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 RAMP = (1e-6, 11e-6)
-OUT = Path("examples/otabuf/otabuf_three_ways.png")
+OUT = Path("examples/otabuf/otabuf_comparison.png")
 FIT_LO, FIT_HI = 1.00, 2.50          # the window the README's table uses
 TRACKING, SLOPE_BAND = 0.100, (0.8, 1.2)
 
@@ -127,7 +127,7 @@ def main() -> None:
         else:
             ax1.plot(x, y, style, color=colour, lw=size, label=name)
     ax1.set_ylabel("output on ua2 / pad J  (V)")
-    ax1.set_title("examples/otabuf -- OTA unity-gain follower, three ways\n"
+    ax1.set_title("examples/otabuf -- OTA unity-gain follower\n"
                   "ibias 100 uA, tail=4", fontsize=11)
     ax1.legend(loc="upper left", fontsize=9)
     ax1.grid(alpha=0.25)

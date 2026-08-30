@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/diffamp/tb_diffamp.sch
-against the reference measurements in examples/diffamp/README.md ("Step
-response and settling"), last measured 2026-08-29 at cprobe=10p (with rprobe=10meg):
+against the reference measurements in examples/diffamp/README.md, last
+measured 2026-08-29 at cprobe=10p (with rprobe=10meg):
 
     as drawn   base 2.012V   +40mV -> 2.744V   -40mV -> 1.237V
     as routed  base 2.018V   +40mV -> 2.769V   -40mV -> 1.227V
 
 The as-drawn column moved on 2026-08-29 with the model-binning fix (see
-examples/pdiffamp/README.md): the ideal library was handing sky130 a width
+CLAUDE.md's trap list): the ideal library was handing sky130 a width
 expression naming its own `w` parameter, which selected the wrong model
 bin. The as-routed column is unchanged to the millivolt, because the
 routed decks write literal widths and were never affected.

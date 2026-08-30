@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/srlatch/tb_srlatch.sch
-against the reference measurements in examples/srlatch/README.md ("Load
-capacitors in tb_srlatch.sch"), last measured 2026-08-29 at cprobe=10p (with rprobe=10meg):
+against the reference measurements in examples/srlatch/README.md, last
+measured 2026-08-29 at cprobe=10p (with rprobe=10meg):
 
     qd_after_set   =  3.300V     qr_after_set   =  3.110V
     qd_after_reset = -0.0000V    qr_after_reset = -0.0026V
@@ -43,7 +43,7 @@ physical device would have failed for the right reason and been useless.
 The sheet draws w=4 now, treset_drawn is 1.77ns, and the ordering is the
 one every other example shows, so the check is worth having: it is what
 would catch the routed matrix quietly getting faster than ideal wiring.
-See examples/srlatch/README.md, "Timing the reset".
+See examples/srlatch/README.md for the reset timing measured on silicon.
 """
 
 from __future__ import annotations

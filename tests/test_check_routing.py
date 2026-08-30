@@ -27,7 +27,7 @@ M6 net1 net2 VAPWR VAPWR mosbius_pmos w=1
 """
 
 # The same ring drawn at the width the diff-pair halves are fixed at, so
-# every stage matches -- what examples/ringosc/README.md actually uses.
+# every stage matches -- what examples/ringosc/ring.sch actually uses.
 MATCHED_RING = RING.replace("w=1", "w=4")
 
 

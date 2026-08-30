@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/currentsource three ways: as drawn, as routed, on silicon.
+"""Draw examples/currentsource as drawn, as routed, and on silicon.
 
 Inputs, all produced by other commands so this script only draws:
 
@@ -10,7 +10,7 @@ Inputs, all produced by other commands so this script only draws:
     build/currentsource_compliance_sink.json    tools/measure_currentsource_ad3.py
 
 Either measured file on its own is enough; with both, both legs are drawn.
-Writes examples/currentsource/currentsource_three_ways.png.
+Writes examples/currentsource/currentsource_comparison.png.
 
 **The top panel is the honest comparison and the bottom panel is the
 useful one.** Absolute current on this chip is only as good as the bias
@@ -46,7 +46,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-OUT = Path("examples/currentsource/currentsource_three_ways.png")
+OUT = Path("examples/currentsource/currentsource_comparison.png")
 TB = Path("build/currentsource_tb.txt")
 MEASURED = {"source": Path("build/currentsource_compliance_source.json"),
             "sink": Path("build/currentsource_compliance_sink.json")}

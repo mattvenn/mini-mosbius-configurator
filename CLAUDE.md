@@ -379,8 +379,11 @@ The pad would add only ~5pF on the bias node, which nothing here measures,
 against needing a new "is ibias in use" rule (the crosspoint test doesn't
 apply to it) and breaking the port-name/net-name coincidence that makes the
 config ties land. (c) *No `--pads full|none` flag.* It was proposed to make
-the pad-vs-matrix split reproducible; the split is now written up in
-`examples/inverter/README.md`, and one-shot "change one physical assumption
+the pad-vs-matrix split reproducible; the split was measured on the
+inverter (the routed output carries ~10.8 pF more than the drawn one,
+which is the bond pad, not the switch matrix -- the write-up was trimmed
+out of `examples/inverter/README.md` on 2026-08-30 and is in git history),
+and one-shot "change one physical assumption
 and re-run" experiments already have a home in `tools/` (`run_ring_pad_loaded.sh`
 and five siblings). A CLI flag would put a physically-impossible deck -- a
 chip with no pads -- on the product path a beginner uses, and would need a

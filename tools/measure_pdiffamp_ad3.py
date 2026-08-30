@@ -10,8 +10,7 @@ the host:
     python3 tools/measure_pdiffamp_ad3.py
 
 **First run on silicon 2026-08-29**: 17.82 V/V fitted at 99.4 uA against
-21.22 as drawn, with a +18 mV input offset. examples/pdiffamp/README.md
-has the write-up. The two lessons this script inherits from
+21.22 as drawn, with a +18 mV input offset. The two lessons this script inherits from
 tools/measure_diffamp_ad3.py, both learned the expensive way there, are
 why the reported gain is a fit over the linear region rather than a peak
 local slope (the peak local slope reads 19.6 V/V here, and is a noise

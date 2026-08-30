@@ -107,7 +107,7 @@ def main() -> int:
     # branches came out 21.5 against 14.2 V/V, and the cause was that the
     # ideal library passed the sky130 model a width expression naming its own
     # parameter `w`, which collides with the model subcircuit's own `w` and
-    # selected the wrong bin. See examples/pdiffamp/README.md.
+    # selected the wrong bin. See CLAUDE.md's trap list.
     for side in ("pos", "neg"):
         drawn, routed = gains[f"drawn_{side}"], gains[f"routed_{side}"]
         if abs(routed - drawn) > BRANCH_AGREEMENT * abs(drawn):

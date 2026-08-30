@@ -27,8 +27,8 @@
 #
 #   sh tools/run_srlatch_measured_edge.sh ss
 #
-# This chip measured as an ss part -- see examples/ringosc/README.md for
-# the two-circuit argument that establishes that -- so ss is the corner to
+# This chip measured as an ss part -- see CLAUDE.md for the two-circuit
+# argument that establishes that -- so ss is the corner to
 # compare a silicon timing against, while tt stays what the committed
 # sheets and CI use.
 set -e

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/otabuf/tb_otabuf.sch against
-the reference measurements in examples/otabuf/README.md ("What running it
-shows"), last measured 2026-08-28 at cprobe=10p (with rprobe=10meg),
+the reference measurements in examples/otabuf/README.md, last measured 2026-08-28 at cprobe=10p (with rprobe=10meg),
 ibias_amps=100u, tail=4:
 
     offsets (output minus input, on the ramp)
@@ -22,8 +21,8 @@ uses `mosbius_ota` at all -- five transistors and a tail bank in one
 block, including the `ctrl_otan_mode[0]` bit that ties the PMOS mirror
 gates to `outp`. That bit went unset once already, leaving the routed OTA
 with a floating mirror gate and the two branches of this testbench not
-the same circuit (examples/otabuf/README.md, "Two bugs this example
-found"). It is also the only example that closes a *feedback loop*
+the same circuit (both fixed 2026-08-28; git log has the write-up). It is
+also the only example that closes a *feedback loop*
 through the switch matrix, so it is the only one that would notice the
 routed model turning a stable follower into something that rings or
 latches.

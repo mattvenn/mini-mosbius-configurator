@@ -5,7 +5,7 @@
 # lumped-capacitor approximation. Intended for a machine with more RAM than
 # the ~1.9GB this project's usual dev host has (that ceiling is why this
 # script exists instead of just using `mosbius watch`/the container directly
-# -- see TODO.md Sec 1 and examples/ringosc/README.md for the background).
+# -- see TODO.md for the background).
 #
 # Run from the repo root: tools/run_ringo_full_sim.sh
 set -euo pipefail

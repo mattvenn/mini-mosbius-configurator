@@ -17,7 +17,7 @@
 # same source of truth mosbius/spice.py's render_config_spice() uses --
 # not hand-typed), and exactly one pad_model instance.
 #
-# Per examples/ringosc/README.md, ring.sch brings out only ONE package pin
+# ring.sch brings out only ONE package pin
 # for its whole 3-stage loop: ua1 = bus_A[1]. The other two loop nodes
 # (bus_A[2], bus_A[6]/bus_B[6]) are internal-only bus rows with no real
 # pin -- so "add the pad model to all external pins" for this design means
@@ -162,7 +162,7 @@ top = f"""* Routed-onto-the-chip testbench for examples/ringosc/ring.sch (bitstr
 * netlist (mosbius, pad_model, tt_asw_3v3, etc. -- unmodified below this
 * point), only this top section is new.
 *
-* ring.sch, per examples/ringosc/README.md: XM1->nmos_a, XM2->pmos_a,
+* ring.sch routes as: XM1->nmos_a, XM2->pmos_a,
 * XM3->nmos_b, XM4->pmos_b, XM5->ndiffpair+, XM6->pdiffpair+, loop
 * ua1(bus_A[1]) -> bus_A[2] -> bus_A[6]+bus_B[6] -> back to bus_A[1].
 * Only bus_A[1] (=ua1) has a real package pin -- bus_A[2] and

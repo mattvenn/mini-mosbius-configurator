@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/ringosc's output three ways: as drawn, as routed, and as
+"""Draw examples/ringosc's output as drawn, as routed, and as
 measured on silicon.
 
 Inputs, all produced by other commands so this script only draws:
@@ -9,7 +9,7 @@ Inputs, all produced by other commands so this script only draws:
     build/ring_tb_out_routed.txt     (tools/check_ring_sim.sh runs them)
     build/ring_silicon_trace.json    from tools/measure_ring_ad3.py
 
-Writes examples/ringosc/ring_three_ways.png and prints the table.
+Writes examples/ringosc/ring_comparison.png and prints the table.
 
 **Two panels, on two timebases, like the testbench's two `tran` runs.**
 As drawn the ring runs at 2.083 GHz and the other two near 40 MHz, a
@@ -197,7 +197,7 @@ def main() -> None:
                    transform=routed_ax.transAxes, fontsize=7.5, color="dimgrey",
                    ha="center", va="top")
 
-    out = Path("examples/ringosc/ring_three_ways.png")
+    out = Path("examples/ringosc/ring_comparison.png")
     fig.tight_layout(rect=(0, 0.07, 1, 1))
     fig.savefig(out, dpi=120)
     print(f"\nwrote {out}")

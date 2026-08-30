@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of
 examples/currentsource/tb_currentsource.sch against the reference
-measurements in examples/currentsource/README.md ("What running it
-shows"), last measured 2026-08-28 at Vsweep=1.65V, ratio=2,
+measurements in examples/currentsource/README.md, last measured 2026-08-28 at Vsweep=1.65V, ratio=2,
 ibias_amps=100u:
 
     psource_a (source)   +209.9 uA drawn   +209.3 uA routed   (+200 uA ideal)

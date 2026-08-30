@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/pdiffamp three ways: as drawn, as routed, on silicon.
+"""Draw examples/pdiffamp as drawn, as routed, and on silicon.
 
 Inputs, all produced by other commands so this script only draws:
 
@@ -9,7 +9,7 @@ Inputs, all produced by other commands so this script only draws:
     build/pdiffamp_tb_out_routed.txt
     build/pdiffamp_silicon.json       from tools/measure_pdiffamp_ad3.py
 
-Writes examples/pdiffamp/pdiffamp_three_ways.png.
+Writes examples/pdiffamp/pdiffamp_comparison.png.
 
 **Silicon is drawn in purple here, not the green the other examples use.**
 Green against the orange of the as-routed series is a genuine collision for
@@ -53,7 +53,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-OUT = Path("examples/pdiffamp/pdiffamp_three_ways.png")
+OUT = Path("examples/pdiffamp/pdiffamp_comparison.png")
 LINEAR_WINDOW = (0.5, 1.8)
 SETTLED_AT = (0.9e-6, 3.4e-6, 5.9e-6)     # ends of the 0 / +10mV / -10mV holds
 STEPS_MV = (0.0, +10.0, -10.0)
@@ -132,7 +132,7 @@ def main() -> None:
     ax1.axvline(0, color="0.8", lw=0.9, ls=":")
     ax1.set_xlabel("differential input, referred to each branch's own operating point  (mV)")
     ax1.set_ylabel("output change from that point  (V)")
-    ax1.set_title("examples/pdiffamp -- PMOS differential pair, NMOS mirror load, three ways\n"
+    ax1.set_title("examples/pdiffamp -- PMOS differential pair, NMOS mirror load\n"
                   f"tail=4, bias {nominal['amps'] * 1e6:.0f} uA, "
                   f"{record['fine_step'] * 1000:.0f} mV input steps", fontsize=11)
     ax1.legend(loc="upper left", fontsize=9)

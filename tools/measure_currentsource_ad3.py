@@ -6,8 +6,8 @@ Three experiments, all on one rig, chosen with --mode:
 
     compliance   sweep the output pin across the supply and watch where the
                  current stops being constant. This is the one to run
-                 first: it lands directly on the I-V table in
-                 examples/currentsource/README.md.
+                 first: it lands directly on the curve drawn by
+                 tools/plot_currentsource_comparison.py.
     ratio        program ratio=1..4 in turn and check the four currents are
                  evenly spaced. Immune to the bias current's calibration,
                  because a ratio of two measured currents cancels it.
@@ -652,8 +652,8 @@ def report_compliance(points: list[dict], leg: dict, resistor: float,
           f"from {role} at ratio={ratio}.")
 
     # The flat region, and where it stops being flat. "Within 5% of the
-    # mid-rail value" is the same window examples/currentsource/README.md
-    # uses on the simulated curve, so the two are directly comparable.
+    # mid-rail value" is the same window applied to the simulated curve,
+    # so the two are directly comparable.
     nominal = mid["amps"]
     inside = [p for p in points if abs(p["amps"] - nominal) <= 0.05 * abs(nominal)]
     if inside:

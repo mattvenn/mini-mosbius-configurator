@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/srlatch three ways: as drawn, as routed, and as measured
-on silicon.
+"""Draw examples/srlatch as drawn, as routed, and as measured on silicon.
 
 Inputs, all produced by other commands so this script only draws:
 
@@ -11,8 +10,8 @@ Inputs, all produced by other commands so this script only draws:
 
 Writes two figures:
 
-    examples/srlatch/srlatch_three_ways.png   the whole sequence, levels
-    examples/srlatch/srlatch_reset_edge.png   the reset transition, zoomed
+    examples/srlatch/srlatch_comparison.png   the whole sequence, levels
+    build/srlatch_reset_edge.png              the reset transition, zoomed
 
 The second one needs build/srlatch_silicon_edge.json from
 tools/measure_srlatch_edge_ad3.py and the matched-stimulus simulation from
@@ -39,10 +38,10 @@ window; the trace's own edges lag it by a few milliseconds of host
 scheduling, which is visible and does not matter to a level measurement.
 
 **The first figure measures no edge, and the second one does.** In the
-left panel of `srlatch_three_ways.png` the transitions are the
+left panel of `srlatch_comparison.png` the transitions are the
 generator's DC offset slewing over milliseconds -- that is how
 `tools/measure_srlatch_ad3.py` drives the levels, and it is the wrong
-instrument for an edge. `srlatch_reset_edge.png` is the other measurement:
+instrument for an edge. `build/srlatch_reset_edge.png` is the other measurement:
 real waveform edges, the scope triggered on Q's own fall at 100 MS/s, and
 both decks re-run under the same stimulus by
 `tools/run_srlatch_measured_edge.sh`.
@@ -61,13 +60,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 DRAWN = Path("build/srlatch_tb_out_drawn.txt")
 ROUTED = Path("build/srlatch_tb_out_routed.txt")
 SILICON = Path("build/srlatch_silicon_trace.json")
-OUT = Path("examples/srlatch/srlatch_three_ways.png")
+OUT = Path("examples/srlatch/srlatch_comparison.png")
 
 EDGE_SILICON = Path("build/srlatch_silicon_edge.json")
 EDGE_RESET = Path("build/srlatch_edge_reset.txt")
 EDGE_DRAWN = Path("build/srlatch_edge_out_drawn.txt")
 EDGE_ROUTED = Path("build/srlatch_edge_out_routed.txt")
-EDGE_OUT = Path("examples/srlatch/srlatch_reset_edge.png")
+EDGE_OUT = Path("build/srlatch_reset_edge.png")
 MIDRAIL = 1.65
 
 

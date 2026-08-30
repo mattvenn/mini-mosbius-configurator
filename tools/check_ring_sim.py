@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """Check an ngspice batch-mode log of examples/ringosc/tb_ring.sch against
-the reference measurements in examples/ringosc/README.md ("What the
-committed schematic measures now"): freq_drawn=2.083GHz,
-freq_routed=43.89MHz, last measured 2026-08-27.
+the reference measurements in examples/ringosc/README.md:
+freq_drawn=2.289GHz, freq_routed=43.89MHz, last re-run 2026-08-29.
 
 Run by tools/check_ring_sim.sh, which
 .github/workflows/spice-regression.yml runs once a month alongside the

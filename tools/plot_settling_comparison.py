@@ -6,7 +6,7 @@ Input, produced by another command so this script only draws:
 
     build/otabuf_settling.json   from tools/measure_settling_ad3.py otabuf
 
-Writes examples/otabuf/otabuf_settling.png.
+Writes build/otabuf_settling.png.
 
 **Why bias is the x axis and not time.** A single slew reading at the
 nominal bias is worthless here: the output crosses its measurement band in
@@ -33,7 +33,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-OUT = Path("examples/otabuf/otabuf_settling.png")
+OUT = Path("build/otabuf_settling.png")
 SRC = Path("build/otabuf_settling.json")
 MARGIN = 3.0
 BAND = 0.7                 # the 1.3-2.0 V window the slew is measured across

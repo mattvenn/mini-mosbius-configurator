@@ -12,7 +12,7 @@ only what is particular to that circuit.*
 | [`pdiffamp/`](pdiffamp/) | Five FETs + PMOS tail bank | The diff amp in the opposite polarity, and the only example that places a `mosbius_ptail`. |
 | [`currentsource/`](currentsource/) | Two mirror legs | `ibias` itself: what `ratio=` buys, and an I-V curve with a real compliance limit. The only example that measures a current. |
 | [`otabuf/`](otabuf/) | OTA: five FETs + tail bank | A feedback loop closed through the switch matrix, and the only example that uses `mosbius_ota`. |
-| [`ringosc/`](ringosc/) | Eight FETs | An open investigation, not a polished example: how close the routed model gets to measured silicon. |
+| [`ringosc/`](ringosc/) | Eight FETs | Every usable single FET on the chip at once, and how close the routed model gets to measured silicon. |
 
 [`TUTORIAL.md`](../TUTORIAL.md) at the repo root walks the inverter
 through from a blank sheet, one instruction at a time. This page is the

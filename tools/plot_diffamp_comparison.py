@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Draw examples/diffamp three ways: as drawn, as routed, on silicon.
+"""Draw examples/diffamp as drawn, as routed, and on silicon.
 
 Inputs, all produced by other commands so this script only draws:
 
@@ -9,7 +9,7 @@ Inputs, all produced by other commands so this script only draws:
     build/diffamp_tb_out_routed.txt
     build/diffamp_silicon.json       from tools/measure_diffamp_ad3.py
 
-Writes examples/diffamp/diffamp_three_ways.png.
+Writes examples/diffamp/diffamp_comparison.png.
 
 **The simulated side is three points, not a curve, and the figure has to
 be honest about that.** tb_diffamp.sch is a step response: it holds the
@@ -46,7 +46,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-OUT = Path("examples/diffamp/diffamp_three_ways.png")
+OUT = Path("examples/diffamp/diffamp_comparison.png")
 LINEAR_WINDOW = (1.3, 2.4)
 SETTLED_AT = (0.9e-6, 3.4e-6, 5.9e-6)     # ends of the 0 / +40mV / -40mV holds
 STEPS_MV = (0.0, +40.0, -40.0)
@@ -120,7 +120,7 @@ def main() -> None:
     ax1.axvline(0, color="0.8", lw=0.9, ls=":")
     ax1.set_xlabel("differential input, referred to each branch's own operating point  (mV)")
     ax1.set_ylabel("output change from that point  (V)")
-    ax1.set_title("examples/diffamp -- 5-transistor differential amplifier, three ways\n"
+    ax1.set_title("examples/diffamp -- 5-transistor differential amplifier\n"
                   f"tail=4, bias {nominal['amps'] * 1e6:.0f} uA, "
                   f"{record['fine_step'] * 1000:.0f} mV input steps", fontsize=11)
     ax1.legend(loc="upper left", fontsize=9)

@@ -949,7 +949,7 @@ def _render_r1(subjects: list[str], device_roles: dict[str, str], prop: str,
         f"on silicon, not in the drawing.",
         f"To fix: set the other devices of the same kind to {prop}="
         f"{effective} as well, so every stage matches deliberately -- "
-        f"examples/ringosc/README.md does exactly that. They match in W/L, "
+        f"examples/ringosc/ring.sch does exactly that. They match in W/L, "
         f"though not in parasitics: the programmable FET's 1x and 2x slices "
         f"sit behind drain switches and the diff-pair half does not.",
     )
