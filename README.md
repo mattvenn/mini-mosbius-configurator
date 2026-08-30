@@ -1,4 +1,4 @@
-# mini-mosbius-configurator
+# Mini MOSbius Configurator
 
 [![Made with Claude](https://img.shields.io/badge/Made%20with-Claude-D97757?logo=anthropic&logoColor=white)](https://claude.com/claude-code)
 
@@ -7,6 +7,8 @@ This project is for people learning analog microelectronics.
 An xschem library and Python toolchain for [mini-MOSbius](https://tinytapeout.com/chips/ttsky25a/tt_um_tnt_mosbius)
 
 Draw an analog circuit in xschem, check it fits and is safe, generate the bitstream, and upload it to the chip.
+
+Mini MOSbius is inspired by [MOSbius](https://mosbius.org/0_front_matter/intro.html).
 
 ## Start with the examples
 
