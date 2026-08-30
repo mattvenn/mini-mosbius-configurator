@@ -3,18 +3,16 @@ G {}
 K {}
 V {}
 S {}
+F {}
 E {}
-N -120 -140 280 -140 {
-lab=ibias}
-N 280 -140 280 -80 {
-lab=ibias}
-N 200 20 320 20 {
+N -10 90 70 90 {
 lab=b}
-N 320 -50 320 20 {
+N 70 20 70 90 {
 lab=b}
-N 320 -200 320 -110 {
-lab=out}
-C {sky130_fd_pr/nfet3_g5v0d10v5.sym} 300 -80 0 0 {name=M2
+N -20 -10 30 -10 {lab=ibias}
+N -20 -130 70 -130 {lab=out}
+N 70 -130 70 -40 {lab=out}
+C {sky130_fd_pr/nfet3_g5v0d10v5.sym} 50 -10 0 0 {name=M2
 L=1
 W="10*ratio"
 nf="2*ratio"
@@ -29,8 +27,8 @@ model=nfet_g5v0d10v5
 body=b
 spiceprefix=X
 }
-C {devices/lab_pin.sym} -120 -140 0 1 {name=p1 lab=ibias}
-C {devices/lab_pin.sym} 200 20 0 1 {name=p2 lab=b}
-C {devices/iopin.sym} 320 -200 0 1 {name=p3 lab=out}
-C {mosbius_implicit_port.sym} 0 -140 0 0 {name=e1 lab=ibias}
-C {mosbius_implicit_port.sym} 260 20 0 0 {name=e2 lab=b}
+C {devices/lab_pin.sym} -20 -10 2 1 {name=p1 lab=ibias}
+C {devices/lab_pin.sym} -10 90 2 1 {name=p2 lab=b}
+C {devices/iopin.sym} -20 -130 0 1 {name=p3 lab=out}
+C {mosbius_implicit_port.sym} 10 -10 1 0 {name=e1}
+C {mosbius_implicit_port.sym} 10 90 1 0 {name=e2}

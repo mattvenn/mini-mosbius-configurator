@@ -7,6 +7,13 @@ v {xschem version=3.4.8RC file_version=1.2
 * implicit gate/source nets. It emits a comment and nothing else -- no
 * device, no port, no change to any connection.
 *
+* It takes no attributes. The net name it draws and the name it writes
+* into the netlist are both `@#0:net_name`, read from whatever net the
+* marker is attached to, so neither can disagree with the schematic.
+* (It used to carry a hand-typed `lab=`, which nothing checked: a marker
+* reading `lab=toplabel` on a net that netlisted as `net1` produced
+* `* implicit port toplabel` with no complaint. Changed 2026-08-30.)
+*
 * What it is for. `extra` puts a net on the instance line and in the
 * .subckt port list without giving the symbol a pin box, which is how
 * this library keeps bias and body connections off your schematic. Those
@@ -31,18 +38,25 @@ v {xschem version=3.4.8RC file_version=1.2
 * borrows that type while saying the accurate thing on the sheet and in
 * the netlist. Verified 2026-08-28: the reporting stops and the netlist
 * gains one comment line per marker.
+*
+* Why it is drawn this way. A stub into an open circle is the off-sheet
+* terminal shape: it says the net continues somewhere not on this
+* canvas, which is what an `extra` port does. The earlier drawing ended
+* in two shrinking crossbars, which is the earth-ground shape and so
+* read as the net being terminated -- the opposite of the truth. The
+* words "implicit port" are in this comment rather than on every
+* instance, and the net name sits on layer 15 so it reads as annotation
+* and not as a device.
 }
 G {}
 K {type=noconn
-format="* implicit port @lab"
-template="name=e1 lab=xxx"
+format="* implicit port @#0:net_name"
+template="name=e1"
 }
 V {}
 S {}
 E {}
 B 5 -1.25 -1.25 1.25 1.25 {name=p dir=inout}
-L 4 0 0 12 0 {}
-L 4 12 -5 12 5 {}
-L 4 16 -3 16 3 {}
-T {@lab} 21 -5 0 0 0.2 0.2 {}
-T {implicit port} 0 6 0 0 0.15 0.15 {}
+L 4 0 0 9 0 {}
+A 4 12 0 3 270 360 {}
+T {@#0:net_name} 18 -5 0 0 0.2 0.2 {layer=15}

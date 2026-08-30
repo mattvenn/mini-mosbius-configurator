@@ -3,17 +3,15 @@ G {}
 K {}
 V {}
 S {}
+F {}
 E {}
-N 280 -80 280 -140 {
-lab=ibias}
-N -20 -140 280 -140 {
-lab=ibias}
-N 320 -110 320 -160 {
+N 320 -160 320 -110 {
 lab=b}
 N 200 -160 320 -160 {
 lab=b}
 N 320 -50 320 -20 {
 lab=out}
+N 200 -80 280 -80 {lab=ibias}
 C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 300 -80 0 0 {name=M2
 L=1
 W="30*ratio"
@@ -29,8 +27,8 @@ model=pfet_g5v0d10v5
 body=b
 spiceprefix=X
 }
-C {devices/lab_pin.sym} -20 -140 0 1 {name=p1 lab=ibias}
-C {devices/lab_pin.sym} 200 -160 0 1 {name=p2 lab=b}
+C {devices/lab_pin.sym} 200 -80 2 1 {name=p1 lab=ibias}
+C {devices/lab_pin.sym} 200 -160 2 1 {name=p2 lab=b}
 C {devices/iopin.sym} 320 -20 0 1 {name=p3 lab=out}
-C {mosbius_implicit_port.sym} 100 -140 0 0 {name=e1 lab=ibias}
-C {mosbius_implicit_port.sym} 260 -160 0 0 {name=e2 lab=b}
+C {mosbius_implicit_port.sym} 240 -80 1 0 {name=e1}
+C {mosbius_implicit_port.sym} 260 -160 1 0 {name=e2}

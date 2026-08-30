@@ -3,18 +3,19 @@ G {}
 K {}
 V {}
 S {}
+F {}
 E {}
-N 240 -160 240 -100 {
+N 30 -110 30 -50 {
 lab=s}
-N -0 -160 240 -160 {
+N -50 -110 30 -110 {
 lab=s}
-N -0 -70 200 -70 {
+N -50 -20 -10 -20 {
 lab=g}
-N -0 40 240 40 {
+N -50 90 30 90 {
 lab=d}
-N 240 -40 240 40 {
+N 30 10 30 90 {
 lab=d}
-C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 220 -70 0 0 {name=M1
+C {sky130_fd_pr/pfet3_g5v0d10v5.sym} 10 -20 0 0 {name=M1
 L=0.5
 W="wdev"
 nf="nfdev"
@@ -29,7 +30,7 @@ model=pfet_g5v0d10v5
 body=b
 spiceprefix=X
 }
-C {devices/iopin.sym} 0 -160 0 1 {name=p7 lab=s}
-C {devices/ipin.sym} 0 -70 0 1 {name=p1 lab=g}
-C {devices/iopin.sym} 0 40 0 1 {name=p2 lab=d}
-C {devices/code.sym} -120 -300 0 0 {name=SIZE only_toplevel=false value=".param wdev='30*w' nfdev='4*w'"}
+C {devices/iopin.sym} -50 -110 0 1 {name=p7 lab=s}
+C {devices/ipin.sym} -50 -20 2 1 {name=p1 lab=g}
+C {devices/iopin.sym} -50 90 0 1 {name=p2 lab=d}
+C {devices/code.sym} -220 -60 0 0 {name=SIZE only_toplevel=false value=".param wdev='30*w' nfdev='4*w'"}
