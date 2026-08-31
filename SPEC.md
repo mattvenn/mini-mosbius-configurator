@@ -740,6 +740,18 @@ sources are common. So the router **spends the constrained resource first**:
 3. Map FETs needing independent sources onto `nmos_a`/`nmos_b` / `pmos_a`/`pmos_b`.
 4. Choose A vs B side to satisfy any external-port requirements (§3.2).
 
+Step 4 is a search over the (at most 4! per polarity) assignments rather
+than a single greedy pass, because side is what decides two things that
+the schematic itself does not say: whether a differential-pair gate can
+reach its net at all (§2.12 -- the inputs reach rows 1–3 only), and how
+many nets end up touching both bus sides. The second is a scarce
+resource: a two-sided net has to sit on the same row number on both
+sides, and only one row is free of a `ua[]` bond wire on both (§2.10),
+so a circuit with two such nets does not fit however it is routed.
+Both are scored, and any assignment with neither violation is taken --
+the netlist's own order first, so a design with no conflict is
+undisturbed.
+
 Capacity is therefore 4 NMOS and 4 PMOS, but only if the circuit's source-sharing
 structure matches the hardware's. A design wanting 4 NMOS with four *independent*
 sources does not fit, and the watcher says so in those terms rather than just

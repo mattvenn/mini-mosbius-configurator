@@ -559,8 +559,11 @@ def _net_sides(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, set[st
     contributes nothing yet. Deliberately the same terminal-filtering
     DEVICE_TERMINALS does everywhere else (a diff-pair half's own "s" pin
     has no crosspoint and never contributes a side, matching
-    _collect_touches), so a net's side set here is exactly what
-    _collect_touches would find once every device has its final role.
+    _collect_touches), and the same free-source-tie filtering
+    _apply_free_source_ties does: a source sitting on its own role's tail
+    rail is closed with a ctrl_*_source bit and never reaches the bus at
+    all, so it puts no side on VAPWR/VGND. Between them, a net's side set
+    here is exactly what route() will later find it touching.
     """
     sides: dict[str, set[str]] = {}
     for d in design.devices:
@@ -570,6 +573,9 @@ def _net_sides(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, set[st
         for terminal, net in d.terminals.items():
             if terminal not in DEVICE_TERMINALS.get(role, {}):
                 continue
+            if (terminal == "s" and role in SOURCE_TIE_PIN
+                    and net == SOURCE_TIE_RAIL[role]):
+                continue  # tied to its rail for free -- see _apply_free_source_ties
             sides.setdefault(net, set()).add(TERMINAL_SIDE[(role, terminal)])
     return sides
 
@@ -602,6 +608,29 @@ def _diffpair_gate_violations(
     return violations
 
 
+def _joined_row_violations(net_sides: dict[str, set[str]]) -> int:
+    """How many more nets want a bus row free on *both* sides than the
+    chip has such rows -- 0 when they all fit.
+
+    A net touching both bus sides has to sit on the same row *number* on
+    side A and on side B, bridged by cfg_bus_short. Only a row with no
+    ua[] bond wire on either side can carry that, and there is exactly one
+    (`ROWS_FREE_ON_BOTH_SIDES`, derived from the pin map -- today row 6).
+    A rail net is in the same competition, not outside it: every VAPWR and
+    VGND tap other than the row-6 pair has a bond wire on the far side, so
+    a two-sided rail net must land on row 6 as well.
+
+    A *port* net is excluded: its row is fixed by its bond wire, and
+    bridging it spends that pin's own row number on the far side rather
+    than the shared one. Which nets are two-sided at all is not a property
+    of the schematic -- it follows from which hardware slot each FET was
+    given, which is exactly what the caller is choosing.
+    """
+    joined = sum(1 for net, sides in net_sides.items()
+                 if len(sides) > 1 and net not in PORT_ROW)
+    return max(0, joined - len(ROWS_FREE_ON_BOTH_SIDES))
+
+
 def _allocate_fets_by_constraint(
     requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
     pair_rail: str, label: str, tail: DeviceRequest | None,
@@ -616,11 +645,20 @@ def _allocate_fets_by_constraint(
     equally valid assignments: which specific device gets nmos_a vs
     nmos_b, or which half of a pair is + vs -, never changes whether the
     *set* of requests fits, only which bus side each one ends up on. But
-    side is exactly what decides whether a diff-pair gate's net is
-    reachable (srlatch/README.md: "a diff-pair half's gate can never sit
-    on an internal net that spans both bus sides"), so the wrong point in
-    that space can turn a fine circuit into a RouteError -- purely
-    because of the order xschem happened to list instances in.
+    side is what decides two separate things, so the wrong point in that
+    space can turn a fine circuit into a RouteError -- purely because of
+    the order xschem happened to list instances in:
+
+    - whether a diff-pair gate's net is reachable at all
+      (srlatch/README.md: "a diff-pair half's gate can never sit on an
+      internal net that spans both bus sides") -- `_diffpair_gate_violations`;
+    - and how many nets end up spanning both bus sides, since every such
+      net competes for the one row that is free on both
+      (`_joined_row_violations`, TODO.md's own item, closed 2026-08-31).
+      Two source followers plus an inverter routed in only 3 of its 6
+      orderings before this: in the other 3 the allocation put a follower
+      drain on each bus side, which made VAPWR two-sided, which took row 6
+      away from the internal net that also needed it.
 
     Brute force over orderings of `requests` rather than re-deriving
     _allocate_fets's own eligibility rules (forced pairs, rail-tied
@@ -652,7 +690,9 @@ def _allocate_fets_by_constraint(
         except RouteError:
             continue
         net_sides = _net_sides(design, {**fixed_roles, **candidate})
-        if _diffpair_gate_violations(gate_nets, candidate, pair_roles, net_sides) == 0:
+        violations = (_diffpair_gate_violations(gate_nets, candidate, pair_roles, net_sides)
+                      + _joined_row_violations(net_sides))
+        if violations == 0:
             return candidate
 
     # No ordering avoids every violation: the circuit is unroutable

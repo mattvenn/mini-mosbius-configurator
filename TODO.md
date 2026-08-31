@@ -115,41 +115,16 @@ that the item above raises.
 
 ## Tooling and library
 
-6 which hardware slot a FET gets still decides whether an ordinary
-circuit fits, because the slot fixes which bus side each terminal is on.
-Found 2026-08-30, as the residue of the two routing-order fixes made the
-same day (a rail tap now scores its bridge, and nets now route in order of
-how little choice they have). Those two took a PMOS-pair-plus-two-followers
-netlist from 0 clean orderings out of 120 to 90; this is the other 30.
-
-The contention is for bus row 6. It is the only row with no ua[] bond wire
-on either side (`ROWS_FREE_ON_BOTH_SIDES`, derived from the pin map), so it
-is the only row *any* net spanning both bus sides can use -- rail or
-internal, and there is one of it. Whether a given net spans both sides is
-not a property of the schematic: it follows from which slot
-`allocate_devices()` handed each FET. Two source followers plus an inverter
-routes in 3 of its 6 orderings; in the other 3 the allocation makes VAPWR
-two-sided, it takes row 6, and the internal net that also needs row 6 gets
-`DOESN'T FIT -- 'outa' needs a free row on both sides, joined`.
-
-`_allocate_fets_by_constraint()` already searches orderings, but it scores
-only for diff-pair gates on two-sided nets and out-of-range package pins
-(2026-08-22). Adding "and don't make a net two-sided when row 6 is already
-spoken for" is the same shape of constraint and the same search. The
-honest alternative is to say the router is greedy and leave it, since the
-message names the net and the rule; but a source follower plus an inverter
-is not an exotic circuit to be told to reorder by hand.
-
-7 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+6 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
 ## Docs and user-facing text
 
-8 check all the schematic texts
+7 check all the schematic texts
 
-9 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+8 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-10 document what VDPWR is actually for. Nowhere says that the FETs a user
+9 document what VDPWR is actually for. Nowhere says that the FETs a user
 draws never see 1.8V: every analog device in the submodule (nmos_prog,
 pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
 VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only
@@ -161,4 +136,4 @@ built from mosbius_* symbols never connects it. So it powers nothing you
 draw, and exists so the matrix can be told what to be. Belongs in
 TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
 
-11 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+10 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library

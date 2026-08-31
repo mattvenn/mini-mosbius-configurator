@@ -9,12 +9,21 @@ self-consistency technique M1/M2 used before real hardware exists.
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 from mosbius.check import check, check_routing
 from mosbius.decode import decode
 from mosbius.netlist import NetlistError, parse_netlist
-from mosbius.route import RouteError, route
+from mosbius.route import (
+    ROWS_FREE_ON_BOTH_SIDES,
+    RouteError,
+    _joined_row_violations,
+    _net_sides,
+    allocate_devices,
+    route,
+)
 
 INVERTER_NETLIST = """
 nfeta_0 ua1 ua2 VGND net1 mosbius_nmos w=1
@@ -409,6 +418,73 @@ def test_reordering_never_relocates_a_working_designs_bitstream():
     after = route(parse_netlist(SR_LATCH_NETLIST))
     assert after.device_roles == before.device_roles
     assert after.config.to_bitstream() == before.config.to_bitstream()
+
+
+# Two source followers plus an inverter -- an ordinary circuit, no
+# differential pair anywhere. Both followers put their *drain* on VAPWR,
+# and a drain has no ctrl_*_source tie, so each one lands on the bus. If
+# the allocator gives the two followers slots on opposite bus sides then
+# VAPWR spans both sides, and a two-sided net can only sit on a row free
+# of a ua[] bond wire on both -- of which there is exactly one, row 6
+# (ROWS_FREE_ON_BOTH_SIDES). `outa` needs that same row, so it gets
+# DOESN'T FIT. Which slot each FET got is not something the schematic
+# says, so before TODO.md's item (closed 2026-08-31) this routed in 3 of
+# its 6 instance orderings and failed in the other 3.
+TWO_FOLLOWERS_AND_AN_INVERTER = [
+    "XM1 ua1  outa  VGND  VGND  mosbius_nmos w=1",   # inverter NMOS
+    "XM2 outa VAPWR ua2   VGND  mosbius_nmos w=1",   # source follower A
+    "XM3 ua3  VAPWR ua4   VGND  mosbius_nmos w=1",   # source follower B
+]
+TWO_FOLLOWERS_PMOS = "XM4 ua1 outa VAPWR VAPWR mosbius_pmos w=1"
+
+
+@pytest.mark.parametrize("order", list(itertools.permutations(range(3))))
+def test_two_source_followers_route_in_every_instance_order(order):
+    netlist = "\n".join([TWO_FOLLOWERS_AND_AN_INVERTER[i] for i in order]
+                        + [TWO_FOLLOWERS_PMOS])
+    routed = route(parse_netlist(netlist))
+    # The point of the fix: at most one net ends up spanning both bus
+    # sides, so the one row that can carry such a net is not fought over.
+    joined = [net for net, rows in routed.net_rows.items()
+              if len(rows) > 1 and not net.startswith("ua")]
+    assert len(joined) <= len(ROWS_FREE_ON_BOTH_SIDES)
+    assert "outa" in routed.net_rows
+
+
+def test_two_source_followers_give_the_same_bitstream_in_every_order():
+    bitstreams = set()
+    for order in itertools.permutations(range(3)):
+        netlist = "\n".join([TWO_FOLLOWERS_AND_AN_INVERTER[i] for i in order]
+                            + [TWO_FOLLOWERS_PMOS])
+        bitstreams.add(route(parse_netlist(netlist)).config.to_bitstream())
+    assert len(bitstreams) == 1
+
+
+def test_only_one_net_can_span_both_bus_sides():
+    # The rule the new constraint scores against, stated directly rather
+    # than inferred from a circuit: row 6 is the only row free of a ua[]
+    # bond wire on both sides, so it is the only row any two-sided net --
+    # rail or internal -- can use, and there is one of it.
+    assert len(ROWS_FREE_ON_BOTH_SIDES) == 1
+    assert _joined_row_violations({"n1": {"A", "B"}}) == 0
+    assert _joined_row_violations({"n1": {"A", "B"}, "VAPWR": {"A", "B"}}) == 1
+    # One-sided nets are free, and a port net is out of the competition:
+    # its row is its own bond wire, and bridging spends that row number on
+    # the far side rather than the shared one.
+    assert _joined_row_violations({"n1": {"A"}, "n2": {"B"}, "n3": {"A"}}) == 0
+    assert _joined_row_violations({"ua1": {"A", "B"}, "ua2": {"A", "B"}}) == 0
+
+
+def test_a_rail_tied_source_puts_no_side_on_its_rail():
+    # _net_sides scores what route() will actually see, and a source
+    # sitting on its own role's tail rail is closed with a ctrl_*_source
+    # bit instead of a bus row (_apply_free_source_ties). An inverter's
+    # two sources are exactly that, so neither rail is two-sided here even
+    # though the two devices are on opposite bus sides.
+    design = parse_netlist(INVERTER_NETLIST)
+    sides = _net_sides(design, allocate_devices(design))
+    assert "VGND" not in sides
+    assert "VAPWR" not in sides
 
 
 # A net that's forced onto both bus sides no matter how the four NMOS

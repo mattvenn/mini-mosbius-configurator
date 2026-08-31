@@ -230,6 +230,30 @@ bond wire on either side. A one-sided rail net needs no bridge and is
 unchanged, still bus_A[4]. **Every example's bitstream is byte-identical**,
 which is the check that matters: no committed design had ever used a tap.
 
+**Slot allocation now counts how many nets it makes two-sided, and that
+was the last of the instance-order failures (2026-08-31).** Row 6 is the
+only bus row with no `ua[]` bond wire on either side, so it is the only
+row *any* net spanning both sides can use -- rail or internal -- and there
+is one of it. Whether a net spans both sides is not in the schematic: it
+follows from which hardware slot `allocate_devices()` handed each FET. Two
+source followers plus an inverter routed in 3 of its 6 instance orderings;
+in the other 3 the allocation put a follower drain on each side, VAPWR
+became two-sided and took row 6, and the internal net that also needed it
+got `DOESN'T FIT -- 'outa' needs a free row on both sides, joined`.
+`_joined_row_violations()` is that count, scored alongside the diff-pair
+gate rule in the ordering search `_allocate_fets_by_constraint()` already
+ran. Two things came with it: `_net_sides()` now skips a source sitting on
+its own role's tail rail, since `_apply_free_source_ties()` closes that
+with a `ctrl_*_source` bit and it never reaches the bus -- without which
+an inverter's two rails both looked two-sided and the new score was
+nonsense; and a netlist of the shape the earlier fix was measured on, a
+PMOS pair plus two followers, went from 60 of its 120 orderings to all
+120. **Every example's
+bitstream is byte-identical**, all seven. What is still not searched is
+both polarities *jointly* -- NMOS is decided against PMOS's netlist-order
+allocation, then PMOS against the NMOS result -- which is 24+24 tries
+rather than 24x24, and no circuit raised so far needs the difference.
+
 **`examples/srlatch/` draws its write transistors `w=4` now, and the
 warning it used to provoke is asserted in the test suite instead
 (2026-08-29).** `XM5`/`XM6` land on diff-pair halves, whose width is fixed
