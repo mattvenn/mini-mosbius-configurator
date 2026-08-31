@@ -69,6 +69,13 @@ EDGE_ROUTED = Path("build/srlatch_edge_out_routed.txt")
 EDGE_OUT = Path("build/srlatch_reset_edge.png")
 MIDRAIL = 1.65
 
+# The repo-wide fidelity palette: colour says which of the three a trace is,
+# and nothing else, so a reader who has looked at any other example's figure
+# already knows how to read this one. Purple rather than green for silicon
+# because green against this orange is not separable for a protanope.
+COLOURS = {"as drawn": "#4c72b0", "as routed": "#dd8452", "on silicon": "#7d5bbe"}
+STIMULUS = "#888888"        # a driven input, not one of the three
+
 
 def load_txt(path: Path) -> tuple[list[float], list[float]]:
     xs, ys = [], []
@@ -125,13 +132,13 @@ def draw_edge_figure() -> None:
     sim_t0 = cross_time(tr_ns, vr, MIDRAIL, falling=False)
 
     fig, ax = plt.subplots(figsize=(8.5, 4.6))
-    ax.plot([t - t0 for t in ts], si_reset, color="#888888", lw=1.0,
+    ax.plot([t - t0 for t in ts], si_reset, color=STIMULUS, lw=1.0,
             label="RESET, on silicon")
-    ax.plot([t - t0 for t in ts], si_q, color="#c1272d", lw=1.6,
+    ax.plot([t - t0 for t in ts], si_q, color=COLOURS["on silicon"], lw=1.6,
             label="Q, on silicon")
-    ax.plot([t - sim_t0 for t in tr_ns], vd, color="#1f77b4", lw=1.2, ls="--",
+    ax.plot([t - sim_t0 for t in tr_ns], vd, color=COLOURS["as drawn"], lw=1.2, ls="--",
             label="Q, as drawn (ss)")
-    ax.plot([t - sim_t0 for t in tr_ns], vro, color="#2ca02c", lw=1.2, ls="-.",
+    ax.plot([t - sim_t0 for t in tr_ns], vro, color=COLOURS["as routed"], lw=1.2, ls="-.",
             label="Q, as routed (ss)")
     ax.axhline(MIDRAIL, color="#bbbbbb", lw=0.8)
     ax.axvline(0, color="#bbbbbb", lw=0.8)
@@ -179,14 +186,16 @@ def main() -> None:
     shade(right, 60, 101, "SET")       # tb_srlatch.sch's two PULSE sources
     shade(right, 220, 261, "RESET")
 
-    left.plot(ts, trace["q"], color="#c1272d", lw=1.2, label="Q on silicon")
+    left.plot(ts, trace["q"], color=COLOURS["on silicon"], lw=1.2, label="Q on silicon")
     left.set_xlabel("time (ms) -- inputs driven milliseconds apart")
     left.set_ylabel("Q (V)")
     left.set_title("on silicon")
     left.legend(loc="center right", fontsize=8)
 
-    right.plot([t * 1e9 for t in td], vd, color="#1f77b4", lw=1.2, label="as drawn")
-    right.plot([t * 1e9 for t in tr], vr, color="#2ca02c", lw=1.2, ls="--", label="as routed")
+    right.plot([t * 1e9 for t in td], vd, color=COLOURS["as drawn"], lw=1.2,
+               label="as drawn")
+    right.plot([t * 1e9 for t in tr], vr, color=COLOURS["as routed"], lw=1.2, ls="--",
+               label="as routed")
     right.set_xlabel("time (ns) -- inputs pulsed nanoseconds apart")
     right.set_title("simulated")
     right.legend(loc="center right", fontsize=8)

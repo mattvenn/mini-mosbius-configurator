@@ -97,7 +97,7 @@ def main() -> None:
 
     full.plot(*drawn, lw=1.4, color="#4C72B0", label="as drawn")
     full.plot(*routed, lw=1.4, color="#DD8452", label="as routed")
-    full.plot(*silicon, "o", ms=3.2, color="#55A868", label="on silicon")
+    full.plot(*silicon, "o", ms=3.2, color="#7D5BBE", label="on silicon")
     full.set_xlabel("ua1, input (V)")
     full.set_ylabel("ua2, output (V)")
     full.set_title("CMOS inverter transfer curve")
@@ -112,7 +112,7 @@ def main() -> None:
     zx, zy = fine if fine else silicon
     pts = [(a, b) for a, b in zip(zx, zy) if lo <= a <= hi]
     zoom.plot([p[0] for p in pts], [p[1] for p in pts], "o", ms=3.2,
-              color="#55A868", label="on silicon")
+              color="#7D5BBE", label="on silicon")
     zoom.plot([lo, hi], [lo, hi], ls="--", lw=0.8, color="grey", label="out = in")
     zoom.set_xlim(lo, hi)
     zoom.set_xlabel("ua1, input (V)")

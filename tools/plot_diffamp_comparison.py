@@ -110,11 +110,11 @@ def main() -> None:
     centre_in = (2.0 - intercept) / slope       # where the fit crosses 2.0 V
     centre_out = 2.0
     ax1.plot([(p[0] - centre_in) * 1000 for p in fine],
-             [p[1] - centre_out for p in fine], "o", color="#55a868", ms=3.2,
+             [p[1] - centre_out for p in fine], "o", color="#7d5bbe", ms=3.2,
              label=f"on silicon   {slope:.2f} V/V fitted", zorder=3)
 
     xs = [-45, 45]
-    ax1.plot(xs, [slope * x / 1000 for x in xs], "-", color="#55a868",
+    ax1.plot(xs, [slope * x / 1000 for x in xs], "-", color="#7d5bbe",
              lw=1, alpha=0.55, zorder=2)
     ax1.axhline(0, color="0.8", lw=0.9, ls=":")
     ax1.axvline(0, color="0.8", lw=0.9, ls=":")
@@ -138,7 +138,7 @@ def main() -> None:
     gains = [lsq([p for p in b["fine"]
                   if LINEAR_WINDOW[0] <= p[1] <= LINEAR_WINDOW[1]])[0]
              for b in good]
-    ax2.plot(amps, gains, "o-", color="#55a868", ms=7, lw=1.4,
+    ax2.plot(amps, gains, "o-", color="#7d5bbe", ms=7, lw=1.4,
              label="on silicon, fitted")
     ref_i, ref_g = amps[0], gains[0]
     ax2.plot(amps, [ref_g * (ref_i / i) ** 0.5 for i in amps], "--",
@@ -148,7 +148,7 @@ def main() -> None:
              label="moderate inversion: gain flat with I")
     for i, g in zip(amps, gains):
         ax2.annotate(f"{g:.2f}", (i, g), textcoords="offset points",
-                     xytext=(0, 9), ha="center", fontsize=8.5, color="#3a6b48")
+                     xytext=(0, 9), ha="center", fontsize=8.5, color="#5a3f8c")
     ax2.set_xlabel("tail bias current, from the rail and the 20 kOhm resistor  (uA)")
     ax2.set_ylabel("gain over the linear region  (V/V)")
     ax2.legend(loc="lower left", fontsize=8.5)

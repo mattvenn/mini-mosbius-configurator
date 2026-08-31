@@ -113,19 +113,9 @@ The difference is that a fixture is declared to be a snapshot and has a
 job policing it. Related to the question about combining the test suites
 that the item above raises.
 
-6 put `.github/workflows/spice-regression.yml` back on its monthly
-schedule. It was switched to run on every push on 2026-08-29, deliberately
-and temporarily, because the examples are changing daily and a break is
-worth hearing about the same day. It costs about five minutes per push --
-the six jobs run in parallel, and most of each one is ngspice parsing
-sky130A's model library rather than simulating anything. Flip it back once
-the examples settle -- delete the bare `push:` trigger and the note above
-it; the `schedule:` and `workflow_dispatch:` entries are still there
-untouched.
-
 ## Tooling and library
 
-7 which hardware slot a FET gets still decides whether an ordinary
+6 which hardware slot a FET gets still decides whether an ordinary
 circuit fits, because the slot fixes which bus side each terminal is on.
 Found 2026-08-30, as the residue of the two routing-order fixes made the
 same day (a rail tap now scores its bridge, and nets now route in order of
@@ -150,27 +140,16 @@ honest alternative is to say the router is greedy and leave it, since the
 message names the net and the rule; but a source follower plus an inverter
 is not an exotic circuit to be told to reorder by hand.
 
-8 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+7 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
-
-9 the six `tools/plot_*_comparison.py` figures draw silicon in a green
-that collides with the orange they draw "as routed" in. The dataviz
-palette validator scores that adjacent pair at Delta E 4.5 for protanopes,
-against a floor of 8, so the two series are not reliably separable for a
-red-green colourblind reader; the blue/orange pair is fine.
-`tools/plot_pdiffamp_comparison.py` already uses a purple (`#7d5bbe`)
-that scores 18.9 against the same orange and passes every check. Swapping
-the other five over is a one-constant change each plus a re-run, and until
-it happens the figure set is inconsistent -- which is the only reason not
-to have done it at the time.
-
-10 check all the schematic texts
 
 ## Docs and user-facing text
 
-11 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+8 check all the schematic texts
 
-12 document what VDPWR is actually for. Nowhere says that the FETs a user
+9 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+
+10 document what VDPWR is actually for. Nowhere says that the FETs a user
 draws never see 1.8V: every analog device in the submodule (nmos_prog,
 pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
 VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only
@@ -182,4 +161,4 @@ built from mosbius_* symbols never connects it. So it powers nothing you
 draw, and exists so the matrix can be told what to be. Belongs in
 TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
 
-13 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+11 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library

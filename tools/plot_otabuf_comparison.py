@@ -114,7 +114,7 @@ def main() -> None:
     series = [
         ("as drawn", vin_s, drawn, "#4c72b0", "-", 1.4),
         ("as routed", vin_s, routed, "#dd8452", "-", 1.4),
-        ("on silicon", vin_m, vout_m, "#55a868", "o", 3.0),
+        ("on silicon", vin_m, vout_m, "#7d5bbe", "o", 3.0),
     ]
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8.5), sharex=True,
@@ -144,7 +144,7 @@ def main() -> None:
         f"below the common-mode range the output is pinned,\n"
         f"and silicon's floor is {floor_m:.2f} V against the decks' ~{floor_s:.2f} V.\n"
         f"The input ramps up THROUGH that floor, which is why the\n"
-        f"green points cross the ideal line here without following it.",
+        f"purple points cross the ideal line here without following it.",
         xy=(0.30, floor_m), xytext=(1.42, 0.86), fontsize=8, color="0.35",
         arrowprops=dict(arrowstyle="->", color="0.55", lw=0.9,
                         connectionstyle="arc3,rad=-0.15"))

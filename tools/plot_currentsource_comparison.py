@@ -58,7 +58,7 @@ MEASURED = {"source": Path("build/currentsource_compliance_source.json"),
 TB_COLUMNS = {("source", "as drawn"): 1, ("source", "as routed"): 3,
               ("sink", "as drawn"): 5, ("sink", "as routed"): 7}
 
-COLOURS = {"as drawn": "#4c72b0", "as routed": "#dd8452", "on silicon": "#55a868"}
+COLOURS = {"as drawn": "#4c72b0", "as routed": "#dd8452", "on silicon": "#7d5bbe"}
 # Colour carries the fidelity, matching the other figures in this repo, so
 # the leg has to be carried by something else or the two families are
 # indistinguishable in the normalised panel where they overlap.

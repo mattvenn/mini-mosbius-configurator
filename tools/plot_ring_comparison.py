@@ -182,7 +182,7 @@ def main() -> None:
     for cycle in (0, 1, 2):
         offset = cycle / f_fold
         keep = (ph + offset) <= rtw[-1]
-        routed_ax.plot((ph[keep] + offset) * 1e9, pv[keep], ".", ms=1.6, color="#55A868",
+        routed_ax.plot((ph[keep] + offset) * 1e9, pv[keep], ".", ms=1.6, color="#7D5BBE",
                        label=f"on silicon -- {f_silicon / 1e6:.2f} MHz" if cycle == 0 else None)
     routed_ax.set_xlabel("time (ns)")
     routed_ax.set_ylabel("ua3, buffered output (V)")

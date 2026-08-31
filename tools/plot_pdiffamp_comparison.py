@@ -11,12 +11,13 @@ Inputs, all produced by other commands so this script only draws:
 
 Writes examples/pdiffamp/pdiffamp_comparison.png.
 
-**Silicon is drawn in purple here, not the green the other examples use.**
-Green against the orange of the as-routed series is a genuine collision for
-protanopes -- the dataviz palette validator scores that adjacent pair at
-Delta E 4.5, well under the 8 it wants -- while purple against the same
-orange scores 18.9. The blue/orange pair is unchanged, so the two
-simulated series still read as they do everywhere else in the repo.
+**Silicon is drawn in purple, as it is in every comparison figure here.**
+This was the first figure to use it: green -- what all of them used before
+2026-08-31 -- against the orange of the as-routed series is a genuine
+collision for protanopes, since the dataviz palette validator scores that
+adjacent pair at Delta E 4.5, well under the 8 it wants, while purple
+against the same orange scores 18.9. The blue/orange pair was never the
+problem and is unchanged.
 
 **The simulated side is three points, not a curve, and the figure has to
 be honest about that.** tb_pdiffamp.sch is a step response: it holds the
