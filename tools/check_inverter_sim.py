@@ -8,10 +8,10 @@ last re-run 2026-08-29 at the probe defaults rprobe=10meg cprobe=10p
 modelled in the testbench), on the routing the router produces
 today.
 
-Run by tools/check_inverter_sim.sh (the full netlist/route/simulate/ngspice
-pipeline), which .github/workflows/spice-regression.yml runs on every push
-alongside the ring, diff amp, SR latch, OTA follower and current source
-checks.
+Run by `sh tools/check_example_sim.sh inverter` (the full
+netlist/route/simulate/ngspice pipeline), which
+.github/workflows/spice-regression.yml runs on every push alongside the
+ring, diff amp, SR latch, OTA follower and current source checks.
 
 The +-5% band is set by what actually varies: reltol=0.01 keeps repeat
 runs stable to well under 0.1%, so the noise floor is far below this and
@@ -21,50 +21,43 @@ sizeable error in the pad or parasitic models while still passing; the
 other three checks (tools/check_ring_sim.py, tools/check_diffamp_sim.py
 and tools/check_srlatch_sim.py) carry the same band and the same
 reasoning.
+
+The reading and comparing is tools/simcheck.py; what lives here is the
+numbers, the unit, and what a missing measurement means for this circuit.
 """
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
 
 REFERENCE_NS = {"trise_drawn": 8.16, "trise_routed": 24.63}
 TOLERANCE = 0.05
 
 
+def _ns(v: float) -> str:
+    return f"{v:.2f}ns"
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_inverter_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
+    log_path, text = simcheck.read_log("check_inverter_sim.py")
 
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    values = simcheck.measurements(
+        text, REFERENCE_NS, log_path, scale=1e9,   # seconds -> ns
+        hint="The ngspice run likely errored before reaching the tran "
+             "analysis.",
+    )
+    if values is None:
+        return 1
 
-    values: dict[str, float] = {}
-    for name in REFERENCE_NS:
-        m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-        if not m:
-            print(
-                f"FAIL: no '{name}' measurement found in {log_path} -- the "
-                f"ngspice run likely errored before reaching the tran "
-                f"analysis. Tail of the log:\n"
-                + "\n".join(text.splitlines()[-20:])
-            )
-            return 1
-        values[name] = float(m.group(1)) * 1e9  # seconds -> ns
+    ok = simcheck.compare_relative(values, REFERENCE_NS, TOLERANCE, fmt=_ns)
 
-    ok = True
-    for name, reference in REFERENCE_NS.items():
-        measured = values[name]
-        low, high = reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        status = "ok" if in_range else "OUT OF RANGE"
-        print(
-            f"{name}: {measured:.2f}ns "
-            f"(reference {reference}ns, expected {low:.2f}-{high:.2f}ns) -- {status}"
-        )
-
+    # Structural, and it survives the reference numbers drifting: the
+    # routed edge carries the real switch matrix and pad on top of the
+    # as-drawn ideal wires, so it can only ever be slower.
     if values["trise_routed"] <= values["trise_drawn"]:
         print(
             "FAIL: trise_routed should be slower than trise_drawn -- the "
@@ -73,18 +66,10 @@ def main() -> int:
         )
         ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the inverter's simulated behavior has "
-            "changed. If this is an intentional change (device library "
-            "rebuild, routing change, PDK/tool update), update the "
-            "reference numbers here and in examples/inverter/README.md "
-            "together; otherwise treat this as a real regression."
-        )
-        return 1
-
-    print("\nOK -- inverter as-drawn/as-routed simulation matches the reference measurements.")
-    return 0
+    return simcheck.verdict(
+        ok, subject="the inverter", readme="examples/inverter/README.md",
+        causes="device library rebuild, routing change, PDK/tool update",
+    )
 
 
 if __name__ == "__main__":

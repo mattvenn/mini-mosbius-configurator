@@ -12,7 +12,7 @@ ibias_amps=100u, tail=4:
     slew rate (1.0 V -> 2.3 V step, measured between 1.3 V and 2.0 V)
         42.9 V/us drawn    15.4 V/us routed
 
-Run by tools/check_otabuf_sim.sh, which
+Run by `sh tools/check_example_sim.sh otabuf`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, diff amp, SR latch and current source checks.
 
@@ -45,8 +45,11 @@ together, rather than widening the band.
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
 
 # Input voltages the ramp is sampled at, and the `meas` name suffix
 # tb_otabuf.sch uses for each. The sample times in the deck (3.76us, 6us,
@@ -81,38 +84,26 @@ BRANCH_AGREEMENT_V = 0.010
 FOLLOWING_LIMIT_V = 0.100
 
 
-def find(text: str, name: str, log_path: str) -> float | None:
-    m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-    if not m:
-        print(
-            f"FAIL: no '{name}' measurement found in {log_path} -- the "
-            f"ngspice run likely errored before reaching the tran analysis, "
-            f"or the measurement reported 'failed' instead of a number. Tail "
-            f"of the log:\n" + "\n".join(text.splitlines()[-20:])
-        )
-        return None
-    return float(m.group(1))
+MISSING_HINT = (
+    "The ngspice run likely errored before reaching the tran analysis, or "
+    "the measurement reported 'failed' instead of a number."
+)
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_otabuf_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
-
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    log_path, text = simcheck.read_log("check_otabuf_sim.py")
 
     names = [f"vin_{s}" for s in SAMPLES]
     names += [f"vout_{b}_{s}" for b in ("drawn", "routed") for s in SAMPLES]
     names += [f"t{n}_{b}" for b in ("drawn", "routed") for n in (1, 2)]
 
-    values: dict[str, float] = {}
-    for name in names:
-        value = find(text, name, log_path)
-        if value is None:
-            return 1
-        values[name] = value
+    values = simcheck.measurements(text, names, log_path, hint=MISSING_HINT)
+    if values is None:
+        return 1
 
+    # The offset and slew comparisons below stay hand-written rather than
+    # calling simcheck's: each line has to carry the input voltage it was
+    # sampled at, which is what makes the table readable on this circuit.
     ok = True
 
     # The ramp is slow enough (0.29 V/us against a 42.9 V/us slew rate) that
@@ -217,22 +208,11 @@ def main() -> int:
             )
             ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the OTA follower's simulated behavior has "
-            "changed. If this is an intentional change (device library "
-            "rebuild, routing change, a different circuit in otabuf.sch, "
-            "PDK/tool update), update the reference numbers here and in "
-            "examples/otabuf/README.md together; otherwise treat this as a "
-            "real regression."
-        )
-        return 1
-
-    print(
-        "\nOK -- OTA follower as-drawn/as-routed simulation matches the "
-        "reference measurements."
+    return simcheck.verdict(
+        ok, subject="the OTA follower", readme="examples/otabuf/README.md",
+        causes="device library rebuild, routing change, a different circuit "
+               "in otabuf.sch, PDK/tool update",
     )
-    return 0
 
 
 if __name__ == "__main__":

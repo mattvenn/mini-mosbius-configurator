@@ -43,8 +43,8 @@ with.
 ## Reproducing the numbers
 
 ```bash
-sh tools/check_srlatch_sim.sh          # as drawn and as routed, in the container
-python3 tools/measure_srlatch_ad3.py   # levels on silicon, on the host
+sh tools/check_example_sim.sh srlatch       # as drawn and as routed, in the container
+python3 tools/measure_srlatch_ad3.py        # levels on silicon, on the host
 python3 tools/measure_srlatch_edge_ad3.py   # the reset edge, on the host
 python3 tools/plot_srlatch_comparison.py    # the figure
 ```

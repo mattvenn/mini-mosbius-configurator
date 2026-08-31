@@ -18,7 +18,7 @@ output has less room below it: at 1.12V a -40mV step takes it to within
 250mV of VGND, where it is compressing rather than amplifying, and the
 chord gain would then be measuring the compression.
 
-Run by tools/check_pdiffamp_sim.sh, which
+Run by `sh tools/check_example_sim.sh pdiffamp`, which
 .github/workflows/spice-regression.yml runs alongside the inverter, ring,
 SR latch, diff amp, OTA follower and current source checks.
 
@@ -30,14 +30,28 @@ passing.
 The gains are computed here rather than read from the log's own `gain_*`
 prints, because `vout_*` are plain `meas` results with one value per line,
 which is a format worth depending on; a multi-vector `print` is not.
+
+The reading and comparing is tools/simcheck.py; what lives here is the
+numbers, the derived gains, and what a missing measurement means for this
+circuit.
+
+The four vout_*_pos/neg references are deliberately NOT in the README:
+they are the raw endpoints of the +-10mV step, and what the README
+publishes is the base voltage and the gain computed from them. Do not go
+looking for them in the table.
 """
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
 
-# Volts, from the README table. The measure names are tb_pdiffamp.sch's own.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
+
+# Volts. The measure names are tb_pdiffamp.sch's own. Only the two _base
+# values appear in the README; the four step endpoints are intermediates
+# the gain is computed from (see the note above).
 REFERENCE_V = {
     "vout_drawn_base": 1.112,
     "vout_drawn_pos": 1.328,
@@ -46,8 +60,9 @@ REFERENCE_V = {
     "vout_routed_pos": 1.339,
     "vout_routed_neg": 0.910,
 }
-# The differential step tb_pdiffamp.sch applies, in volts: PWL takes ua1 from
-# 1.5V to 1.51V and then to 1.49V, against ua2 held at 1.5V.
+# The differential step tb_pdiffamp.sch applies, in volts. It is +-10mV
+# rather than the NMOS diff amp's +-40mV because this output sits low by
+# construction, and a bigger step compresses it against VGND.
 STEP_V = 0.01
 TOLERANCE = 0.05
 # How far the as-drawn and as-routed gains may differ from each other before
@@ -55,39 +70,23 @@ TOLERANCE = 0.05
 BRANCH_AGREEMENT = 0.05
 
 
+def _v(x: float) -> str:
+    return f"{x:.3f}V"
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_pdiffamp_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
+    log_path, text = simcheck.read_log("check_pdiffamp_sim.py")
 
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    values = simcheck.measurements(
+        text, REFERENCE_V, log_path,
+        hint="The ngspice run likely errored before reaching the tran "
+             "analysis, or the measurement reported 'failed' instead of a "
+             "number.",
+    )
+    if values is None:
+        return 1
 
-    values: dict[str, float] = {}
-    for name in REFERENCE_V:
-        m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-        if not m:
-            print(
-                f"FAIL: no '{name}' measurement found in {log_path} -- the "
-                f"ngspice run likely errored before reaching the tran "
-                f"analysis, or the measurement reported 'failed' instead of "
-                f"a number. Tail of the log:\n"
-                + "\n".join(text.splitlines()[-20:])
-            )
-            return 1
-        values[name] = float(m.group(1))
-
-    ok = True
-    for name, reference in REFERENCE_V.items():
-        measured = values[name]
-        low, high = sorted((reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)))
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        status = "ok" if in_range else "OUT OF RANGE"
-        print(
-            f"{name}: {measured:.3f}V "
-            f"(reference {reference}V, expected {low:.3f}-{high:.3f}V) -- {status}"
-        )
+    ok = simcheck.compare_relative(values, REFERENCE_V, TOLERANCE, fmt=_v)
 
     gains = {}
     for branch in ("drawn", "routed"):
@@ -138,22 +137,12 @@ def main() -> int:
             )
             ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the PMOS differential amplifier's simulated "
-            "behavior has changed. If this is an intentional change (device "
-            "library rebuild, routing change, a different circuit in "
-            "pdiffamp.sch, PDK/tool update), update the reference numbers "
-            "here and in examples/pdiffamp/README.md together; otherwise "
-            "treat this as a real regression."
-        )
-        return 1
-
-    print(
-        "\nOK -- PMOS differential amplifier as-drawn/as-routed simulation "
-        "matches the reference measurements."
+    return simcheck.verdict(
+        ok, subject="the PMOS differential amplifier",
+        readme="examples/pdiffamp/README.md",
+        causes="device library rebuild, routing change, a different circuit "
+               "in pdiffamp.sch, PDK/tool update",
     )
-    return 0
 
 
 if __name__ == "__main__":

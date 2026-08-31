@@ -61,20 +61,15 @@ measured. The ratio experiment is what tells those two apart.
 
 3 make it easy for people to submit designs to the examples
 
-## Tests and CI
-
-4 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
-the moment I think they're all a bit separate. possiblity to reuse
-
 ## Tooling and library
 
-5 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+4 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
 ## Docs and user-facing text
 
-6 check all the schematic texts
+5 check all the schematic texts
 
-7 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+6 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-8 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+7 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library

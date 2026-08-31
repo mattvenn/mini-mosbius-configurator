@@ -75,6 +75,13 @@ IN_CH, OUT_CH = 0, 1
 # not cached build artifacts: if the router's allocation ever changes,
 # re-route and re-measure rather than editing these strings, or the
 # published numbers quietly stop describing what was on the chip.
+# The OTA follower's published slew rates come from the checker that
+# asserts them against examples/otabuf/README.md, so there is one literal
+# for the pair rather than one per file. The diff amp's tau below has no
+# such counterpart -- it is published nowhere else -- so it stays a literal.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from check_otabuf_sim import REFERENCE_SLEW_V_PER_US as OTABUF_SLEW  # noqa: E402
+
 PROFILES = {
     "otabuf": {
         "bitstream": "404000000000000000000000000000000000000000850210",
@@ -84,7 +91,12 @@ PROFILES = {
         "band": (1.3, 2.0),          # the sheet measures the slew here
         "trigger": ("in", 1.65),
         # slew = I_tail / C, so C follows from the published rate.
-        "published": {"as drawn": 42.9, "as routed": 15.4},
+        # Imported, not copied: this pair is published in
+        # examples/otabuf/README.md's table and asserted by
+        # tools/check_otabuf_sim.py, and a second literal here would be a
+        # third copy with nothing keeping it in step.
+        "published": {"as drawn": OTABUF_SLEW["drawn"],
+                      "as routed": OTABUF_SLEW["routed"]},
         "tail_amps": 400e-6,
         "dc_gain": 1.0,
         "units": "V/us",

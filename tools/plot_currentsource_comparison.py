@@ -5,7 +5,7 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/currentsource_tb.txt                  from tb_currentsource.sch,
-                                                via tools/check_currentsource_sim.sh
+                                                via tools/check_example_sim.sh currentsource
     build/currentsource_compliance_source.json  from
     build/currentsource_compliance_sink.json    tools/measure_currentsource_ad3.py
 
@@ -115,7 +115,7 @@ def main() -> None:
             "  testbench, which needs xschem and ngspice, so run it in the\n"
             "  IIC-OSIC-TOOLS container from the repo root:\n\n"
             "    docker run --rm -v \"$PWD:/work\" -w /work hpretl/iic-osic-tools:latest \\\n"
-            "        --skip bash -lc 'sh tools/check_currentsource_sim.sh'\n")
+            "        --skip bash -lc 'sh tools/check_example_sim.sh currentsource'\n")
 
     have = {leg: path for leg, path in MEASURED.items() if path.exists()}
     if not have:

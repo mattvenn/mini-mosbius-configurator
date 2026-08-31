@@ -35,7 +35,7 @@ transistor the chip cannot build.
 ## Reproducing the numbers
 
 ```bash
-sh tools/check_inverter_sim.sh          # as drawn and as routed, in the container
-python3 tools/measure_inverter_ad3.py   # on silicon, on the host
+sh tools/check_example_sim.sh inverter      # as drawn and as routed, in the container
+python3 tools/measure_inverter_ad3.py       # on silicon, on the host
 python3 tools/plot_inverter_comparison.py   # the figure and the table
 ```

@@ -292,6 +292,57 @@ substituted in -- for a netlist, a missing/unreadable path, JSON with no
 is covered too: a routed design JSON handed to `route`/`watch` now says
 so, instead of "no mosbius_* instances found in this netlist".
 
+**The example regression is one script and one matrix, and the three test
+tiers stay separate (2026-08-31).** `tools/check_example_sim.sh <example>`
+replaced seven near-identical shell scripts that differed only in two names
+-- and the inverter's copy had quietly drifted into routing by hand instead
+of calling `tools/regenerate_routed.sh` like the other six, so its CI job
+had been exercising a different path. `.github/workflows/spice-regression.yml`
+is now one `simulate` job with a `strategy.matrix` leg per example
+(`fail-fast: false`, so which leg broke is still the output). `tools/simcheck.py`
+holds what every `check_<example>_sim.py` was repeating -- pull named values
+out of an ngspice log, fail with the log's tail, compare against a reference
+dict, print the table, print the verdict -- while each checker keeps its own
+numbers, unit formatter and, above all, its own explanation of what a
+missing measurement means, since "the ring failed to start oscillating,
+check Ikickd/Ikickr" is the entire value of the check to whoever meets it.
+All seven were re-run in the container after the change and reproduce their
+published numbers exactly.
+
+What was deliberately **not** done, so don't propose it again: unifying
+pytest, the spice regression and the AD3 scripts behind a common runner.
+They have different inputs, runtimes and notions of truth -- pure Python in
+0.3 s; docker and five minutes; a chip on a desk and a human. Reuse belongs
+downward in shared helpers, not sideways in a runner.
+
+**The AD3 scripts call `mosbius.program.program()` now, not the CLI in a
+subprocess (2026-08-31).** Seven of them had their own `program_chip()`
+shelling out to `python3 -m mosbius.cli program`, which meant the only way
+to learn whether the board actually delivered the bias current was to
+string-match the CLI's English -- and that fails in the DANGEROUS
+direction, since a reworded warning reads as "this board has a current
+source" and the script then measures an unbiased chip very carefully.
+They read `result["ibias_set"]` instead, as `measure_currentsource_ad3.py`
+always did. `cli.py`'s `_ibias_warning` moved to `mosbius/program.py` as
+the public `ibias_warning()` for them to share: the text is about the
+hardware, not about the CLI. **These are the one part of that day's work
+not verified by anything -- they need a demoboard and a chip.**
+
+**One published number was in two files and no README; it is in the README
+now.** The OTA follower's slew rate (42.9 / 15.4 V/us) sat in
+`check_otabuf_sim.py` and `measure_settling_ad3.py` with no published
+source, while `examples/otabuf/README.md`'s "Try this" invited the reader
+to measure it and compare. It is a row in that table now, and
+`measure_settling_ad3.py` imports the pair from the checker. Checked at the
+same time: of the 34 reference numbers across the seven checkers, 24 appear
+verbatim in their README and every one of those agrees. The other ten are
+the diff amps' raw +-step endpoints, which are intermediates the published
+gain is computed from -- both checkers now say so in their docstrings, so
+nobody goes hunting for them in the table. A `reference.json` or a test
+that parses the README tables was considered and rejected: the duplication
+was one number pair, and the prose around those tables is not worth
+generating.
+
 **The spice regression runs on every push, and the example bitstreams are
 deliberately not pinned (2026-08-31).** The monthly cron is gone from
 `.github/workflows/spice-regression.yml`; seven parallel docker jobs cost

@@ -8,7 +8,7 @@ ibias_amps=100u:
     psource_a (source)   +209.9 uA drawn   +209.3 uA routed   (+200 uA ideal)
     nsink_a   (sink)     -201.3 uA drawn   -203.9 uA routed   (-200 uA ideal)
 
-Run by tools/check_currentsource_sim.sh, which
+Run by `sh tools/check_example_sim.sh currentsource`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, diff amp, SR latch and OTA follower checks.
 
@@ -41,8 +41,11 @@ than widening the band.
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
 
 # Amps, from the README table. The measure names are
 # tb_currentsource.sch's own; the signs are the ammeters' own, and are
@@ -68,39 +71,22 @@ IDEAL_TOLERANCE = 0.25
 BRANCH_AGREEMENT = 0.05
 
 
+def _ua(a: float) -> str:
+    return f"{a * 1e6:+.1f}uA"
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_currentsource_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
+    log_path, text = simcheck.read_log("check_currentsource_sim.py")
 
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    values = simcheck.measurements(
+        text, REFERENCE_A, log_path,
+        hint="The ngspice run likely errored before reaching the dc sweep, "
+             "or the measurement reported 'failed' instead of a number.",
+    )
+    if values is None:
+        return 1
 
-    values: dict[str, float] = {}
-    for name in REFERENCE_A:
-        m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-        if not m:
-            print(
-                f"FAIL: no '{name}' measurement found in {log_path} -- the "
-                f"ngspice run likely errored before reaching the dc sweep, or "
-                f"the measurement reported 'failed' instead of a number. Tail "
-                f"of the log:\n" + "\n".join(text.splitlines()[-20:])
-            )
-            return 1
-        values[name] = float(m.group(1))
-
-    ok = True
-    for name, reference in REFERENCE_A.items():
-        measured = values[name]
-        low, high = sorted((reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)))
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        status = "ok" if in_range else "OUT OF RANGE"
-        print(
-            f"{name}: {measured * 1e6:+.1f}uA "
-            f"(reference {reference * 1e6:+.1f}uA, expected "
-            f"{low * 1e6:+.1f} to {high * 1e6:+.1f}uA) -- {status}"
-        )
+    ok = simcheck.compare_relative(values, REFERENCE_A, TOLERANCE, fmt=_ua)
 
     # Structural, and it survives the reference numbers drifting: `ratio=2`
     # means two times the reference current, on silicon and in the ideal
@@ -150,22 +136,12 @@ def main() -> int:
             )
             ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the current source's simulated behavior has "
-            "changed. If this is an intentional change (device library "
-            "rebuild, routing change, a different circuit in "
-            "currentsource.sch, PDK/tool update), update the reference "
-            "numbers here and in examples/currentsource/README.md together; "
-            "otherwise treat this as a real regression."
-        )
-        return 1
-
-    print(
-        "\nOK -- current source as-drawn/as-routed simulation matches the "
-        "reference measurements."
+    return simcheck.verdict(
+        ok, subject="the current source",
+        readme="examples/currentsource/README.md",
+        causes="device library rebuild, routing change, a different circuit "
+               "in currentsource.sch, PDK/tool update",
     )
-    return 0
 
 
 if __name__ == "__main__":

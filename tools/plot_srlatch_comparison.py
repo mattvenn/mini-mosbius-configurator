@@ -5,7 +5,7 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/srlatch_tb_out_drawn.txt    from tb_srlatch.sch, via
-    build/srlatch_tb_out_routed.txt   tools/check_srlatch_sim.sh
+    build/srlatch_tb_out_routed.txt   tools/check_example_sim.sh srlatch
     build/srlatch_silicon_trace.json  from tools/measure_srlatch_ad3.py
 
 Writes two figures:
@@ -157,9 +157,9 @@ def draw_edge_figure() -> None:
 
 def main() -> None:
     for path, how in [
-        (DRAWN, "Run `sh tools/check_srlatch_sim.sh` in the IIC-OSIC-TOOLS container "
+        (DRAWN, "Run `sh tools/check_example_sim.sh srlatch` in the IIC-OSIC-TOOLS container "
                 "to\n  simulate tb_srlatch.sch and write it."),
-        (ROUTED, "Run `sh tools/check_srlatch_sim.sh` in the IIC-OSIC-TOOLS container "
+        (ROUTED, "Run `sh tools/check_example_sim.sh srlatch` in the IIC-OSIC-TOOLS container "
                  "to\n  simulate tb_srlatch.sch and write it."),
         (SILICON, "Run `python3 tools/measure_srlatch_ad3.py` on the host, with the "
                   "chip\n  in the socket and an Analog Discovery on pads C, J and D."),

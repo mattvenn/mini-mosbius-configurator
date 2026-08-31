@@ -42,8 +42,8 @@ uncalibrated bias cannot spoil.
 ## Reproducing the numbers
 
 ```bash
-sh tools/check_currentsource_sim.sh          # as drawn and as routed, in the container
+sh tools/check_example_sim.sh currentsource                 # as drawn and as routed, in the container
 python3 tools/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
-python3 tools/measure_currentsource_ad3.py   # on silicon, on the host
-python3 tools/plot_currentsource_comparison.py   # the figure
+python3 tools/measure_currentsource_ad3.py                  # on silicon, on the host
+python3 tools/plot_currentsource_comparison.py              # the figure
 ```

@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -46,6 +45,11 @@ import ad3  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
+from mosbius.program import (  # noqa: E402
+    ProgramError,
+    ibias_warning,
+    program,
+)
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
 # examples/otabuf as the router placed it on 2026-08-29 -- the configuration
@@ -106,15 +110,26 @@ def implied_bias(rail: float) -> str:
 
 
 def program_chip(port: str | None) -> None:
-    cmd = [sys.executable, "-m", "mosbius.cli", "program", BITSTREAM,
-           "--project", PROJECT, "--ibias", "0"]
-    if port:
-        cmd += ["--port", port]
+    """Upload the configuration through mosbius.program.program().
+
+    Not `python3 -m mosbius.cli program` in a subprocess. The result dict
+    carries an `ibias_set` field saying whether the board actually
+    delivered the bias current, and the CLI renders that as a paragraph of
+    English on stderr; reading the field is not merely tidier, because
+    string-matching that paragraph fails in the DANGEROUS direction -- a
+    reworded warning reads as "this board has a current source", and the
+    script would then measure an unbiased chip very carefully.
+    tools/measure_currentsource_ad3.py has always done it this way.
+    """
+    config = SwitchConfig.from_bitstream(BITSTREAM, ibias=0)
     print("== loading the OTA follower onto the chip")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    print("  " + (result.stdout.strip() or result.stderr.strip()).replace("\n", "\n  "))
-    if result.returncode != 0:
-        raise SystemExit("programming failed -- nothing measured")
+    try:
+        result = program(config, project=PROJECT, port=port)
+    except ProgramError as exc:
+        raise SystemExit(f"programming failed -- nothing measured\n\n{exc}")
+    warning = ibias_warning(result, config)
+    if warning:
+        print(warning)
 
 
 def sweep(handle) -> list[tuple[float, float]]:

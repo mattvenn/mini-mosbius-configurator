@@ -5,7 +5,7 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/otabuf_tb.txt            from tb_otabuf.sch, via
-                                   tools/check_otabuf_sim.sh
+                                   tools/check_example_sim.sh otabuf
     build/otabuf_silicon_dc.json   from tools/measure_otabuf_ad3.py
 
 Writes examples/otabuf/otabuf_comparison.png.
@@ -102,7 +102,7 @@ def main() -> None:
             raise SystemExit(
                 f"missing {p}\n\n"
                 "  This script only draws. Produce the simulated curves with\n"
-                "  tools/check_otabuf_sim.sh and the measured ones with\n"
+                "  tools/check_example_sim.sh otabuf and the measured ones with\n"
                 "  tools/measure_otabuf_ad3.py, then run this again."
             )
 

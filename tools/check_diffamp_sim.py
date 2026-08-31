@@ -18,7 +18,7 @@ the tail bank now draws the 400 uA that tail=4 means on silicon, where the
 old ideal model gave it 200 uA. See that README's "The bias-reference
 correction".
 
-Run by tools/check_diffamp_sim.sh, which
+Run by `sh tools/check_example_sim.sh diffamp`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, SR latch, OTA follower and current source checks.
 
@@ -41,14 +41,28 @@ tools/check_ring_sim.py, and the same reasoning applies -- see the note
 there. If an upstream image update does shift a result past the band,
 re-measure deliberately and update the numbers here and in
 examples/diffamp/README.md together, rather than widening the band.
+
+The reading and comparing is tools/simcheck.py; what lives here is the
+numbers, the derived gains, and what a missing measurement means for this
+circuit.
+
+The four vout_*_pos/neg references are deliberately NOT in the README:
+they are the raw endpoints of the +-40mV step, and what the README
+publishes is the base voltage and the gain computed from them. Do not go
+looking for them in the table.
 """
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
 
-# Volts, from the README table. The measure names are tb_diffamp.sch's own.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
+
+# Volts. The measure names are tb_diffamp.sch's own. Only the two _base
+# values appear in the README; the four step endpoints are intermediates
+# the gain is computed from (see the note above).
 REFERENCE_V = {
     "vout_drawn_base": 2.012,
     "vout_drawn_pos": 2.744,
@@ -68,39 +82,23 @@ TOLERANCE = 0.05
 BRANCH_AGREEMENT = 0.05
 
 
+def _v(x: float) -> str:
+    return f"{x:.3f}V"
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_diffamp_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
+    log_path, text = simcheck.read_log("check_diffamp_sim.py")
 
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    values = simcheck.measurements(
+        text, REFERENCE_V, log_path,
+        hint="The ngspice run likely errored before reaching the tran "
+             "analysis, or the measurement reported 'failed' instead of a "
+             "number.",
+    )
+    if values is None:
+        return 1
 
-    values: dict[str, float] = {}
-    for name in REFERENCE_V:
-        m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-        if not m:
-            print(
-                f"FAIL: no '{name}' measurement found in {log_path} -- the "
-                f"ngspice run likely errored before reaching the tran "
-                f"analysis, or the measurement reported 'failed' instead of "
-                f"a number. Tail of the log:\n"
-                + "\n".join(text.splitlines()[-20:])
-            )
-            return 1
-        values[name] = float(m.group(1))
-
-    ok = True
-    for name, reference in REFERENCE_V.items():
-        measured = values[name]
-        low, high = sorted((reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)))
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        status = "ok" if in_range else "OUT OF RANGE"
-        print(
-            f"{name}: {measured:.3f}V "
-            f"(reference {reference}V, expected {low:.3f}-{high:.3f}V) -- {status}"
-        )
+    ok = simcheck.compare_relative(values, REFERENCE_V, TOLERANCE, fmt=_v)
 
     gains = {}
     for branch in ("drawn", "routed"):
@@ -144,22 +142,11 @@ def main() -> int:
             )
             ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the differential amplifier's simulated "
-            "behavior has changed. If this is an intentional change (device "
-            "library rebuild, routing change, a different circuit in "
-            "diffamp.sch, PDK/tool update), update the reference numbers "
-            "here and in examples/diffamp/README.md together; otherwise treat "
-            "this as a real regression."
-        )
-        return 1
-
-    print(
-        "\nOK -- differential amplifier as-drawn/as-routed simulation matches "
-        "the reference measurements."
+    return simcheck.verdict(
+        ok, subject="the differential amplifier", readme="examples/diffamp/README.md",
+        causes="device library rebuild, routing change, a different circuit "
+               "in diffamp.sch, PDK/tool update",
     )
-    return 0
 
 
 if __name__ == "__main__":

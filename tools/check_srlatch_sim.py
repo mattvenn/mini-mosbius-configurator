@@ -13,7 +13,7 @@ w=4 on the sheet to match the fixed geometry of the diff-pair halves they
 land on. The bitstream is unchanged by that -- there were never width bits
 behind the request -- so nothing about the chip or its measurements moved.
 
-Run by tools/check_srlatch_sim.sh, which
+Run by `sh tools/check_example_sim.sh srlatch`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, both diff amps, OTA follower and current source
 checks.
@@ -44,14 +44,21 @@ The sheet draws w=4 now, treset_drawn is 1.77ns, and the ordering is the
 one every other example shows, so the check is worth having: it is what
 would catch the routed matrix quietly getting faster than ideal wiring.
 See examples/srlatch/README.md for the reset timing measured on silicon.
+
+The reading and comparing is tools/simcheck.py; what lives here is the
+numbers, the units, and what a missing measurement means for this circuit
+-- which for the treset_* pair is the longest such explanation in the
+repo, and the reason `hint` is per-example rather than generic.
 """
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
 
-# Volts. The stored output level once SET has driven it high.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
+
 REFERENCE_HIGH_V = {"qd_after_set": 3.300, "qr_after_set": 3.110}
 # Volts. Both references are within a few mV of ground, so this is an
 # absolute band, not a fraction of the reference.
@@ -65,82 +72,53 @@ TOLERANCE = 0.05
 # be storing anything at all.
 MIN_STATE_SEPARATION_V = 3.0
 
+# What a missing measurement means here. This is long because the two known
+# causes are both specific and both expensive to rediscover; a generic
+# "the run errored" would be worth almost nothing on this circuit.
+MISSING_HINT = (
+    "Either the ngspice run errored before reaching the tran analysis, or "
+    "the measurement reported 'failed' rather than a number -- for the "
+    "treset_* pair there are two known causes, both of which print "
+    "'trig(TARG) : out of interval'.\n\n"
+    "  1. The as-drawn latch never set, so there is no falling edge to "
+    "time. Check qd_after_set in the log: near 0 V means this. It is what "
+    "happened on 2026-08-29 with XM5/XM6 still drawn w=1 against diff-pair "
+    "halves fixed at w=4 in silicon -- write transistors four times too "
+    "weak, which the wrong model bin had been masking by over-strengthening "
+    "every as-drawn device. The sheet draws them w=4 now, so seeing this "
+    "again means something has reopened that gap: check the router's "
+    "warnings, which should be silent.\n"
+    "  2. A load big enough to stretch the reset edge past the measurement "
+    "window, which is what cprobe=100p used to do."
+)
 
-def _measurement(text: str, name: str, log_path: str) -> float | None:
-    m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-    if m:
-        return float(m.group(1))
-    print(
-        f"FAIL: no '{name}' measurement found in {log_path}. Either the "
-        f"ngspice run errored before reaching the tran analysis, or the "
-        f"measurement reported 'failed' rather than a number -- for the "
-        f"treset_* pair there are two known causes, both of which print "
-        f"'trig(TARG) : out of interval'.\n\n"
-        f"  1. The as-drawn latch never set, so there is no falling edge to "
-        f"time. Check qd_after_set in the log: near 0 V means this. It is "
-        f"what happened on 2026-08-29 with XM5/XM6 still drawn w=1 against "
-        f"diff-pair halves fixed at w=4 in silicon -- write transistors four "
-        f"times too weak, which the wrong model bin had been masking by "
-        f"over-strengthening every as-drawn device. The sheet draws them w=4 "
-        f"now, so seeing this again means something has reopened that gap: "
-        f"check the router's warnings, which should be silent.\n"
-        f"  2. A load big enough to stretch the reset edge past the "
-        f"measurement window, which is what cprobe=100p used to do.\n\n"
-        f"Tail of the log:\n"
-        + "\n".join(text.splitlines()[-20:])
-    )
-    return None
+
+def _v(x: float) -> str:
+    return f"{x:.3f}V"
+
+
+def _v4(x: float) -> str:
+    return f"{x:.4f}V"
+
+
+def _ns(x: float) -> str:
+    return f"{x:.2f}ns"
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_srlatch_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
-
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    log_path, text = simcheck.read_log("check_srlatch_sim.py")
 
     names = list(REFERENCE_HIGH_V) + list(REFERENCE_LOW_V) + list(REFERENCE_NS)
-    values: dict[str, float] = {}
-    for name in names:
-        value = _measurement(text, name, log_path)
-        if value is None:
-            return 1
-        values[name] = value
+    values = simcheck.measurements(text, names, log_path, hint=MISSING_HINT)
+    if values is None:
+        return 1
     for name in REFERENCE_NS:
         values[name] *= 1e9  # seconds -> ns
 
-    ok = True
-
-    for name, reference in REFERENCE_HIGH_V.items():
-        measured = values[name]
-        low, high = reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        print(
-            f"{name}: {measured:.3f}V (reference {reference}V, expected "
-            f"{low:.3f}-{high:.3f}V) -- {'ok' if in_range else 'OUT OF RANGE'}"
-        )
-
-    for name, reference in REFERENCE_LOW_V.items():
-        measured = values[name]
-        in_range = abs(measured - reference) <= LOW_ABS_TOLERANCE_V
-        ok = ok and in_range
-        print(
-            f"{name}: {measured:.4f}V (reference {reference}V, expected "
-            f"within +-{LOW_ABS_TOLERANCE_V}V of it) -- "
-            f"{'ok' if in_range else 'OUT OF RANGE'}"
-        )
-
-    for name, reference in REFERENCE_NS.items():
-        measured = values[name]
-        low, high = reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        print(
-            f"{name}: {measured:.2f}ns (reference {reference}ns, expected "
-            f"{low:.2f}-{high:.2f}ns) -- {'ok' if in_range else 'OUT OF RANGE'}"
-        )
+    ok = simcheck.compare_relative(values, REFERENCE_HIGH_V, TOLERANCE, fmt=_v)
+    ok = simcheck.compare_absolute(
+        values, REFERENCE_LOW_V, LOW_ABS_TOLERANCE_V, fmt=_v4) and ok
+    ok = simcheck.compare_relative(values, REFERENCE_NS, TOLERANCE, fmt=_ns) and ok
 
     # Structural, and it survives the reference numbers drifting: this is
     # the property that makes the circuit a latch rather than a pair of
@@ -183,22 +161,11 @@ def main() -> int:
         )
         ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the SR latch's simulated behavior has "
-            "changed. If this is an intentional change (device library "
-            "rebuild, routing change, a different circuit in srlatch.sch, "
-            "PDK/tool update), update the reference numbers here and in "
-            "examples/srlatch/README.md together; otherwise treat this as a "
-            "real regression."
-        )
-        return 1
-
-    print(
-        "\nOK -- SR latch as-drawn/as-routed simulation matches the reference "
-        "measurements."
+    return simcheck.verdict(
+        ok, subject="the SR latch", readme="examples/srlatch/README.md",
+        causes="device library rebuild, routing change, a different circuit "
+               "in srlatch.sch, PDK/tool update",
     )
-    return 0
 
 
 if __name__ == "__main__":

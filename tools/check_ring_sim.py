@@ -4,7 +4,7 @@
 the reference measurements in examples/ringosc/README.md:
 freq_drawn=2.289GHz, freq_routed=43.89MHz, last re-run 2026-08-29.
 
-Run by tools/check_ring_sim.sh, which
+Run by `sh tools/check_example_sim.sh ring`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, diff amp, SR latch, OTA follower and current source checks.
 
@@ -35,12 +35,18 @@ Frequencies are read from the loop nodes, not the buffered outputs. The
 buffer cannot slew its 15pF load at these speeds, so out_drawn spans only
 ~1.8-2.1V and grazes the 1.5V trigger -- measured there, the same deck
 reported 58.3MHz on one run and 44.0MHz on the next. See the README.
+
+The reading and comparing is tools/simcheck.py; what lives here is the
+numbers, the unit, and what a missing measurement means for this circuit.
 """
 
 from __future__ import annotations
 
-import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import simcheck  # noqa: E402
 
 # Hz. freq_drawn is the ideal-wire loop; freq_routed is the same loop
 # through the real switch matrix, and is the one comparable in spirit to
@@ -55,40 +61,20 @@ def _fmt(hz: float) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: check_ring_sim.py <ngspice-log>", file=sys.stderr)
-        return 2
+    log_path, text = simcheck.read_log("check_ring_sim.py")
 
-    log_path = sys.argv[1]
-    text = open(log_path).read()
+    # `let freq_x = 1/period_x` then `print freq_x`, so the log line is
+    # "freq_drawn = 2.082616e+09" rather than a .meas result line.
+    values = simcheck.measurements(
+        text, REFERENCE_HZ, log_path,
+        hint="The ngspice run likely errored before reaching it, or the ring "
+             "failed to start oscillating (check that Ikickd/Ikickr still "
+             "inject into the loop nodes).",
+    )
+    if values is None:
+        return 1
 
-    values: dict[str, float] = {}
-    for name in REFERENCE_HZ:
-        # `let freq_x = 1/period_x` then `print freq_x`, so the log line is
-        # "freq_drawn = 2.082616e+09" rather than a .meas result line.
-        m = re.search(rf"^\s*{name}\s*=\s*([0-9.eE+-]+)", text, re.MULTILINE)
-        if not m:
-            print(
-                f"FAIL: no '{name}' value found in {log_path} -- the ngspice "
-                f"run likely errored before reaching it, or the ring failed "
-                f"to start oscillating (check that Ikickd/Ikickr still "
-                f"inject into the loop nodes). Tail of the log:\n"
-                + "\n".join(text.splitlines()[-20:])
-            )
-            return 1
-        values[name] = float(m.group(1))
-
-    ok = True
-    for name, reference in REFERENCE_HZ.items():
-        measured = values[name]
-        low, high = reference * (1 - TOLERANCE), reference * (1 + TOLERANCE)
-        in_range = low <= measured <= high
-        ok = ok and in_range
-        status = "ok" if in_range else "OUT OF RANGE"
-        print(
-            f"{name}: {_fmt(measured)} "
-            f"(reference {_fmt(reference)}, expected {_fmt(low)}-{_fmt(high)}) -- {status}"
-        )
+    ok = simcheck.compare_relative(values, REFERENCE_HZ, TOLERANCE, fmt=_fmt)
 
     # Structural, and it survives the reference numbers drifting: the
     # routed loop carries the real matrix's resistance and capacitance on
@@ -101,19 +87,11 @@ def main() -> int:
         )
         ok = False
 
-    if not ok:
-        print(
-            "\nSomething about the ring oscillator's simulated behavior has "
-            "changed. If this is an intentional change (device library "
-            "rebuild, routing change, a different circuit in ring.sch, "
-            "PDK/tool update), update the reference numbers here and in "
-            "examples/ringosc/README.md together; otherwise treat this as a "
-            "real regression."
-        )
-        return 1
-
-    print("\nOK -- ring oscillator as-drawn/as-routed simulation matches the reference measurements.")
-    return 0
+    return simcheck.verdict(
+        ok, subject="the ring oscillator", readme="examples/ringosc/README.md",
+        causes="device library rebuild, routing change, a different circuit "
+               "in ring.sch, PDK/tool update",
+    )
 
 
 if __name__ == "__main__":

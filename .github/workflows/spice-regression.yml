@@ -14,145 +14,65 @@ on:
   workflow_dispatch:
 
 jobs:
-  # A separate job per example, not another step, so they fail
+  # One matrix leg per example, not one job with seven steps, so they fail
   # independently: each guards something the others cannot, so a break in
   # one is not evidence about the rest, and a report saying which broke is
-  # worth more than one that stops at the first. The inverter is
-  # pad-and-load dominated; the ring is switch-matrix dominated (row
-  # coupling and bus-wire capacitance are what set its frequency); the diff
-  # amp is the only one that would notice a shifted bias point on the NMOS
-  # side, since it is an analog operating point rather than a digital edge,
-  # and the PMOS diff amp is its mirror -- the only job that exercises the
-  # PMOS tail bank, so a device-library change that got the PMOS side wrong
-  # would leave the NMOS one passing; the
-  # SR latch is the only one that stores a value, so it is the only one that
-  # would notice the routed matrix losing a held state; the OTA follower is
-  # the only one that uses mosbius_ota at all and the only one that closes a
-  # feedback loop through the matrix; and the current source is the only one
-  # that measures a current, so it is the only one that would notice the
-  # chip's single bias reference being split, shorted or absent.
-  inverter:
+  # worth more than one that stops at the first. A matrix keeps that -- each
+  # leg is its own named job with its own red X -- while collapsing seven
+  # near-identical job blocks that differed only in the example's name.
+  #
+  # What each leg guards: the inverter is pad-and-load dominated; the ring is
+  # switch-matrix dominated (row coupling and bus-wire capacitance are what
+  # set its frequency); the diff amp is the only one that would notice a
+  # shifted bias point on the NMOS side, since it is an analog operating
+  # point rather than a digital edge, and the PMOS diff amp is its mirror --
+  # the only leg that exercises the PMOS tail bank, so a device-library
+  # change that got the PMOS side wrong would leave the NMOS one passing;
+  # the SR latch is the only one that stores a value, so it is the only one
+  # that would notice the routed matrix losing a held state; the OTA
+  # follower is the only one that uses mosbius_ota at all and the only one
+  # that closes a feedback loop through the matrix; and the current source
+  # is the only one that measures a current, so it is the only one that
+  # would notice the chip's single bias reference being split, shorted or
+  # absent.
+  simulate:
     runs-on: ubuntu-latest
+    strategy:
+      # One leg failing must not cancel the others: which of them broke is
+      # the information this workflow exists to produce.
+      fail-fast: false
+      matrix:
+        # `example` is what tools/check_example_sim.sh takes; `deck` is the
+        # testbench name the ngspice log is written under, which differs
+        # only for the ring (examples/ringosc/ draws ring.sch).
+        include:
+          - example: inverter
+            deck: inverter
+          - example: ring
+            deck: ring
+          - example: diffamp
+            deck: diffamp
+          - example: pdiffamp
+            deck: pdiffamp
+          - example: srlatch
+            deck: srlatch
+          - example: otabuf
+            deck: otabuf
+          - example: currentsource
+            deck: currentsource
+    name: ${{ matrix.example }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Simulate examples/inverter in IIC-OSIC-TOOLS
+      - name: Simulate examples/${{ matrix.example }} in IIC-OSIC-TOOLS
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_inverter_sim.sh'
+            --skip bash -lc 'sh tools/check_example_sim.sh ${{ matrix.example }}'
 
       - name: Upload ngspice log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: inverter-ngspice-log
-          path: build/ngspice_tb_inverter.log
-          if-no-files-found: ignore
-
-  ringosc:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Simulate examples/ringosc in IIC-OSIC-TOOLS
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_ring_sim.sh'
-
-      - name: Upload ngspice log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ringosc-ngspice-log
-          path: build/ngspice_tb_ring.log
-          if-no-files-found: ignore
-
-  diffamp:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Simulate examples/diffamp in IIC-OSIC-TOOLS
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_diffamp_sim.sh'
-
-      - name: Upload ngspice log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diffamp-ngspice-log
-          path: build/ngspice_tb_diffamp.log
-          if-no-files-found: ignore
-
-  pdiffamp:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Simulate examples/pdiffamp in IIC-OSIC-TOOLS
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_pdiffamp_sim.sh'
-
-      - name: Upload ngspice log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdiffamp-ngspice-log
-          path: build/ngspice_tb_pdiffamp.log
-          if-no-files-found: ignore
-
-  srlatch:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Simulate examples/srlatch in IIC-OSIC-TOOLS
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_srlatch_sim.sh'
-
-      - name: Upload ngspice log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: srlatch-ngspice-log
-          path: build/ngspice_tb_srlatch.log
-          if-no-files-found: ignore
-
-  otabuf:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Simulate examples/otabuf in IIC-OSIC-TOOLS
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_otabuf_sim.sh'
-
-      - name: Upload ngspice log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: otabuf-ngspice-log
-          path: build/ngspice_tb_otabuf.log
-          if-no-files-found: ignore
-
-  currentsource:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Simulate examples/currentsource in IIC-OSIC-TOOLS
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_currentsource_sim.sh'
-
-      - name: Upload ngspice log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: currentsource-ngspice-log
-          path: build/ngspice_tb_currentsource.log
+          name: ${{ matrix.example }}-ngspice-log
+          path: build/ngspice_tb_${{ matrix.deck }}.log
           if-no-files-found: ignore
