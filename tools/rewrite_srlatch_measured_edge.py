@@ -9,7 +9,7 @@ Four changes, and nothing else:
 
 * **The stimulus edge.** `tb_srlatch.sch` uses 1 ns edges. The Analog
   Discovery's generator was measured at 20.2 ns 10%-90% on the RESET pad
-  by tools/measure_srlatch_edge_ad3.py. A SPICE PULSE's `tr` is the full
+  by tools/ad3/measure_srlatch_edge_ad3.py. A SPICE PULSE's `tr` is the full
   0-100% transition, so the 10%-90% part of it is 0.8*tr: tr = 25.3 ns
   reproduces the measured 20.2 ns.
 * **The timescale.** Edges 25x longer need a longer window, so the pulses

@@ -6,14 +6,14 @@ The OTA unity-gain follower: input on pad C (`ua1`), output on pad J
 (`ua2`, which is also the feedback node). Run from the repo root, on the
 host -- it needs USB for the demoboard:
 
-    python3 tools/measure_otabuf_ad3.py
+    python3 tools/ad3/measure_otabuf_ad3.py
 
 **This is the first example measured here that needs a bias current.** The
 OTA's tail is a slave of the chip's bias reference, so with `ibias` unfed
 the whole circuit has no operating point and the output sits whereever the
 leakage puts it. On a demoboard with no bias circuit that current comes
 from V+ through a series resistor into pad K -- see "Feeding it by hand" in
-examples/README.md, and run tools/measure_ibias_clamp_ad3.py first to
+examples/README.md, and run tools/ad3/measure_ibias_clamp_ad3.py first to
 confirm the pad and find the setting. This script sets V+ itself and reads
 build/ibias_clamp.json, if it is there, to say what current that implies.
 
@@ -28,7 +28,7 @@ Slew rate -- the sheet's third number -- is NOT measured here. It needs a
 real edge, and ad3.wavegen() makes levels rather than edges (see its
 docstring: a DC offset change is slewed over milliseconds and produces a
 clean, plausible, entirely wrong ramp). That wants the triggered-capture
-idiom in tools/measure_srlatch_edge_ad3.py, as its own script.
+idiom in tools/ad3/measure_srlatch_edge_ad3.py, as its own script.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
@@ -96,7 +96,7 @@ def implied_bias(rail: float) -> str:
     """What the clamp sweep says this rail setting delivers, if it was run."""
     path = Path("build/ibias_clamp.json")
     if not path.exists():
-        return ("  (run tools/measure_ibias_clamp_ad3.py to know what current this is)")
+        return ("  (run tools/ad3/measure_ibias_clamp_ad3.py to know what current this is)")
     data = json.loads(path.read_text())
     pts = data["points"]
     for a, b in zip(pts, pts[1:]):
@@ -119,7 +119,7 @@ def program_chip(port: str | None) -> None:
     string-matching that paragraph fails in the DANGEROUS direction -- a
     reworded warning reads as "this board has a current source", and the
     script would then measure an unbiased chip very carefully.
-    tools/measure_currentsource_ad3.py has always done it this way.
+    tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
     config = SwitchConfig.from_bitstream(BITSTREAM, ibias=0)
     print("== loading the OTA follower onto the chip")

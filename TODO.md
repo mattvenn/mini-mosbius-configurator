@@ -13,7 +13,7 @@ where the switch matrix makes a large difference, so it is the row worth
 having.
 
 Two things make it harder than the DC sweep already in
-`tools/measure_inverter_ad3.py`. The edge is a few tens of nanoseconds, so
+`tools/ad3/measure_inverter_ad3.py`. The edge is a few tens of nanoseconds, so
 the stimulus needs a source with a much faster edge than the AD3's
 waveform generator, and its own settling has to be subtracted or ruled
 out; the AD3's digital output is one candidate and is untested here. And
@@ -45,7 +45,7 @@ netlist-not-schematic trick `tools/sweep_corners_currentsource.sh` uses so
 the committed sheet and every published number stay put. Checked
 2026-08-31: all four route, all four leave `psource_a` on `ua2` and
 `nsink_a` on `ua3`, and the bitstreams differ only in the ratio cycler
-bits. `tools/measure_currentsource_ad3.py --mode ratio` takes them with
+bits. `tools/ad3/measure_currentsource_ad3.py --mode ratio` takes them with
 `--configs`, reads each ratio back out of its own bitstream rather than
 its filename, and warns if the router did move a device between them.
 

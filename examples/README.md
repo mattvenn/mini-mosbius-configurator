@@ -161,7 +161,7 @@ less. At 100 uA through 20 kOhm the resistor takes 2.0 V and the pad about
 1.28 V, so being 50 mV wrong about the pad is a 2.5% error in the current;
 through 4.7 kOhm the same 50 mV is 10.6%.
 
-`tools/measure_ibias_clamp_ad3.py` sweeps the supply and reads both ends
+`tools/ad3/measure_ibias_clamp_ad3.py` sweeps the supply and reads both ends
 of the resistor, so the current is a difference between two measurements
 rather than a number derived from the supply's own idea of its output. It
 also identifies the pad, which a single-point measurement cannot: a pad

@@ -5,8 +5,8 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/srlatch_tb_out_drawn.txt    from tb_srlatch.sch, via
-    build/srlatch_tb_out_routed.txt   tools/check_example_sim.sh srlatch
-    build/srlatch_silicon_trace.json  from tools/measure_srlatch_ad3.py
+    build/srlatch_tb_out_routed.txt   tools/ci/check_example_sim.sh srlatch
+    build/srlatch_silicon_trace.json  from tools/ad3/measure_srlatch_ad3.py
 
 Writes two figures:
 
@@ -14,7 +14,7 @@ Writes two figures:
     build/srlatch_reset_edge.png              the reset transition, zoomed
 
 The second one needs build/srlatch_silicon_edge.json from
-tools/measure_srlatch_edge_ad3.py and the matched-stimulus simulation from
+tools/ad3/measure_srlatch_edge_ad3.py and the matched-stimulus simulation from
 tools/run_srlatch_measured_edge.sh; it is skipped if either is absent.
 
 **The two panels cannot share a time axis, and that is the honest way to
@@ -40,7 +40,7 @@ scheduling, which is visible and does not matter to a level measurement.
 **The first figure measures no edge, and the second one does.** In the
 left panel of `srlatch_comparison.png` the transitions are the
 generator's DC offset slewing over milliseconds -- that is how
-`tools/measure_srlatch_ad3.py` drives the levels, and it is the wrong
+`tools/ad3/measure_srlatch_ad3.py` drives the levels, and it is the wrong
 instrument for an edge. `build/srlatch_reset_edge.png` is the other measurement:
 real waveform edges, the scope triggered on Q's own fall at 100 MS/s, and
 both decks re-run under the same stimulus by
@@ -115,7 +115,7 @@ def draw_edge_figure() -> None:
     do not start at the same instant or have the same shape.
     """
     if not all(p.exists() for p in (EDGE_SILICON, EDGE_RESET, EDGE_DRAWN, EDGE_ROUTED)):
-        print("  (skipping the edge figure: run tools/measure_srlatch_edge_ad3.py and\n"
+        print("  (skipping the edge figure: run tools/ad3/measure_srlatch_edge_ad3.py and\n"
               "   tools/run_srlatch_measured_edge.sh first)")
         return
 
@@ -157,11 +157,11 @@ def draw_edge_figure() -> None:
 
 def main() -> None:
     for path, how in [
-        (DRAWN, "Run `sh tools/check_example_sim.sh srlatch` in the IIC-OSIC-TOOLS container "
+        (DRAWN, "Run `sh tools/ci/check_example_sim.sh srlatch` in the IIC-OSIC-TOOLS container "
                 "to\n  simulate tb_srlatch.sch and write it."),
-        (ROUTED, "Run `sh tools/check_example_sim.sh srlatch` in the IIC-OSIC-TOOLS container "
+        (ROUTED, "Run `sh tools/ci/check_example_sim.sh srlatch` in the IIC-OSIC-TOOLS container "
                  "to\n  simulate tb_srlatch.sch and write it."),
-        (SILICON, "Run `python3 tools/measure_srlatch_ad3.py` on the host, with the "
+        (SILICON, "Run `python3 tools/ad3/measure_srlatch_ad3.py` on the host, with the "
                   "chip\n  in the socket and an Analog Discovery on pads C, J and D."),
     ]:
         if not path.exists():

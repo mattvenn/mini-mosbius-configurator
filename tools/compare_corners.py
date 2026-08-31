@@ -4,7 +4,7 @@
 
 Reads what tools/sweep_corners.sh left in build/ (one inverter DC sweep and
 one ring frequency per corner) and compares each against the two bench
-measurements -- tools/measure_inverter_ad3.py and tools/measure_ring_ad3.py
+measurements -- tools/ad3/measure_inverter_ad3.py and tools/ad3/measure_ring_ad3.py
 -- then prints the corners ranked by combined error.
 
 **Why these two circuits answer the question together.** An inverter's trip
@@ -63,8 +63,8 @@ def main() -> None:
     if not bench_dc.exists() or not bench_ring.exists():
         raise SystemExit(
             "need both bench measurements first:\n"
-            "  python3 tools/measure_inverter_ad3.py\n"
-            "  python3 tools/measure_ring_ad3.py"
+            "  python3 tools/ad3/measure_inverter_ad3.py\n"
+            "  python3 tools/ad3/measure_ring_ad3.py"
         )
 
     pts = json.loads(bench_dc.read_text())

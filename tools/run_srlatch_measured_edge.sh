@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Re-run examples/srlatch's testbench with the stimulus the bench actually
 # applies, so its reset delay can be compared with the one measured on
-# silicon by tools/measure_srlatch_edge_ad3.py.
+# silicon by tools/ad3/measure_srlatch_edge_ad3.py.
 #
 # Why this exists rather than a change to tb_srlatch.sch: the sheet drives
 # RESET as a 1 ns step, and an Analog Discovery's generator takes about
@@ -75,4 +75,4 @@ cp .spiceinit build/.spiceinit
 grep -E '^(treset|vhigh|vlow)' build/ngspice_tb_srlatch_measured_edge.log || true
 echo
 echo "Compare treset_* above with the silicon number from"
-echo "tools/measure_srlatch_edge_ad3.py, not with the sheet's own treset."
+echo "tools/ad3/measure_srlatch_edge_ad3.py, not with the sheet's own treset."

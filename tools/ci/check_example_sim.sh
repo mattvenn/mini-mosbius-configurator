@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Regression check for one example: netlists the design, routes it, builds
 # the routed subcircuit, netlists the example's own testbench, runs it
-# through ngspice, and hands the log to tools/check_<name>_sim.py, which
+# through ngspice, and hands the log to tools/ci/check_<name>_sim.py, which
 # compares what came out against the reference measurements published in
 # that example's README.
 #
@@ -16,7 +16,7 @@
 # the repo root:
 #
 #   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-#       --skip bash -lc 'sh tools/check_example_sim.sh inverter'
+#       --skip bash -lc 'sh tools/ci/check_example_sim.sh inverter'
 #
 # Budget a couple of minutes whichever example you pick: sky130A's combined
 # model library takes 1-2 minutes to parse regardless of circuit size, and
@@ -26,7 +26,7 @@
 set -e
 
 usage() {
-    echo "usage: sh tools/check_example_sim.sh <example>" >&2
+    echo "usage: sh tools/ci/check_example_sim.sh <example>" >&2
     echo "" >&2
     echo "  inverter       a digital edge: rise time as drawn and as routed" >&2
     echo "  ring           two transients; the branches oscillate ~40x apart," >&2
@@ -89,7 +89,9 @@ netlist_schematic() {
     fi
 }
 
-cd "$(dirname "$0")/.."
+# This script lives in tools/ci/, so the repo root is two levels up. Every
+# path below (build/, examples/, .spiceinit) is relative to it.
+cd "$(dirname "$0")/../.."
 mkdir -p build
 
 echo "== netlisting, routing and building examples/$dir/$design.sch"
@@ -104,4 +106,4 @@ cp .spiceinit build/.spiceinit
     || { echo "ngspice exited non-zero -- tail of build/ngspice_tb_$design.log:"; \
          tail -40 "build/ngspice_tb_$design.log"; exit 1; }
 
-python3 "tools/check_${check}_sim.py" "build/ngspice_tb_$design.log"
+python3 "tools/ci/check_${check}_sim.py" "build/ngspice_tb_$design.log"

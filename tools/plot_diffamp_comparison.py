@@ -5,9 +5,9 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/diffamp_tb_inp.txt         from tb_diffamp.sch, via
-    build/diffamp_tb_out_drawn.txt   tools/check_example_sim.sh diffamp
+    build/diffamp_tb_out_drawn.txt   tools/ci/check_example_sim.sh diffamp
     build/diffamp_tb_out_routed.txt
-    build/diffamp_silicon.json       from tools/measure_diffamp_ad3.py
+    build/diffamp_silicon.json       from tools/ad3/measure_diffamp_ad3.py
 
 Writes examples/diffamp/diffamp_comparison.png.
 
@@ -81,8 +81,8 @@ def main() -> None:
         raise SystemExit(
             "missing " + ", ".join(missing) + "\n\n"
             "  This script only draws. Produce the simulated curves with\n"
-            "  tools/check_example_sim.sh diffamp and the measured ones with\n"
-            "  tools/measure_diffamp_ad3.py, then run this again.")
+            "  tools/ci/check_example_sim.sh diffamp and the measured ones with\n"
+            "  tools/ad3/measure_diffamp_ad3.py, then run this again.")
 
     drawn_rows = load_col(need["diffamp_tb_out_drawn.txt"])
     routed_rows = load_col(need["diffamp_tb_out_routed.txt"])

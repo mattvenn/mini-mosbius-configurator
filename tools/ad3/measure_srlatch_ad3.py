@@ -7,7 +7,7 @@ same sequence `examples/srlatch/tb_srlatch.sch` simulates -- SET, release,
 RESET, release -- and reads the stored output at each step. Run from the
 repo root, on the host, since it needs USB:
 
-    python3 tools/measure_srlatch_ad3.py
+    python3 tools/ad3/measure_srlatch_ad3.py
 
 **What this measures that no other example on this chip can.** The
 inverter, the ring, the diff amp, the OTA follower and the current source
@@ -20,7 +20,7 @@ state rather than merely passing a signal.
 **Timing is not measured here, but it is measurable.** This script drives
 the inputs by moving a wavegen's DC offset, which the Analog Discovery
 slews over milliseconds -- right for settling a level, useless for an
-edge. `tools/measure_srlatch_edge_ad3.py` drives real waveform edges and
+edge. `tools/ad3/measure_srlatch_edge_ad3.py` drives real waveform edges and
 triggers on Q's own fall to time the reset; it gets 24.46 ns against a
 20 ns stimulus edge, and `tools/run_srlatch_measured_edge.sh` runs both
 decks under that same stimulus for the comparison.
@@ -60,7 +60,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
@@ -105,7 +105,7 @@ FIRST_READING = {
 
 # Volts: the settled levels both decks reach while holding, read off
 # build/srlatch_tb_out_{drawn,routed}.txt at 200 ns (high) and 300 ns
-# (low). These are NOT tools/check_srlatch_sim.py's reference numbers,
+# (low). These are NOT tools/ci/check_srlatch_sim.py's reference numbers,
 # which are sampled at 110 ns and 280 ns and so catch the routed instance
 # mid-settle -- see this file's docstring. A bench reading taken 50 ms
 # after the pulse belongs against the settled value.
@@ -144,7 +144,7 @@ def program_chip(port: str | None) -> None:
     string-matching that paragraph fails in the DANGEROUS direction -- a
     reworded warning reads as "this board has a current source", and the
     script would then measure an unbiased chip very carefully.
-    tools/measure_currentsource_ad3.py has always done it this way.
+    tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
     config = SwitchConfig.from_bitstream(BITSTREAM)
     print("== loading the SR latch onto the chip")

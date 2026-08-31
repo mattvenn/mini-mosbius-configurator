@@ -7,7 +7,7 @@ records the DC transfer curve, so the same circuit can be compared as
 drawn, as routed (`mosbius simulate`) and as measured. Run it from the
 repo root, on the host -- not in the container, since it needs USB:
 
-    python3 tools/measure_inverter_ad3.py
+    python3 tools/ad3/measure_inverter_ad3.py
 
 **Which pads to clip onto is derived, not written down here.** A design's
 `ua[k]` is not a pad letter and the relationship changes with the shuttle,
@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
@@ -79,7 +79,7 @@ def program_chip(port: str | None) -> None:
     string-matching that paragraph fails in the DANGEROUS direction -- a
     reworded warning reads as "this board has a current source", and the
     script would then measure an unbiased chip very carefully.
-    tools/measure_currentsource_ad3.py has always done it this way.
+    tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
     config = SwitchConfig.from_bitstream(BITSTREAM)
     print("== loading the inverter onto the chip")

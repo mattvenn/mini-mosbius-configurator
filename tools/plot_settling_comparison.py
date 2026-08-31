@@ -4,7 +4,7 @@
 
 Input, produced by another command so this script only draws:
 
-    build/otabuf_settling.json   from tools/measure_settling_ad3.py otabuf
+    build/otabuf_settling.json   from tools/ad3/measure_settling_ad3.py otabuf
 
 Writes build/otabuf_settling.png.
 
@@ -53,7 +53,7 @@ def main() -> None:
         raise SystemExit(
             f"missing {SRC}\n\n"
             "  This script only draws. Run\n"
-            "  `python3 tools/measure_settling_ad3.py otabuf` first.")
+            "  `python3 tools/ad3/measure_settling_ad3.py otabuf` first.")
     by_bias = json.loads(SRC.read_text())["by_bias"]
     ua = [b["amps"] * 1e6 for b in by_bias]
     rise = [b["rising"]["value"] for b in by_bias]

@@ -47,7 +47,7 @@ except OSError as exc:  # pragma: no cover - depends on the host install
         "  private copy of the framework, so the GUI sees your Analog Discovery\n"
         "  while scripts report no devices. Copy the standalone framework from\n"
         "  the DMG into /Library/Frameworks -- see the note at the top of\n"
-        "  tools/ad3.py for the two commands."
+        "  tools/ad3/ad3.py for the two commands."
     ) from exc
 
 funcDC, funcSine, funcSquare, funcTriangle, funcRampUp = 0, 1, 2, 3, 4
@@ -84,7 +84,7 @@ def wavegen(h, ch=0, func=funcDC, freq=1000.0, amp=0.0, offset=0.0, enable=True)
     useless for anything being timed. It does not announce itself: the
     capture comes back full of a clean, plausible, entirely wrong edge. To
     drive a real edge, configure a waveform (funcSquare/funcPulse/funcCustom)
-    and let the generator clock it out; see tools/measure_srlatch_edge_ad3.py.
+    and let the generator clock it out; see tools/ad3/measure_srlatch_edge_ad3.py.
     """
     dwf.FDwfAnalogOutNodeEnableSet(h, c_int(ch), c_int(0), c_int(1 if enable else 0))
     dwf.FDwfAnalogOutNodeFunctionSet(h, c_int(ch), c_int(0), c_ubyte(func))
@@ -213,7 +213,7 @@ def mean(samples, ch):
 # nanoseconds to move volts, so a measurement of something comparably fast
 # is partly a measurement of the stimulus. Always capture the driving
 # channel too and report its own edge beside the result, so the margin is
-# visible rather than assumed. tools/measure_srlatch_edge_ad3.py learned
+# visible rather than assumed. tools/ad3/measure_srlatch_edge_ad3.py learned
 # this the expensive way.
 
 TRIGSRC_DETECTOR_ANALOG_IN = 2

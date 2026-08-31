@@ -5,8 +5,8 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/otabuf_tb.txt            from tb_otabuf.sch, via
-                                   tools/check_example_sim.sh otabuf
-    build/otabuf_silicon_dc.json   from tools/measure_otabuf_ad3.py
+                                   tools/ci/check_example_sim.sh otabuf
+    build/otabuf_silicon_dc.json   from tools/ad3/measure_otabuf_ad3.py
 
 Writes examples/otabuf/otabuf_comparison.png.
 
@@ -77,7 +77,7 @@ def tracking_band(vin, vout):
     Nearness alone is not enough: below the common-mode range the output
     sits pinned at a floor, the input ramps up through it, and the
     difference passes through zero on the way past. See
-    tools/measure_otabuf_ad3.py for the full version of this trap.
+    tools/ad3/measure_otabuf_ad3.py for the full version of this trap.
     """
     best, run = [], []
     for i, (x, y) in enumerate(zip(vin, vout)):
@@ -102,8 +102,8 @@ def main() -> None:
             raise SystemExit(
                 f"missing {p}\n\n"
                 "  This script only draws. Produce the simulated curves with\n"
-                "  tools/check_example_sim.sh otabuf and the measured ones with\n"
-                "  tools/measure_otabuf_ad3.py, then run this again."
+                "  tools/ci/check_example_sim.sh otabuf and the measured ones with\n"
+                "  tools/ad3/measure_otabuf_ad3.py, then run this again."
             )
 
     vin_s, drawn, routed = load_sim(sim_path)

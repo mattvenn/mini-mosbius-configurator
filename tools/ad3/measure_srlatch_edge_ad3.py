@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Time the SR latch's reset on real silicon: RESET rising to Q falling.
 
-`tools/measure_srlatch_ad3.py` measures the levels the latch holds. This
+`tools/ad3/measure_srlatch_ad3.py` measures the levels the latch holds. This
 measures the one thing that happens *between* them -- the delay from RESET
 crossing mid-rail to Q crossing it, which is `tb_srlatch.sch`'s `treset`.
 Run from the repo root, on the host:
 
-    python3 tools/measure_srlatch_edge_ad3.py
+    python3 tools/ad3/measure_srlatch_edge_ad3.py
 
 **Triggering is what makes this possible, and its absence is what made it
 look impossible.** The event is tens of nanoseconds inside a sequence
@@ -60,7 +60,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
@@ -71,7 +71,7 @@ from mosbius.program import (  # noqa: E402
 from mosbius.pads import pads_in_use  # noqa: E402
 
 # examples/srlatch as the router placed it on 2026-08-29, the same string
-# tools/measure_srlatch_ad3.py programs; the measured reset edge is against it.
+# tools/ad3/measure_srlatch_ad3.py programs; the measured reset edge is against it.
 # It is a record of an experiment, not a cached build artifact: if the
 # router's allocation ever changes, re-route and re-measure rather than
 # editing this string, or the published numbers quietly stop describing
@@ -122,7 +122,7 @@ def program_chip(port: str | None) -> None:
     string-matching that paragraph fails in the DANGEROUS direction -- a
     reworded warning reads as "this board has a current source", and the
     script would then measure an unbiased chip very carefully.
-    tools/measure_currentsource_ad3.py has always done it this way.
+    tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
     config = SwitchConfig.from_bitstream(BITSTREAM)
     print("== loading the SR latch onto the chip")

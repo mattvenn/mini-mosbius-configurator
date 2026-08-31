@@ -5,9 +5,9 @@
 Inputs, all produced by other commands so this script only draws:
 
     build/currentsource_tb.txt                  from tb_currentsource.sch,
-                                                via tools/check_example_sim.sh currentsource
+                                                via tools/ci/check_example_sim.sh currentsource
     build/currentsource_compliance_source.json  from
-    build/currentsource_compliance_sink.json    tools/measure_currentsource_ad3.py
+    build/currentsource_compliance_sink.json    tools/ad3/measure_currentsource_ad3.py
 
 Either measured file on its own is enough; with both, both legs are drawn.
 Writes examples/currentsource/currentsource_comparison.png.
@@ -115,7 +115,7 @@ def main() -> None:
             "  testbench, which needs xschem and ngspice, so run it in the\n"
             "  IIC-OSIC-TOOLS container from the repo root:\n\n"
             "    docker run --rm -v \"$PWD:/work\" -w /work hpretl/iic-osic-tools:latest \\\n"
-            "        --skip bash -lc 'sh tools/check_example_sim.sh currentsource'\n")
+            "        --skip bash -lc 'sh tools/ci/check_example_sim.sh currentsource'\n")
 
     have = {leg: path for leg, path in MEASURED.items() if path.exists()}
     if not have:
@@ -124,8 +124,8 @@ def main() -> None:
             + " exists.\n\n"
             "  Those come from the bench, on the host, with an Analog Discovery\n"
             "  and a sense resistor wired to the demoboard:\n\n"
-            "    python3 tools/measure_currentsource_ad3.py --leg source\n"
-            "    python3 tools/measure_currentsource_ad3.py --leg sink\n\n"
+            "    python3 tools/ad3/measure_currentsource_ad3.py --leg source\n"
+            "    python3 tools/ad3/measure_currentsource_ad3.py --leg sink\n\n"
             "  Either one alone is enough to draw a figure.")
 
     rows = load_tb(TB)

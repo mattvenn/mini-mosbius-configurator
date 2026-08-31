@@ -37,7 +37,7 @@ NMOS-against-PMOS strength ratio, and see which corner the two agree on.
 ## Reproducing the numbers
 
 ```bash
-sh tools/check_example_sim.sh ring      # as drawn and as routed, in the container
-python3 tools/measure_ring_ad3.py       # on silicon, on the host
+sh tools/ci/check_example_sim.sh ring      # as drawn and as routed, in the container
+python3 tools/ad3/measure_ring_ad3.py       # on silicon, on the host
 python3 tools/plot_ring_comparison.py   # the figure
 ```

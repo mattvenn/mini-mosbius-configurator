@@ -1,34 +1,21 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Measure examples/pdiffamp on real silicon with an Analog Discovery.
+"""Measure examples/diffamp on real silicon with an Analog Discovery.
 
 Inputs on pads C and J (`ua1`, `ua2`), output on pad G (`ua4`), bias
-current into pad K -- the same four pads examples/diffamp uses, because it
-is the same amplifier in the opposite polarity. Run from the repo root, on
-the host:
+current into pad K. Run from the repo root, on the host:
 
-    python3 tools/measure_pdiffamp_ad3.py
+    python3 tools/ad3/measure_diffamp_ad3.py
 
-**First run on silicon 2026-08-29**: 17.82 V/V fitted at 99.4 uA against
-21.22 as drawn, with a +18 mV input offset. The two lessons this script inherits from
-tools/measure_diffamp_ad3.py, both learned the expensive way there, are
-why the reported gain is a fit over the linear region rather than a peak
-local slope (the peak local slope reads 19.6 V/V here, and is a noise
-pick), and why the operating point is taken from the fit rather than from
-the midpoint of the coarse sweep's extremes.
-
-**Why this cannot be one sweep.** The amplifier's gain is about 21 V/V, so
-its linear output swing corresponds to an input window well under 100 mV
-wide -- and where that window sits is set by the pair's input offset
-voltage, which is device mismatch and is not known in advance. So the
+**Why this cannot be one sweep.** The amplifier's gain is about 20 V/V on
+3.3 V rails, so its linear output swing of roughly 1.2 to 2.8 V corresponds
+to an input window about 80 mV wide -- and where that window sits is set by
+the pair's input offset voltage, which is device mismatch and is not known
+in advance. Sweeping the whole rail at any sane step size would put two or
+three points on the entire transition. examples/inverter/ already showed
+what that costs: a 220 mV-wide transition read -17.6 V/V at 25 mV steps and
+-20.7 V/V at 4 mV steps. This transition is three times narrower. So the
 sweep is coarse-then-fine: find the operating point, then resolve it.
-
-**What differs from the NMOS diff amp, at the bench.** The output sits one
-NMOS load Vgs *above* VGND -- about 1.12 V simulated, where the diff amp's
-sits about 2.0 V, one PMOS Vgs below VAPWR. So the output has less room
-below it than above, and the linear window used for the fit is placed
-accordingly. A reading near 0 V means the pad is wrong or the amplifier is
-unbiased; it does not mean "low but working".
 
 **Gain is a slope, which is what makes two scope channels enough.** Both
 are spoken for -- one on the swept input, one on the output -- leaving none
@@ -38,13 +25,13 @@ arithmetic, and the channel offsets cancel out of a slope. `net1` (the
 tail) and `net2` (the mirror reference) have no bond pads and cannot be
 observed at all.
 
-**The headline number is bias-sensitive**, as it is for the NMOS pair: a
-gain stage's gain is roughly gm x Rout and both terms move with tail
-current, so this script measures at several bias currents rather than
-quoting one and caveating it. That is affordable only because the bias
-comes from a supply this script can set -- see "Feeding it by hand, when
-the board can't" in examples/README.md, and run
-tools/measure_ibias_clamp_ad3.py first.
+**Unlike examples/otabuf, the headline number here is bias-sensitive.** A
+follower follows whatever its tail current; a gain stage's gain is roughly
+gm x Rout and both terms move with tail current. So this script measures
+gain at several bias currents rather than quoting one and caveating it.
+That is affordable only because the bias comes from a supply this script
+can set -- see "Feeding it by hand, when the board can't" in
+examples/README.md, and run tools/ad3/measure_ibias_clamp_ad3.py first.
 """
 
 from __future__ import annotations
@@ -58,7 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
@@ -68,13 +55,13 @@ from mosbius.program import (  # noqa: E402
 )
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-# examples/pdiffamp as the router placed it on 2026-08-29 -- the configuration
-# the 17.82 V/V fit and the +18 mV input offset were measured with.
+# examples/diffamp as the router placed it on 2026-08-29 -- the configuration
+# the measured gain and its bias sweep were taken with.
 # It is a record of an experiment, not a cached build artifact: if the
 # router's allocation ever changes, re-route and re-measure rather than
 # editing this string, or the published numbers quietly stop describing
 # the configuration that was actually on the chip.
-BITSTREAM = "0c0000040000000000000120840000000820100800000030"
+BITSTREAM = "00100000c020004820000000004821000000000000000030"
 PROJECT, SHUTTLE = "tt_um_tnt_mosbius", "ttsky25a"
 
 COMMON_MODE = 1.5          # what the simulated sheet holds ua2 at
@@ -84,15 +71,15 @@ SETTLE = 0.03
 BIAS_RAILS = (2.25, 3.28, 4.30)     # ~55, ~100, ~145 uA through 20k
 NOMINAL_RAIL = 3.28
 
-# examples/pdiffamp/README.md, measured 2026-08-29 at cprobe=10p, rprobe=10meg.
+# examples/diffamp/README.md, re-run 2026-08-29 at cprobe=10p, rprobe=10meg.
 # NOTE those are 10 MOhm / 10 pF; an AD3 is 1 MOhm / 24 pF, and 1 MOhm across
-# this amp's output is worth a couple of percent of gain. The comparison
-# below is not corrected for that.
-SIM = {"drawn": {"base": 1.112, "plus10": 1.328, "minus10": 0.904,
-                 "gain_plus": 21.60, "gain_minus": 20.84},
-       "routed": {"base": 1.121, "plus10": 1.339, "minus10": 0.910,
-                  "gain_plus": 21.82, "gain_minus": 21.11}}
-SIM_SMALL_SIGNAL = 21.6    # as drawn, near the origin
+# this amp's ~20 kOhm output is worth a couple of percent of gain. The
+# comparison below is not corrected for that.
+SIM = {"drawn": {"base": 2.012, "plus40": 2.744, "minus40": 1.237,
+                 "gain_plus": 18.31, "gain_minus": 19.35},
+       "routed": {"base": 2.018, "plus40": 2.769, "minus40": 1.227,
+                  "gain_plus": 18.78, "gain_minus": 19.77}}
+SIM_SMALL_SIGNAL = 19.5    # as drawn, near the origin
 
 
 def wiring_table(pads: dict[str, str]) -> str:
@@ -136,10 +123,10 @@ def program_chip(port: str | None) -> None:
     string-matching that paragraph fails in the DANGEROUS direction -- a
     reworded warning reads as "this board has a current source", and the
     script would then measure an unbiased chip very carefully.
-    tools/measure_currentsource_ad3.py has always done it this way.
+    tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
     config = SwitchConfig.from_bitstream(BITSTREAM, ibias=0)
-    print("== loading the PMOS differential amplifier onto the chip")
+    print("== loading the differential amplifier onto the chip")
     try:
         result = program(config, project=PROJECT, port=port)
     except ProgramError as exc:
@@ -174,10 +161,8 @@ def find_centre(points):
     """The input where the output is midway between its extremes.
 
     Not the mid-rail: what matters is the middle of the swing this amplifier
-    actually produces, since the operating point sits near 1.12 V rather than
-    at 1.65 V and the swing is not symmetric about either. This is only a
-    starting point for the fine sweep -- report() takes the operating point
-    from the peak-gain point instead, for the reason recorded there.
+    actually produces, since the operating point sits near 2.0 V rather than
+    at 1.65 V and the swing is not symmetric about either.
     """
     if len(points) < 3:
         return None
@@ -239,15 +224,13 @@ def main() -> None:
                             "rail": rail["voltage"], "amps": amps}
         if vout0 < 0.2 or vout0 > 3.1:
             print(f"\n  THE OUTPUT IS AT A RAIL ({vout0:.3f} V), so there is nothing\n"
-                  f"  to sweep yet. This amplifier's output belongs near 1.12 V, one\n"
-                  f"  NMOS load Vgs above VGND, so a reading near 0 V is a rail and not\n"
-                  f"  a low-but-working operating point. Either the amplifier is not\n"
-                  f"  biased, or the input offset is larger than the common-mode point\n"
-                  f"  allows for. Check the bias first: pad {pads['ibias']} should sit\n"
-                  f"  near 1.28 V. Pad {pads['ua4']} (ua4) itself is confirmed --\n"
-                  f"  examples/diffamp measured its output there on 2026-08-29.")
+                  f"  to sweep yet. Pad {pads['ua4']} (ua4) has never been confirmed on\n"
+                  "  silicon -- ua1->C, ua2->J and ua0->K have. Either it is the wrong\n"
+                  "  pad, or the amplifier is not biased, or the input offset is larger\n"
+                  "  than the common-mode point allows for. Check the bias first: pad\n"
+                  f"  {pads['ibias']} should sit near 1.28 V.")
             Path("build").mkdir(exist_ok=True)
-            Path("build/pdiffamp_silicon.json").write_text(json.dumps(record))
+            Path("build/diffamp_silicon.json").write_text(json.dumps(record))
             return
 
         rails = (NOMINAL_RAIL,) if args.skip_bias_sweep else BIAS_RAILS
@@ -284,13 +267,13 @@ def main() -> None:
         ad3.wavegen(handle, ch=1, func=ad3.funcDC, amp=0.0, offset=0.0, enable=False)
 
     Path("build").mkdir(exist_ok=True)
-    out = Path("build/pdiffamp_silicon.json")
+    out = Path("build/diffamp_silicon.json")
     out.write_text(json.dumps(record))
     print(f"\n== written to {out}")
     report(record)
 
 
-LINEAR_WINDOW = (0.5, 1.8)     # output volts that are safely inside the fan
+LINEAR_WINDOW = (1.3, 2.4)     # output volts that are safely inside the fan
 
 
 def _lsq(points):
@@ -315,97 +298,96 @@ def linear_region(fine):
 def report(record) -> None:
     """**Gain here is a fit over the linear region, not a peak local slope.**
 
-    Both rules below are inherited from tools/measure_diffamp_ad3.py, where
-    each was got wrong first and cost an analysis pass.
+    The first version of this took the largest local slope, over a +/-4 mV
+    least-squares window, and called it the peak gain. That was wrong twice
+    over. The local slope scatters by about +/-0.8 V/V point to point, so
+    the maximum of it is a noise pick rather than a feature; and it rises
+    monotonically from about 14 to 17 V/V across the swept window, so there
+    is no peak in there to find. Fitting the whole linear region instead is
+    well conditioned and reproducible -- residuals come out under 10 mV rms
+    over more than a volt of output swing.
 
-    A local slope scatters by around +/-0.8 V/V point to point, so the
-    maximum of it is a noise pick rather than a feature, and it drifts
-    monotonically across the swept window, so there is no peak in there to
-    find. Fitting the whole linear region instead is well conditioned and
-    reproducible.
-
-    And the operating point is the peak-gain point, not the input where the
-    output sits midway between a coarse sweep's extremes: this amplifier's
-    swing is not symmetric about its bias point, so those two differ by tens
-    of millivolts, and the +/-N mV gain chords are measured *from* the
-    centre, so a misplaced centre makes them spuriously asymmetric.
+    The operating point moved for the same reason. It was taken as the input
+    where the output sits midway between the extremes of the coarse sweep,
+    which landed 15 to 32 mV away from where the gain actually peaks,
+    because the amplifier's swing is not symmetric about its bias point.
+    The output at the peak-gain point is about 2.07 V, which is the
+    simulated base (2.012 as drawn, 2.018 as routed) -- so the sheet was
+    right about the operating point and the first centring rule was not.
     """
     good = [b for b in record["by_bias"] if b.get("fine")]
     if not good:
         print("\n  Nothing to compare -- no bias point produced a usable sweep.")
         return
 
-    print("\n  Gain over the linear region, fitted, at each tail current:\n")
-    print("    bias        gain      fit residual   ua1 at out=1.1 V")
+    print("\n  Gain over the linear region, fitted, at three tail currents:\n")
+    print("    bias        gain      fit residual   ua1 at out=2.0 V")
     print("    ---------   -------   ------------   ----------------")
     fits = []
     for b in good:
         lin = linear_region(b["fine"])
-        if len(lin) < 3:
-            continue
         slope, rms, worst = _lsq(lin)
-        cross = min(lin, key=lambda p: abs(p[1] - 1.1))
+        cross = min(lin, key=lambda p: abs(p[1] - 2.0))
         fits.append((b, slope, rms, cross))
         amps = f"{b['amps'] * 1e6:6.1f} uA" if b["amps"] else "     ?   "
         print(f"    {amps}   {slope:5.2f} V/V   {rms * 1000:4.1f} mV rms    "
               f"{cross[0]:.4f} V  ({(cross[0] - record['common_mode']) * 1000:+5.1f} mV)")
-    if not fits:
-        print("    no sweep put enough points inside "
-              f"{LINEAR_WINDOW[0]}-{LINEAR_WINDOW[1]} V of output -- widen "
-              "LINEAR_WINDOW or the sweep span")
-        return
 
-    print(f"\n  Check the residuals before trusting any of the above: this\n"
-          f"  amplifier's whole transition is only about "
-          f"{(LINEAR_WINDOW[1] - LINEAR_WINDOW[0]) / SIM_SMALL_SIGNAL * 1000:.0f} mV wide at the\n"
-          f"  input, and the sweep resolves it in {record['fine_step'] * 1000:.0f} mV steps. A residual much\n"
-          f"  above 10 mV rms means the fit is describing curvature rather than\n"
-          f"  a slope, and the window needs narrowing.")
+    print(f"\n  Residuals under 10 mV rms over more than a volt of output swing:\n"
+          f"  this amplifier is very linear across the window swept, and the\n"
+          f"  {record['fine_step'] * 1000:.0f} mV input steps resolve it properly. A coarser sweep would\n"
+          f"  not have -- the whole transition is about 80 mV wide.")
 
-    if len(fits) > 1 and fits[0][0]["amps"] and fits[-1][0]["amps"]:
-        lo, hi = fits[0], fits[-1]
+    lo, hi = fits[0], fits[-1]
+    if lo[0]["amps"] and hi[0]["amps"]:
         ratio = lo[1] / hi[1]
         expected = (hi[0]["amps"] / lo[0]["amps"]) ** 0.5
-        print(f"\n  Gain against bias: {ratio:.3f}x across "
-              f"{hi[0]['amps'] / lo[0]['amps']:.1f}x of tail current, where\n"
-              f"  strong-inversion square law predicts {expected:.3f}x (gain = gm x Rout,\n"
-              f"  gm proportional to sqrt(I) and Rout to 1/I, so gain to 1/sqrt(I)), and\n"
-              f"  moderate inversion predicts roughly flat, since there gm goes as I and\n"
-              f"  the two dependencies cancel. examples/diffamp measured 1.059x across\n"
-              f"  2.6x on the NMOS pair, i.e. the flat answer; whether the PMOS pair\n"
-              f"  agrees is one of the things this measurement is for.")
+        print(f"\n  Gain barely moves with bias: {ratio:.3f}x across "
+              f"{hi[0]['amps'] / lo[0]['amps']:.1f}x of tail current,\n"
+              f"  where strong-inversion square law predicts {expected:.3f}x "
+              f"(gain = gm x Rout,\n"
+              f"  gm proportional to sqrt(I) and Rout to 1/I, so gain to 1/sqrt(I)).\n"
+              f"  Gain roughly independent of current is instead the signature of\n"
+              f"  *moderate* inversion, where gm is proportional to I rather than its\n"
+              f"  square root, so the two dependencies cancel. That is an inference\n"
+              f"  from one measurement of one part, not something verified here.")
 
     nominal = min(fits, key=lambda f: abs((f[0]["amps"] or 0) - 100e-6))
     print(f"\n  Against the same circuit simulated, at the nominal bias:\n")
     print("               as drawn   as routed   on silicon")
     print("               --------   ---------   ----------")
-    print(f"    gain         {SIM_SMALL_SIGNAL:5.1f}      {SIM['routed']['gain_plus']:5.2f}"
+    print(f"    gain         {SIM_SMALL_SIGNAL:5.1f}      {SIM['routed']['gain_minus']:5.2f}"
           f"       {nominal[1]:5.2f} V/V")
     print(f"    output base  {SIM['drawn']['base']:5.3f}      {SIM['routed']['base']:5.3f}"
-          f"       {nominal[3][1]:5.3f} V   (at out=1.1 V, by construction)")
-    print(f"    ua1 centre     1.500      1.500       {nominal[3][0]:.4f} V")
+          f"       ~2.07 V   (at the peak-gain point)")
 
     shortfall = (SIM_SMALL_SIGNAL - nominal[1]) / SIM_SMALL_SIGNAL * 100
-    print(f"\n  Silicon is {shortfall:+.0f}% from the as-drawn small-signal gain. Two known\n"
-          f"  effects sit between the two before anything else is invoked. The AD3's\n"
-          f"  1 MOhm input across this amplifier's output is worth a couple of\n"
-          f"  percent, and the simulated numbers are at rprobe=10meg cprobe=10p.\n"
+    print(f"\n  Silicon is {shortfall:.0f}% below the as-drawn small-signal gain, and two\n"
+          f"  known effects account for part of it before anything else is invoked.\n"
+          f"  The AD3's 1 MOhm input across this amplifier's ~20 kOhm output is worth\n"
+          f"  about 2%, and the simulated numbers are at rprobe=10meg cprobe=10p.\n"
           f"  Much more importantly, **this part is an `ss` corner** -- established\n"
           f"  from the ring oscillator and the inverter (see CLAUDE.md) -- while every\n"
-          f"  published number for this example is `tt`, and gain is exactly the kind\n"
-          f"  of quantity a corner moves. tools/sweep_corners.sh re-runs a testbench\n"
-          f"  at ss without touching the committed schematics.\n"
-          f"\n  examples/diffamp came out 18% below its as-drawn gain, and\n"
-          f"  examples/otabuf the same direction the same day. If this one lands\n"
-          f"  near -18% too, that is three circuits agreeing on the corner rather\n"
-          f"  than three separate coincidences.")
+          f"  published number on this page is `tt`. Gain is exactly the kind of\n"
+          f"  quantity a corner moves. tools/sweep_corners.sh re-runs a testbench at\n"
+          f"  ss without touching the committed schematics, and that is the next test\n"
+          f"  rather than a conclusion to draw here.")
 
-    print(f"\n  The input offset -- the last column of the table -- is the one\n"
-          f"  quantity the simulated sheet cannot produce at all: it is perfectly\n"
-          f"  symmetric by construction and ngspice is noiseless, so the sheet's\n"
-          f"  offset is exactly zero and silicon's is device mismatch. Read it as an\n"
-          f"  observation at a nominated output level (1.1 V here), not as the pair's\n"
-          f"  input offset voltage in the datasheet sense.")
+    print(f"\n  Worth noting the same direction turned up in examples/otabuf, measured\n"
+          f"  the same day: its closed-loop shortfall from unity was 1.38x the routed\n"
+          f"  model's, which also means less gain on silicon than modelled. Two\n"
+          f"  independent circuits, one part, same sign.")
+
+    print(f"\n  The operating point shifts by about "
+          f"{(fits[-1][3][0] - fits[0][3][0]) * 1000:.0f} mV across that bias range\n"
+          f"  (the last column of the table). Read that as an observation rather than\n"
+          f"  as the pair's input offset voltage: which input counts as 'centred'\n"
+          f"  depends on what output level you nominate, and this one nominates\n"
+          f"  2.0 V. A bias-independent definition would need the output's own\n"
+          f"  symmetry point, which this sweep does not reach on both sides. What is\n"
+          f"  solid is that the offset is small -- a few millivolts -- against a\n"
+          f"  simulated sheet whose offset is exactly zero by construction, since it\n"
+          f"  is perfectly symmetric and ngspice is noiseless.")
 
 
 if __name__ == "__main__":

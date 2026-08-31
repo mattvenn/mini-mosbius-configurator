@@ -7,7 +7,7 @@ frequency of its buffered output, so it can be compared as drawn, as
 routed (`mosbius simulate`) and as measured. Run from the repo root, on
 the host, since it needs USB:
 
-    python3 tools/measure_ring_ad3.py
+    python3 tools/ad3/measure_ring_ad3.py
 
 **Take nothing off a loop node.** The ring's three stages feed each other,
 so `ua1` and `ua2` are inside the feedback path and a probe there is a
@@ -43,7 +43,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
@@ -91,7 +91,7 @@ def program_chip(port: str | None) -> None:
     string-matching that paragraph fails in the DANGEROUS direction -- a
     reworded warning reads as "this board has a current source", and the
     script would then measure an unbiased chip very carefully.
-    tools/measure_currentsource_ad3.py has always done it this way.
+    tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
     config = SwitchConfig.from_bitstream(BITSTREAM)
     print("== loading the ring oscillator onto the chip")

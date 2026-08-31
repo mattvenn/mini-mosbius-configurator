@@ -8,7 +8,7 @@ ibias_amps=100u:
     psource_a (source)   +209.9 uA drawn   +209.3 uA routed   (+200 uA ideal)
     nsink_a   (sink)     -201.3 uA drawn   -203.9 uA routed   (-200 uA ideal)
 
-Run by `sh tools/check_example_sim.sh currentsource`, which
+Run by `sh tools/ci/check_example_sim.sh currentsource`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, diff amp, SR latch and OTA follower checks.
 
@@ -31,7 +31,7 @@ reference and the routed leg reads 482 uA instead of 209.
 The currents are read from the log's `meas` results, one value per line,
 rather than from the `print i_source_drawn i_source_routed d_source`
 line, because a multi-vector `print` is not a format worth depending on.
-Same reasoning as tools/check_diffamp_sim.py.
+Same reasoning as tools/ci/check_diffamp_sim.py.
 
 The +-5% band matches the other checks in tools/. If an upstream image
 update does shift a result past it, re-measure deliberately and update

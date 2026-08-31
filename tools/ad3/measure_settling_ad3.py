@@ -6,8 +6,8 @@ One script, two circuits, because the measurement is the same shape for
 both: drive a real edge, capture it triggered at full rate, and time what
 the output does. Run from the repo root, on the host:
 
-    python3 tools/measure_settling_ad3.py otabuf
-    python3 tools/measure_settling_ad3.py diffamp
+    python3 tools/ad3/measure_settling_ad3.py otabuf
+    python3 tools/ad3/measure_settling_ad3.py diffamp
 
 `examples/otabuf/` is slew-limited -- its tail current charges the output
 node at a fixed rate -- so what is timed is a slew rate, output crossing
@@ -50,7 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
@@ -69,8 +69,8 @@ AD3_CPROBE, SHEET_CPROBE = 24e-12, 10e-12
 IN_CH, OUT_CH = 0, 1
 
 # Each profile's bitstream is its example as the router placed it on
-# 2026-08-29 -- the same strings tools/measure_otabuf_ad3.py and
-# tools/measure_diffamp_ad3.py program, and the configurations the step
+# 2026-08-29 -- the same strings tools/ad3/measure_otabuf_ad3.py and
+# tools/ad3/measure_diffamp_ad3.py program, and the configurations the step
 # responses below were measured against. They are records of experiments,
 # not cached build artifacts: if the router's allocation ever changes,
 # re-route and re-measure rather than editing these strings, or the
@@ -79,7 +79,7 @@ IN_CH, OUT_CH = 0, 1
 # asserts them against examples/otabuf/README.md, so there is one literal
 # for the pair rather than one per file. The diff amp's tau below has no
 # such counterpart -- it is published nowhere else -- so it stays a literal.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ci"))
 from check_otabuf_sim import REFERENCE_SLEW_V_PER_US as OTABUF_SLEW  # noqa: E402
 
 PROFILES = {
@@ -93,7 +93,7 @@ PROFILES = {
         # slew = I_tail / C, so C follows from the published rate.
         # Imported, not copied: this pair is published in
         # examples/otabuf/README.md's table and asserted by
-        # tools/check_otabuf_sim.py, and a second literal here would be a
+        # tools/ci/check_otabuf_sim.py, and a second literal here would be a
         # third copy with nothing keeping it in step.
         "published": {"as drawn": OTABUF_SLEW["drawn"],
                       "as routed": OTABUF_SLEW["routed"]},
@@ -117,9 +117,9 @@ PROFILES = {
 
 
 def implied_bias(rail: float) -> float | None:
-    """What tools/measure_ibias_clamp_ad3.py says this rail delivers.
+    """What tools/ad3/measure_ibias_clamp_ad3.py says this rail delivers.
 
-    Same helper as in tools/measure_diffamp_ad3.py. The bias pad sets its own
+    Same helper as in tools/ad3/measure_diffamp_ad3.py. The bias pad sets its own
     voltage, so the current cannot be read off the rail setting alone -- it
     comes from interpolating the clamp sweep, which measured both ends of the
     resistor.
@@ -285,7 +285,7 @@ def measure_tau(values, dt):
 
 
 def diffamp_centre() -> float:
-    """The operating point measured by tools/measure_diffamp_ad3.py, if it ran.
+    """The operating point measured by tools/ad3/measure_diffamp_ad3.py, if it ran.
 
     Stepping symmetrically about 1.5 V when the real centre is a few
     millivolts off puts the two halves of the step on different parts of the
@@ -477,7 +477,7 @@ def main() -> None:
                     "the circuit is not following at DC, so there is nothing to\n"
                     "  time. The bias has already been cycled once, which has\n"
                     "  cleared this before. Next: check the bias pad is near 1.28 V,\n"
-                    "  and run tools/measure_%s_ad3.py, which sweeps DC properly and\n"
+                    "  and run tools/ad3/measure_%s_ad3.py, which sweeps DC properly and\n"
                     "  reports what it finds." % args.circuit)
             print(f"  alive: output follows at DC across "
                   f"{seen[0][0]:.2f}..{seen[-1][0]:.2f} V")
@@ -544,7 +544,7 @@ def main() -> None:
         raise SystemExit(
             "nothing measurable came back.\n\n"
             "  Check the stimulus is reaching the pin and the output is moving:\n"
-            "  run tools/measure_%s_ad3.py first, which sweeps DC and will say\n"
+            "  run tools/ad3/measure_%s_ad3.py first, which sweeps DC and will say\n"
             "  whether the circuit is alive at all." % args.circuit)
 
     out = Path(f"build/{args.circuit}_settling.json")

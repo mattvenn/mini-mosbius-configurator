@@ -42,7 +42,7 @@ jobs:
       # the information this workflow exists to produce.
       fail-fast: false
       matrix:
-        # `example` is what tools/check_example_sim.sh takes; `deck` is the
+        # `example` is what tools/ci/check_example_sim.sh takes; `deck` is the
         # testbench name the ngspice log is written under, which differs
         # only for the ring (examples/ringosc/ draws ring.sch).
         include:
@@ -67,7 +67,7 @@ jobs:
       - name: Simulate examples/${{ matrix.example }} in IIC-OSIC-TOOLS
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
-            --skip bash -lc 'sh tools/check_example_sim.sh ${{ matrix.example }}'
+            --skip bash -lc 'sh tools/ci/check_example_sim.sh ${{ matrix.example }}'
 
       - name: Upload ngspice log
         if: always()

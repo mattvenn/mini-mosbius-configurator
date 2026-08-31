@@ -17,10 +17,10 @@ Three experiments, all on one rig, chosen with --mode:
 
 Run from the repo root, on the host (it needs USB for the demoboard):
 
-    python3 tools/measure_currentsource_ad3.py --leg source
-    python3 tools/measure_currentsource_ad3.py --mode ratio \\
+    python3 tools/ad3/measure_currentsource_ad3.py --leg source
+    python3 tools/ad3/measure_currentsource_ad3.py --mode ratio \\
         --configs build/currentsource_r1.mosbius.json ... (four of them)
-    python3 tools/measure_currentsource_ad3.py --mode ibias
+    python3 tools/ad3/measure_currentsource_ad3.py --mode ibias
 
 **Why a current source is an easy thing to measure and a transistor is
 not.** Every terminal on this chip reaches its pad through a crosspoint
@@ -79,7 +79,7 @@ the bias pad, and works out which V+ setting gives the current you asked
 for from build/ibias_clamp.json -- because how much current a given rail
 delivers is not calculable from the resistor alone. The other end of that
 resistor is a diode-connected FET, which sets its own voltage; it has to
-have been measured. tools/measure_ibias_clamp_ad3.py is what measures it.
+have been measured. tools/ad3/measure_ibias_clamp_ad3.py is what measures it.
 The resistor there also sets the reachable range: through 20k the bias
 tops out around 154 uA.
 """
@@ -96,7 +96,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import format_analog_header, pad_map  # noqa: E402
 from mosbius.program import ProgramError, program  # noqa: E402
@@ -864,7 +864,7 @@ def set_bias(handle, args) -> float | None:
             "  resistor sets the range: a bigger one cannot push as much current.\n"
             "  Either ask for a current inside that range with --ibias, or re-run\n"
             "  the clamp sweep with a smaller resistor:\n\n"
-            "    python3 tools/measure_ibias_clamp_ad3.py --resistor 10000\n"
+            "    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 10000\n"
         )
     ad3.supply(handle, rail, "V+", current_limit=0.05, settle=0.3)
     ad3.wait_supply_stable(handle, "V+")
@@ -882,7 +882,7 @@ def _clamp_curve() -> list[dict]:
             f"  V+ through a resistor -- and to know what current that is, the bias\n"
             f"  pad has to have been characterised first. {CLAMP_FILE} is missing.\n\n"
             "  Run this, which also confirms the pad letter:\n\n"
-            "    python3 tools/measure_ibias_clamp_ad3.py --resistor 20000\n"
+            "    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000\n"
         )
     return json.loads(CLAMP_FILE.read_text())["points"]
 

@@ -13,7 +13,7 @@ current is what you think -- so this script settles both on their own.
 
 Run it from the repo root, on the host (it needs USB for the demoboard):
 
-    python3 tools/measure_ibias_clamp_ad3.py --resistor 20000
+    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000
 
 **What it is actually testing.** `ua[0]` feeds the gate and drain of the
 diode-connected NMOS that references every mirror and tail on the chip
@@ -55,7 +55,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mosbius.pads import format_analog_header, pad_map  # noqa: E402
 
 PROJECT = "tt_um_tnt_mosbius"

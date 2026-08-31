@@ -8,7 +8,7 @@ last re-run 2026-08-29 at the probe defaults rprobe=10meg cprobe=10p
 modelled in the testbench), on the routing the router produces
 today.
 
-Run by `sh tools/check_example_sim.sh inverter` (the full
+Run by `sh tools/ci/check_example_sim.sh inverter` (the full
 netlist/route/simulate/ngspice pipeline), which
 .github/workflows/spice-regression.yml runs on every push alongside the
 ring, diff amp, SR latch, OTA follower and current source checks.
@@ -18,11 +18,11 @@ runs stable to well under 0.1%, so the noise floor is far below this and
 5% is room for a minor ngspice or PDK point release rather than for real
 change. It was +-25% until 2026-08-28, which was wide enough to miss a
 sizeable error in the pad or parasitic models while still passing; the
-other three checks (tools/check_ring_sim.py, tools/check_diffamp_sim.py
-and tools/check_srlatch_sim.py) carry the same band and the same
+other three checks (tools/ci/check_ring_sim.py, tools/ci/check_diffamp_sim.py
+and tools/ci/check_srlatch_sim.py) carry the same band and the same
 reasoning.
 
-The reading and comparing is tools/simcheck.py; what lives here is the
+The reading and comparing is tools/ci/simcheck.py; what lives here is the
 numbers, the unit, and what a missing measurement means for this circuit.
 """
 

@@ -429,7 +429,7 @@ class TestIbiasWarning:
         text = ibias_warning({"ibias_set": False}, self._config(100e-6))
         assert "100.0 uA" in text
         assert "mosbius_ota" in text and "mosbius_nsink" in text
-        assert "tools/measure_ibias_clamp_ad3.py" in text
+        assert "tools/ad3/measure_ibias_clamp_ad3.py" in text
         assert "on the chip and correct" in text  # not a failed upload
 
     def test_silent_when_the_board_did_set_it(self):

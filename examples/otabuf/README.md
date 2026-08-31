@@ -34,7 +34,7 @@ slope is a ratio of differences within each channel, so it survives that.*
 
 Trade current for speed. The follower's slew rate is set by how fast the
 tail current can charge whatever hangs on the output -- the bond pad and
-the probe included. `tools/measure_settling_ad3.py otabuf` steps the input
+the probe included. `tools/ad3/measure_settling_ad3.py otabuf` steps the input
 and times the output, and the bias current is whatever the supply and
 series resistor put into pad K, so re-running it at a few supply settings
 gives slew rate against bias. The table's slew row is what to compare
@@ -52,8 +52,8 @@ setting.
 ## Reproducing the numbers
 
 ```bash
-sh tools/check_example_sim.sh otabuf                        # as drawn and as routed, in the container
-python3 tools/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
-python3 tools/measure_otabuf_ad3.py                         # on silicon, on the host
+sh tools/ci/check_example_sim.sh otabuf                        # as drawn and as routed, in the container
+python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
+python3 tools/ad3/measure_otabuf_ad3.py                         # on silicon, on the host
 python3 tools/plot_otabuf_comparison.py                     # the figure
 ```

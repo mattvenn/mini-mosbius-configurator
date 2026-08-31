@@ -31,8 +31,8 @@ size matters), against -15.4 V/V as routed. Absolute levels agreed too,
 but only to the AD3's uncalibrated ~45 mV of channel offset, which is
 larger than the ~1.3 mV the deck says a 1 MOhm probe droops VOH -- so a
 level difference in that range is not evidence of anything until the
-instrument is calibrated. `tools/measure_inverter_ad3.py` reproduces the
-measurement, `tools/ad3.py` is the SDK wrapper.
+instrument is calibrated. `tools/ad3/measure_inverter_ad3.py` reproduces the
+measurement, `tools/ad3/ad3.py` is the SDK wrapper.
 
 Three things that cost time on the way there, all fixed, none worth
 rediscovering:
@@ -54,7 +54,7 @@ rediscovering:
   a whole afternoon went into explaining a supply that was never low. The
   tell is that clipped samples are *perfectly* flat: sd exactly 0.000 mV
   over thousands of points is a railed ADC, never a quiet signal.
-  `tools/ad3.py` centres the 5 V span on 1.65 V for chip signals and puts
+  `tools/ad3/ad3.py` centres the 5 V span on 1.65 V for chip signals and puts
   every capture through `check_clipping()`.
 - **On macOS the WaveForms cask alone does not give you the SDK.** The
   app carries a private copy of `dwf.framework`, so the GUI finds the
@@ -97,7 +97,7 @@ repo may assume otherwise. For `tt_um_tnt_mosbius` on ttsky25a the answer is
 ua0-ua5 -> K, C, J, D, G, F, of which five are confirmed on silicon
 (ua0->K, ua1->C, ua2->J, ua3->D, ua4->G); only ua5->F is not. ua0->K was
 confirmed 2026-08-29 by sweeping a supply into pad K through 20 kOhm and
-watching it clamp -- `tools/measure_ibias_clamp_ad3.py`, written up in
+watching it clamp -- `tools/ad3/measure_ibias_clamp_ad3.py`, written up in
 `examples/README.md` -- and ua4->G the same day by `examples/diffamp/`'s
 output sitting at 2.07 V against a simulated base of 2.012/2.018 V.
 
@@ -184,7 +184,7 @@ is the only example that places a `mosbius_ptail` or reaches
 21 V/V a bigger step compresses against the bottom rail and the chord gain
 measures the compression. As drawn and as routed agree to about 1%.
 
-**Measured on silicon 2026-08-29** (`tools/measure_pdiffamp_ad3.py`, pads
+**Measured on silicon 2026-08-29** (`tools/ad3/measure_pdiffamp_ad3.py`, pads
 `ibias` K, `ua1` C, `ua2` J, `ua4` G): 17.82 V/V fitted at 99.4 uA against
 21.22 as drawn, i.e. 16% low -- the third circuit on this part to fall
 short in the same direction, after the diff amp's 18% and otabuf's, and so
@@ -268,7 +268,7 @@ as-drawn latch stopped setting at all (`qd_after_set` 0.0009 V against
 3.300 V). Drawing `w=4` gives `treset_drawn` = 1.77 ns, restores the
 ordering, and changes **no bit of the bitstream**, because there were
 never any width bits behind the request. Two things came with it:
-`tools/check_srlatch_sim.py` gained the "as drawn must be faster than as
+`tools/ci/check_srlatch_sim.py` gained the "as drawn must be faster than as
 routed" assertion it could not make before, and
 `tools/run_srlatch_measured_edge.sh`'s `--drawn-w4` flag is gone, since
 the sheet is what that flag used to simulate.
@@ -292,14 +292,35 @@ substituted in -- for a netlist, a missing/unreadable path, JSON with no
 is covered too: a routed design JSON handed to `route`/`watch` now says
 so, instead of "no mosbius_* instances found in this netlist".
 
+**`tools/` is split by who runs the thing (2026-08-31).** `tools/ci/` is
+the simulation regression -- `check_example_sim.sh`, the seven
+`check_<example>_sim.py` and their shared `simcheck.py` -- and `tools/ad3/`
+is everything that needs a demoboard and an Analog Discovery on a desk:
+`ad3.py` and the ten `measure_*_ad3.py`. What stayed at the top of `tools/`
+is what belongs to neither: the `plot_*_comparison.py` scripts (they read
+both a simulation's output and a bench measurement, which is the point of
+them), the one-shot `run_*` experiments, `sweep_corners*`/`compare_corners`,
+and the two regenerators, `extract_bitmap.py` and
+`rebuild_mosbius_device_library.sh`.
+
+Three things the move needed that a path rewrite does not give you, all
+done: `check_example_sim.sh` is two levels down now, so its `cd` is
+`../..`; every `Path(__file__).resolve().parent.parent` in a moved script
+meant *the repo root* (to import `mosbius`) and gained a `.parent`; and
+`measure_settling_ad3.py` reaches sideways into `tools/ci` for the OTA
+follower's published slew pair, which is `parent.parent / "ci"` rather than
+`parent`. That last one is the only import crossing the two directories,
+and it is deliberate -- see the note below about that number having lived
+in two files.
+
 **The example regression is one script and one matrix, and the three test
-tiers stay separate (2026-08-31).** `tools/check_example_sim.sh <example>`
+tiers stay separate (2026-08-31).** `tools/ci/check_example_sim.sh <example>`
 replaced seven near-identical shell scripts that differed only in two names
 -- and the inverter's copy had quietly drifted into routing by hand instead
 of calling `tools/regenerate_routed.sh` like the other six, so its CI job
 had been exercising a different path. `.github/workflows/spice-regression.yml`
 is now one `simulate` job with a `strategy.matrix` leg per example
-(`fail-fast: false`, so which leg broke is still the output). `tools/simcheck.py`
+(`fail-fast: false`, so which leg broke is still the output). `tools/ci/simcheck.py`
 holds what every `check_<example>_sim.py` was repeating -- pull named values
 out of an ngspice log, fail with the log's tail, compare against a reference
 dict, print the table, print the verdict -- while each checker keeps its own
@@ -360,7 +381,7 @@ build output, so a red job demanding they be re-blessed would push someone
 to edit the record of a past experiment and silently change what the
 published numbers claim to describe. Each is now commented with the date it
 was routed and an instruction to re-route and re-measure rather than edit.
-(`tools/measure_currentsource_ad3.py` reads its routed JSON at runtime
+(`tools/ad3/measure_currentsource_ad3.py` reads its routed JSON at runtime
 instead, correctly: its experiment is four bitstreams you generate
 yourself, with no historical measurement to preserve.) The check scripts do
 assert simulated numbers against the READMEs at +-5%, which is what guards
@@ -470,7 +491,7 @@ The slave widths were already right against the real reference, so
 `ratio=N` and `tail=N` now both mean N x ibias, as the hardware's 2/4/6/8
 cycler encoding does. Consequences, all verified: `examples/diffamp/`'s
 as-drawn tail doubled to the 400 uA `tail=4` means (gain ~21.3 -> ~19.8
-V/V; its README and `tools/check_diffamp_sim.py` are re-measured), while
+V/V; its README and `tools/ci/check_diffamp_sim.py` are re-measured), while
 the inverter, SR latch and ring oscillator are unchanged to the last
 digit. Every design sheet needs exactly one generator: two halve the
 reference, none leaves `ibias` with no DC path, which does not simulate.
@@ -481,8 +502,8 @@ both probe capacitors are `'cprobe'`.
 Also closed on 2026-08-28: **`xschem -n -q` exits non-zero (10) on any
 sheet using the `extra` body/bias pins** -- its connectivity check cannot
 see those -- while writing a perfectly good netlist. Under `set -e` that
-stopped `tools/regenerate_routed.sh` and the `tools/check_*_sim.sh`
-scripts before they reached ngspice, so the diff amp CI job could never
+stopped `tools/regenerate_routed.sh` and the per-example check scripts
+(now the one `tools/ci/check_example_sim.sh`) before they reached ngspice, so the diff amp CI job could never
 have passed. They now check what came out (netlist written, no
 `IS MISSING`) instead of the exit code.
 

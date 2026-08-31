@@ -315,7 +315,7 @@ def ibias_warning(result: dict, config: SwitchConfig) -> str | None:
         "  Feed it externally instead (SPEC.md Sec 3.4b): a bench supply through a\n"
         "  series resistor into the bias pad, sized so most of the supply is\n"
         "  dropped across the resistor. To confirm the pad and set the current:\n\n"
-        "    python3 tools/measure_ibias_clamp_ad3.py --resistor 20000\n\n"
+        "    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000\n\n"
         "  A design of plain mosbius_nmos/mosbius_pmos FETs needs none of this."
     )
 

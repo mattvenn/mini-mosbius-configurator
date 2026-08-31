@@ -33,8 +33,8 @@ agree, and what that says about which region they are working in.
 ## Reproducing the numbers
 
 ```bash
-sh tools/check_example_sim.sh diffamp                       # as drawn and as routed, in the container
-python3 tools/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
-python3 tools/measure_diffamp_ad3.py                        # on silicon, on the host
+sh tools/ci/check_example_sim.sh diffamp                       # as drawn and as routed, in the container
+python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
+python3 tools/ad3/measure_diffamp_ad3.py                        # on silicon, on the host
 python3 tools/plot_diffamp_comparison.py                    # the figure
 ```
