@@ -218,12 +218,24 @@ def _run_mpremote(script: str, *, port: str | None, what: str = "CAN'T PROGRAM")
         (line for line in proc.stdout.splitlines() if line.startswith("MOSBIUS_RESULT:")), None,
     )
     if result_line is None:
+        port_hint = (
+            "  mpremote autodetects the port by default, and picks the wrong\n"
+            "  serial device when more than one is plugged in (or the wrong one\n"
+            "  claims the port first). Tell it which one is the demoboard with\n"
+            "  --port, e.g. --port /dev/ttyACM0, and try again.\n\n"
+            if port is None else
+            f"  --port {port} was given explicitly, so this isn't mpremote picking\n"
+            f"  the wrong device -- check the board is powered, plugged in, and\n"
+            f"  actually enumerating at that path.\n\n"
+        )
         raise ProgramError(
             f"{what} -- no result from the board\n\n"
             f"  mpremote exited with code {proc.returncode} and didn't print a "
             f"result line.\n"
             f"  This usually means the board isn't connected, is running the "
-            f"wrong\n  firmware, or crashed before finishing. Raw output:\n\n"
+            f"wrong\n  firmware, or crashed before finishing.\n\n"
+            f"{port_hint}"
+            f"Raw output:\n\n"
             f"{proc.stdout}\n{proc.stderr}"
         )
     return json.loads(result_line[len("MOSBIUS_RESULT:"):])
