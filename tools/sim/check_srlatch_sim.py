@@ -13,7 +13,7 @@ w=4 on the sheet to match the fixed geometry of the diff-pair halves they
 land on. The bitstream is unchanged by that -- there were never width bits
 behind the request -- so nothing about the chip or its measurements moved.
 
-Run by `sh tools/ci/check_example_sim.sh srlatch`, which
+Run by `sh tools/sim/check_example_sim.sh srlatch`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, both diff amps, OTA follower and current source
 checks.
@@ -26,8 +26,8 @@ the routed model adds -- so a routing or device-library change that made
 the matrix leaky enough to lose the stored state would pass all three of
 the others and fail here.
 
-The +-5% band on the two timings matches tools/ci/check_inverter_sim.py and
-tools/ci/check_ring_sim.py; see the note there for why it is 5% and not
+The +-5% band on the two timings matches tools/sim/check_inverter_sim.py and
+tools/sim/check_ring_sim.py; see the note there for why it is 5% and not
 wider. The two after-reset levels get an absolute band instead: their
 references are ~0V and 2.6mV, where a percentage of the reference is
 meaningless.
@@ -45,7 +45,7 @@ one every other example shows, so the check is worth having: it is what
 would catch the routed matrix quietly getting faster than ideal wiring.
 See examples/srlatch/README.md for the reset timing measured on silicon.
 
-The reading and comparing is tools/ci/simcheck.py; what lives here is the
+The reading and comparing is tools/sim/simcheck.py; what lives here is the
 numbers, the units, and what a missing measurement means for this circuit
 -- which for the treset_* pair is the longest such explanation in the
 repo, and the reason `hint` is per-example rather than generic.

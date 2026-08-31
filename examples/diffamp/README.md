@@ -32,9 +32,13 @@ agree, and what that says about which region they are working in.
 
 ## Reproducing the numbers
 
+The first line runs in the IIC-OSIC-TOOLS container; the rest run on
+the host. [`../README.md`](../README.md#running-each-examples-commands)
+has the docker invocation.
+
 ```bash
-sh tools/ci/check_example_sim.sh diffamp                       # as drawn and as routed, in the container
+sh tools/sim/check_example_sim.sh diffamp                       # as drawn and as routed, in the container
 python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
 python3 tools/ad3/measure_diffamp_ad3.py                        # on silicon, on the host
-python3 tools/plot_diffamp_comparison.py                    # the figure
+python3 tools/plot_diffamp_comparison.py                        # the figure
 ```

@@ -16,6 +16,28 @@ sheet.
 | [`otabuf/`](otabuf/) | OTA: five FETs + tail bank | A feedback loop closed through the switch matrix, and the only example that uses `mosbius_ota`. |
 | [`ringosc/`](ringosc/) | Eight FETs | Every usable single FET on the chip at once, and how close the routed model gets to silicon. |
 
+## Running each example's commands
+
+Every example's README ends with a "Reproducing the numbers" block whose
+first line is marked *in the container*. That one needs xschem and
+ngspice, which are not installed natively, so it is run through
+IIC-OSIC-TOOLS from the repo root:
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+    --skip bash -lc 'sh tools/sim/check_example_sim.sh inverter'
+```
+
+`--skip` has to be the first argument to the image. Budget a couple of
+minutes: sky130A's model library takes 1-2 minutes to parse whatever the
+circuit is, which dominates every run.
+
+The rest of the block runs on the host, plainly, because it needs the USB
+serial port for the demoboard and the USB connection to the Analog
+Discovery. `tools/sim/` is the simulation side, `tools/ad3/` is everything
+that needs hardware on a desk, and the `plot_*_comparison.py` scripts at
+the top of `tools/` read both and draw the figure.
+
 ## Three things a number can be
 
 **As drawn** is the schematic simulated directly: the real sky130 device

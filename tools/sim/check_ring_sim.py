@@ -4,7 +4,7 @@
 the reference measurements in examples/ringosc/README.md:
 freq_drawn=2.289GHz, freq_routed=43.89MHz, last re-run 2026-08-29.
 
-Run by `sh tools/ci/check_example_sim.sh ring`, which
+Run by `sh tools/sim/check_example_sim.sh ring`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, diff amp, SR latch, OTA follower and current source checks.
 
@@ -36,7 +36,7 @@ buffer cannot slew its 15pF load at these speeds, so out_drawn spans only
 ~1.8-2.1V and grazes the 1.5V trigger -- measured there, the same deck
 reported 58.3MHz on one run and 44.0MHz on the next. See the README.
 
-The reading and comparing is tools/ci/simcheck.py; what lives here is the
+The reading and comparing is tools/sim/simcheck.py; what lives here is the
 numbers, the unit, and what a missing measurement means for this circuit.
 """
 

@@ -12,7 +12,7 @@ ibias_amps=100u, tail=4:
     slew rate (1.0 V -> 2.3 V step, measured between 1.3 V and 2.0 V)
         42.9 V/us drawn    15.4 V/us routed
 
-Run by `sh tools/ci/check_example_sim.sh otabuf`, which
+Run by `sh tools/sim/check_example_sim.sh otabuf`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, diff amp, SR latch and current source checks.
 
@@ -31,7 +31,7 @@ The offsets and slew rates are computed here rather than read from the
 log's own `off_*` and `slew_rate_*` prints, because `vin_*`, `vout_*` and
 `t1_*`/`t2_*` are plain `meas` results with one value per line, which is
 a format worth depending on; a multi-vector `print` is not. Same reasoning
-as tools/ci/check_diffamp_sim.py.
+as tools/sim/check_diffamp_sim.py.
 
 The offsets get an absolute band rather than the +-5% the other checks
 use, because they are millivolt differences between volt-sized numbers:

@@ -36,8 +36,12 @@ NMOS-against-PMOS strength ratio, and see which corner the two agree on.
 
 ## Reproducing the numbers
 
+The first line runs in the IIC-OSIC-TOOLS container; the rest run on
+the host. [`../README.md`](../README.md#running-each-examples-commands)
+has the docker invocation.
+
 ```bash
-sh tools/ci/check_example_sim.sh ring      # as drawn and as routed, in the container
-python3 tools/ad3/measure_ring_ad3.py       # on silicon, on the host
-python3 tools/plot_ring_comparison.py   # the figure
+sh tools/sim/check_example_sim.sh ring   # as drawn and as routed, in the container
+python3 tools/ad3/measure_ring_ad3.py    # on silicon, on the host
+python3 tools/plot_ring_comparison.py    # the figure
 ```

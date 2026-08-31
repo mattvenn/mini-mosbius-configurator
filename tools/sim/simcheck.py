@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""The mechanism shared by tools/ci/check_<example>_sim.py.
+"""The mechanism shared by tools/sim/check_<example>_sim.py.
 
 Each of those scripts reads an ngspice batch-mode log, pulls a handful of
 named values out of it, and compares them against the reference numbers

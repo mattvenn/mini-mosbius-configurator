@@ -18,7 +18,7 @@ output has less room below it: at 1.12V a -40mV step takes it to within
 250mV of VGND, where it is compressing rather than amplifying, and the
 chord gain would then be measuring the compression.
 
-Run by `sh tools/ci/check_example_sim.sh pdiffamp`, which
+Run by `sh tools/sim/check_example_sim.sh pdiffamp`, which
 .github/workflows/spice-regression.yml runs alongside the inverter, ring,
 SR latch, diff amp, OTA follower and current source checks.
 
@@ -31,7 +31,7 @@ The gains are computed here rather than read from the log's own `gain_*`
 prints, because `vout_*` are plain `meas` results with one value per line,
 which is a format worth depending on; a multi-vector `print` is not.
 
-The reading and comparing is tools/ci/simcheck.py; what lives here is the
+The reading and comparing is tools/sim/simcheck.py; what lives here is the
 numbers, the derived gains, and what a missing measurement means for this
 circuit.
 

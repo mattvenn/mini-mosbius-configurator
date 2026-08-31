@@ -42,9 +42,13 @@ with.
 
 ## Reproducing the numbers
 
+The first line runs in the IIC-OSIC-TOOLS container; the rest run on
+the host. [`../README.md`](../README.md#running-each-examples-commands)
+has the docker invocation.
+
 ```bash
-sh tools/ci/check_example_sim.sh srlatch       # as drawn and as routed, in the container
+sh tools/sim/check_example_sim.sh srlatch       # as drawn and as routed, in the container
 python3 tools/ad3/measure_srlatch_ad3.py        # levels on silicon, on the host
 python3 tools/ad3/measure_srlatch_edge_ad3.py   # the reset edge, on the host
-python3 tools/plot_srlatch_comparison.py    # the figure
+python3 tools/plot_srlatch_comparison.py        # the figure
 ```

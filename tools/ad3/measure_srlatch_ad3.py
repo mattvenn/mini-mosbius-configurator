@@ -105,7 +105,7 @@ FIRST_READING = {
 
 # Volts: the settled levels both decks reach while holding, read off
 # build/srlatch_tb_out_{drawn,routed}.txt at 200 ns (high) and 300 ns
-# (low). These are NOT tools/ci/check_srlatch_sim.py's reference numbers,
+# (low). These are NOT tools/sim/check_srlatch_sim.py's reference numbers,
 # which are sampled at 110 ns and 280 ns and so catch the routed instance
 # mid-settle -- see this file's docstring. A bench reading taken 50 ms
 # after the pulse belongs against the settled value.

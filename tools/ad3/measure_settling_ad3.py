@@ -79,7 +79,7 @@ IN_CH, OUT_CH = 0, 1
 # asserts them against examples/otabuf/README.md, so there is one literal
 # for the pair rather than one per file. The diff amp's tau below has no
 # such counterpart -- it is published nowhere else -- so it stays a literal.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ci"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "sim"))
 from check_otabuf_sim import REFERENCE_SLEW_V_PER_US as OTABUF_SLEW  # noqa: E402
 
 PROFILES = {
@@ -93,7 +93,7 @@ PROFILES = {
         # slew = I_tail / C, so C follows from the published rate.
         # Imported, not copied: this pair is published in
         # examples/otabuf/README.md's table and asserted by
-        # tools/ci/check_otabuf_sim.py, and a second literal here would be a
+        # tools/sim/check_otabuf_sim.py, and a second literal here would be a
         # third copy with nothing keeping it in step.
         "published": {"as drawn": OTABUF_SLEW["drawn"],
                       "as routed": OTABUF_SLEW["routed"]},

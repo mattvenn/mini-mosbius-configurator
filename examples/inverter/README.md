@@ -34,8 +34,12 @@ transistor the chip cannot build.
 
 ## Reproducing the numbers
 
+The first line runs in the IIC-OSIC-TOOLS container; the rest run on
+the host. [`../README.md`](../README.md#running-each-examples-commands)
+has the docker invocation.
+
 ```bash
-sh tools/ci/check_example_sim.sh inverter      # as drawn and as routed, in the container
-python3 tools/ad3/measure_inverter_ad3.py       # on silicon, on the host
-python3 tools/plot_inverter_comparison.py   # the figure and the table
+sh tools/sim/check_example_sim.sh inverter   # as drawn and as routed, in the container
+python3 tools/ad3/measure_inverter_ad3.py    # on silicon, on the host
+python3 tools/plot_inverter_comparison.py    # the figure and the table
 ```

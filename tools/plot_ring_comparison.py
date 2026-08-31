@@ -6,7 +6,7 @@ measured on silicon.
 Inputs, all produced by other commands so this script only draws:
 
     build/ring_tb_out_drawn.txt      from tb_ring.sch's two tran runs
-    build/ring_tb_out_routed.txt     (tools/ci/check_example_sim.sh ring runs them)
+    build/ring_tb_out_routed.txt     (tools/sim/check_example_sim.sh ring runs them)
     build/ring_silicon_trace.json    from tools/ad3/measure_ring_ad3.py
 
 Writes examples/ringosc/ring_comparison.png and prints the table.
@@ -83,7 +83,7 @@ def main() -> None:
         raise SystemExit(
             "missing input: " + ", ".join(f"build/{f}" for f in missing) + "\n\n"
             "  the two .txt files come from tb_ring.sch's wrdata -- run\n"
-            "  tools/ci/check_example_sim.sh ring inside the IIC-OSIC-TOOLS container.\n"
+            "  tools/sim/check_example_sim.sh ring inside the IIC-OSIC-TOOLS container.\n"
             "  build/ring_silicon_trace.json comes from the bench:\n"
             "  python3 tools/ad3/measure_ring_ad3.py"
         )

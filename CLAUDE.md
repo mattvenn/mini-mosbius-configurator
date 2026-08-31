@@ -268,7 +268,7 @@ as-drawn latch stopped setting at all (`qd_after_set` 0.0009 V against
 3.300 V). Drawing `w=4` gives `treset_drawn` = 1.77 ns, restores the
 ordering, and changes **no bit of the bitstream**, because there were
 never any width bits behind the request. Two things came with it:
-`tools/ci/check_srlatch_sim.py` gained the "as drawn must be faster than as
+`tools/sim/check_srlatch_sim.py` gained the "as drawn must be faster than as
 routed" assertion it could not make before, and
 `tools/run_srlatch_measured_edge.sh`'s `--drawn-w4` flag is gone, since
 the sheet is what that flag used to simulate.
@@ -292,7 +292,7 @@ substituted in -- for a netlist, a missing/unreadable path, JSON with no
 is covered too: a routed design JSON handed to `route`/`watch` now says
 so, instead of "no mosbius_* instances found in this netlist".
 
-**`tools/` is split by who runs the thing (2026-08-31).** `tools/ci/` is
+**`tools/` is split by who runs the thing (2026-08-31).** `tools/sim/` is
 the simulation regression -- `check_example_sim.sh`, the seven
 `check_<example>_sim.py` and their shared `simcheck.py` -- and `tools/ad3/`
 is everything that needs a demoboard and an Analog Discovery on a desk:
@@ -303,24 +303,30 @@ them), the one-shot `run_*` experiments, `sweep_corners*`/`compare_corners`,
 and the two regenerators, `extract_bitmap.py` and
 `rebuild_mosbius_device_library.sh`.
 
+It is `tools/sim/`, not `tools/ci/`, and the difference matters for the
+reason the audience rule gives: every example's README tells a reader to
+run `sh tools/sim/check_example_sim.sh <example>` themselves, and a
+directory called `ci` reads as *not for you*. CI happens to be the other
+caller.
+
 Three things the move needed that a path rewrite does not give you, all
 done: `check_example_sim.sh` is two levels down now, so its `cd` is
 `../..`; every `Path(__file__).resolve().parent.parent` in a moved script
 meant *the repo root* (to import `mosbius`) and gained a `.parent`; and
-`measure_settling_ad3.py` reaches sideways into `tools/ci` for the OTA
-follower's published slew pair, which is `parent.parent / "ci"` rather than
+`measure_settling_ad3.py` reaches sideways into `tools/sim` for the OTA
+follower's published slew pair, which is `parent.parent / "sim"` rather than
 `parent`. That last one is the only import crossing the two directories,
 and it is deliberate -- see the note below about that number having lived
 in two files.
 
 **The example regression is one script and one matrix, and the three test
-tiers stay separate (2026-08-31).** `tools/ci/check_example_sim.sh <example>`
+tiers stay separate (2026-08-31).** `tools/sim/check_example_sim.sh <example>`
 replaced seven near-identical shell scripts that differed only in two names
 -- and the inverter's copy had quietly drifted into routing by hand instead
 of calling `tools/regenerate_routed.sh` like the other six, so its CI job
 had been exercising a different path. `.github/workflows/spice-regression.yml`
 is now one `simulate` job with a `strategy.matrix` leg per example
-(`fail-fast: false`, so which leg broke is still the output). `tools/ci/simcheck.py`
+(`fail-fast: false`, so which leg broke is still the output). `tools/sim/simcheck.py`
 holds what every `check_<example>_sim.py` was repeating -- pull named values
 out of an ngspice log, fail with the log's tail, compare against a reference
 dict, print the table, print the verdict -- while each checker keeps its own
@@ -491,7 +497,7 @@ The slave widths were already right against the real reference, so
 `ratio=N` and `tail=N` now both mean N x ibias, as the hardware's 2/4/6/8
 cycler encoding does. Consequences, all verified: `examples/diffamp/`'s
 as-drawn tail doubled to the 400 uA `tail=4` means (gain ~21.3 -> ~19.8
-V/V; its README and `tools/ci/check_diffamp_sim.py` are re-measured), while
+V/V; its README and `tools/sim/check_diffamp_sim.py` are re-measured), while
 the inverter, SR latch and ring oscillator are unchanged to the last
 digit. Every design sheet needs exactly one generator: two halve the
 reference, none leaves `ibias` with no DC path, which does not simulate.
@@ -503,7 +509,7 @@ Also closed on 2026-08-28: **`xschem -n -q` exits non-zero (10) on any
 sheet using the `extra` body/bias pins** -- its connectivity check cannot
 see those -- while writing a perfectly good netlist. Under `set -e` that
 stopped `tools/regenerate_routed.sh` and the per-example check scripts
-(now the one `tools/ci/check_example_sim.sh`) before they reached ngspice, so the diff amp CI job could never
+(now the one `tools/sim/check_example_sim.sh`) before they reached ngspice, so the diff amp CI job could never
 have passed. They now check what came out (netlist written, no
 `IS MISSING`) instead of the exit code.
 

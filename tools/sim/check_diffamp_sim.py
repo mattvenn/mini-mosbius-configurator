@@ -18,7 +18,7 @@ the tail bank now draws the 400 uA that tail=4 means on silicon, where the
 old ideal model gave it 200 uA. See that README's "The bias-reference
 correction".
 
-Run by `sh tools/ci/check_example_sim.sh diffamp`, which
+Run by `sh tools/sim/check_example_sim.sh diffamp`, which
 .github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, SR latch, OTA follower and current source checks.
 
@@ -36,13 +36,13 @@ The gains are computed here rather than read from the log's own
 per line, which is a format worth depending on; a multi-vector `print` is
 not.
 
-The +-5% band matches tools/ci/check_inverter_sim.py and
-tools/ci/check_ring_sim.py, and the same reasoning applies -- see the note
+The +-5% band matches tools/sim/check_inverter_sim.py and
+tools/sim/check_ring_sim.py, and the same reasoning applies -- see the note
 there. If an upstream image update does shift a result past the band,
 re-measure deliberately and update the numbers here and in
 examples/diffamp/README.md together, rather than widening the band.
 
-The reading and comparing is tools/ci/simcheck.py; what lives here is the
+The reading and comparing is tools/sim/simcheck.py; what lives here is the
 numbers, the derived gains, and what a missing measurement means for this
 circuit.
 

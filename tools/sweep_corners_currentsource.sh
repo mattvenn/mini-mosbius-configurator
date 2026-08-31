@@ -14,7 +14,7 @@
 # which, if either, the chip looks like.
 #
 # Run inside the IIC-OSIC-TOOLS container from the repo root, after
-# tools/ci/check_example_sim.sh currentsource has produced build/tb_currentsource.spice:
+# tools/sim/check_example_sim.sh currentsource has produced build/tb_currentsource.spice:
 #
 #   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
 #       --skip bash -lc 'sh tools/sweep_corners_currentsource.sh'

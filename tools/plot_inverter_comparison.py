@@ -6,7 +6,7 @@ measured on silicon.
 Inputs, all produced by other commands so this script only draws:
 
     build/inverter_dc_drawn.txt      from tb_inverter.sch's dc sweep
-    build/inverter_dc_routed.txt     (tools/ci/check_example_sim.sh inverter runs it)
+    build/inverter_dc_routed.txt     (tools/sim/check_example_sim.sh inverter runs it)
     build/inverter_silicon_dc.json   from tools/ad3/measure_inverter_ad3.py
     build/inverter_silicon_fine.json optional 4 mV sweep of the transition
 
@@ -73,7 +73,7 @@ def main() -> None:
         raise SystemExit(
             "missing input: " + ", ".join(f"build/{f}" for f in missing) + "\n\n"
             "  build/inverter_dc_*.txt come from the dc sweep in tb_inverter.sch --\n"
-            "  run tools/ci/check_example_sim.sh inverter inside the IIC-OSIC-TOOLS container.\n"
+            "  run tools/sim/check_example_sim.sh inverter inside the IIC-OSIC-TOOLS container.\n"
             "  build/inverter_silicon_dc.json comes from the bench:\n"
             "  python3 tools/ad3/measure_inverter_ad3.py"
         )
