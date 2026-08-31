@@ -197,6 +197,13 @@ These have each cost someone a day.
 - **`Vgnd VGND 0 0` is not optional.** xschem emits ground as a named
   global net and never as SPICE node 0, so without that line the whole
   circuit floats.
+- **VDPWR powers nothing you draw.** Every device the chip offers is a
+  3.3 V `g5v0d10v5` FET on VAPWR, so a transistor you place never sees
+  1.8 V. VDPWR reaches only the switch matrix, where one 1.8 V inverter
+  per switch shifts a config bit up to a 3.3 V pass-gate drive. `mosbius
+  simulate` ties all 192 config pins to VDPWR or VGND, so a routed deck
+  without that rail is 192 open switches; the as-drawn instance never
+  connects it at all.
 - **A `w=` on a diff-pair half is ignored.** Those halves have no width
   bits; their geometry is fixed at the equivalent of `w=4`. A circuit
   drawn at `w=1` throughout can route as 1x/1x/4x while looking symmetric

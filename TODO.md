@@ -124,16 +124,4 @@ ideally the same bitstreams will produce similiar results, but at least the rout
 
 8 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-9 document what VDPWR is actually for. Nowhere says that the FETs a user
-draws never see 1.8V: every analog device in the submodule (nmos_prog,
-pmos_prog, diff_n/p, mirror_n/p, ota_n) is g5v0d10v5 with its body on
-VAPWR, so the whole analog half runs at 3.3V. VDPWR reaches only
-tt_asw_3v3, whose 01v8/01v8_hvt pair is the level shifter that turns a
-1.8V config bit into a 3.3V pass-gate drive -- spice.py ties all 192
-config pins to VDPWR/VGND, so without that rail a routed design is 192
-open switches. It is also a dead port in the as-drawn instance: a design
-built from mosbius_* symbols never connects it. So it powers nothing you
-draw, and exists so the matrix can be told what to be. Belongs in
-TUTORIAL.md, and probably as a line in the mini_mosbius.sym pin table.
-
-10 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+9 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
