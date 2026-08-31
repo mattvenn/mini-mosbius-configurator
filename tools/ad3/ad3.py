@@ -17,6 +17,13 @@ DMG contains a second, standalone `dwf.framework` meant for
     hdiutil attach ~/Library/Caches/Homebrew/downloads/*waveforms*.dmg
     sudo cp -R /Volumes/WaveForms/dwf.framework /Library/Frameworks/
 
+**Linux has no such trap -- the WaveForms .deb/.rpm installs a plain
+shared library, not a framework with a private copy.** `_dwf_candidates()`
+tries the handful of names/locations that install has used, then falls
+back to `ctypes.util.find_library("dwf")`. If none of those match your
+install, set `AD3_DWF_PATH` to the library's path directly rather than
+editing this file -- `ldconfig -p | grep -i dwf` finds it.
+
 **The scope range is a peak-to-peak span, not a maximum.** This is the
 trap that cost an afternoon: `FDwfAnalogInChannelRangeSet(h, ch, 5.0)`
 means +/-2.5 V around the channel offset, so a 3.3 V rail measured with
@@ -33,22 +40,71 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import ctypes.util
+import os
+import platform
 import time
 from ctypes import byref, c_double, c_int, c_ubyte
 
-DWF_PATH = "/Library/Frameworks/dwf.framework/dwf"
 
-try:
-    dwf = ctypes.cdll.LoadLibrary(DWF_PATH)
-except OSError as exc:  # pragma: no cover - depends on the host install
+def _dwf_candidates() -> list[str]:
+    """Library names/paths worth trying, in order, for the current OS.
+
+    Every WaveForms install puts the library somewhere different: a
+    macOS framework bundle, a Linux shared library the package manager
+    already knows about, or a Windows DLL on PATH. None of these is
+    "the" path -- they are guesses ordered by how each platform's
+    installer has actually placed it.
+    """
+    system = platform.system()
+    if system == "Darwin":
+        return ["/Library/Frameworks/dwf.framework/dwf"]
+    if system == "Windows":
+        return ["dwf.dll"]
+    return [  # Linux: the .deb/.rpm installs a plain shared library.
+        "libdwf.so",
+        "libdwf.so.3",
+        "/usr/lib/libdwf.so",
+        "/usr/lib/x86_64-linux-gnu/libdwf.so",
+        "/usr/local/lib/libdwf.so",
+    ]
+
+
+DWF_PATH = os.environ.get("AD3_DWF_PATH")
+_candidates = [DWF_PATH] if DWF_PATH else _dwf_candidates()
+_found = ctypes.util.find_library("dwf")
+if _found and _found not in _candidates:
+    _candidates.append(_found)
+
+dwf = None
+for _candidate in _candidates:
+    try:
+        dwf = ctypes.cdll.LoadLibrary(_candidate)
+        DWF_PATH = _candidate
+        break
+    except OSError:
+        continue
+
+if dwf is None:  # pragma: no cover - depends on the host install
+    tried = "\n".join(f"    {c}" for c in _candidates)
+    if platform.system() == "Darwin":
+        hint = (
+            "  Installing the WaveForms app alone is not enough: the app keeps a\n"
+            "  private copy of the framework, so the GUI sees your Analog Discovery\n"
+            "  while scripts report no devices. Copy the standalone framework from\n"
+            "  the DMG into /Library/Frameworks -- see the note at the top of\n"
+            "  tools/ad3/ad3.py for the two commands."
+        )
+    else:
+        hint = (
+            "  Check the WaveForms runtime is actually installed (not just the\n"
+            "  GUI app), then find where it put the library:\n\n"
+            "      ldconfig -p | grep -i dwf\n\n"
+            "  and set AD3_DWF_PATH to that path -- no need to edit this file."
+        )
     raise SystemExit(
-        f"can't load the WaveForms SDK from {DWF_PATH}\n\n"
-        "  Installing the WaveForms app alone is not enough: the app keeps a\n"
-        "  private copy of the framework, so the GUI sees your Analog Discovery\n"
-        "  while scripts report no devices. Copy the standalone framework from\n"
-        "  the DMG into /Library/Frameworks -- see the note at the top of\n"
-        "  tools/ad3/ad3.py for the two commands."
-    ) from exc
+        f"can't load the WaveForms SDK. Tried:\n{tried}\n\n{hint}"
+    )
 
 funcDC, funcSine, funcSquare, funcTriangle, funcRampUp = 0, 1, 2, 3, 4
 _STATE_DONE = 2
@@ -71,6 +127,27 @@ def open_device():
             "  Check it is plugged in, and that the WaveForms application is not\n"
             "  holding it -- one process owns the device at a time."
         )
+    # Fail here, not with a confusing bench result later: an underpowered
+    # AD3 can still open and report samples, they are just not
+    # trustworthy. See check_power()'s docstring for the real numbers this
+    # was verified against.
+    #
+    # **iusb ramps up for a moment after FDwfDeviceOpen, and reading it
+    # immediately can catch it still rising** -- seen on a known-good cable
+    # 2026-08-31, where the very first check_power() failed and a second
+    # run moments later passed with nothing else changed. So this polls for
+    # up to 1.5 s and only fails if the reading is still low at the end of
+    # it, the same shape as wait_supply_stable() below.
+    warning = None
+    deadline = time.time() + 1.5
+    while time.time() < deadline:
+        warning = check_power(handle)
+        if warning is None:
+            break
+        time.sleep(0.2)
+    if warning:
+        dwf.FDwfDeviceClose(handle)
+        raise SystemExit(warning)
     return handle
 
 
@@ -310,6 +387,82 @@ def crossing(values, level, rising=True, dt=1.0):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Digital output (DIO) -- a stimulus edge that isn't W1's DAC+amplifier
+# ---------------------------------------------------------------------------
+#
+# tools/ad3/measure_inverter_edge_ad3.py measured square_wave()'s own edge at
+# 74 ns (10%-90%) on ua1, only a 1.3x margin over the 95 ns it measured on
+# the inverter's output -- too close to trust, since W1 drives through a DAC
+# and an output amplifier that takes tens of nanoseconds to move volts. A
+# DIO pin switches through a plain logic buffer instead, a different circuit
+# that may have a real edge fast enough to matter here. Untested before
+# 2026-08-31.
+#
+# **It stayed untested in the sense that matters.** DIO0 measured 82 ns
+# here, close to W1's 74 ns -- but per the AD3 datasheet (files.digilent.com/
+# datasheets/Analog-Discovery-3-Datasheet.pdf, sec. 6.1) the analog input
+# channels (1+/2+, whatever this is observed through) are bandwidth-limited
+# to 9 MHz @ -3dB without a BNC adapter, the same ~9 MHz the AWG output is
+# spec'd at (sec. 6.2). DIO pins are explicitly NOT BNC-adapter pins ("all
+# other pins pass through... to a 100 mil 2x15 MTE header") and have no
+# published bandwidth of their own. So W1's and DIO0's edges landing in the
+# same ballpark is consistent with both being observed through the same
+# 9 MHz-limited scope channel, not with both sources actually being equally
+# slow -- DIO0's true edge speed is still unmeasured. A BNC adapter would
+# raise the scope's own bandwidth to 30+ MHz without touching DIO0 at all,
+# which is the one upgrade that could actually separate these two
+# possibilities.
+#
+# **These wrap the SDK's Digital Out (pattern generator) API for the first
+# time in this codebase.** Every other function in this file was checked
+# against real hardware before being trusted (see this file's docstring and
+# CLAUDE.md); these have not been yet. If a call raises `AttributeError`,
+# the function name is wrong -- check the actual declaration in dwf.h
+# (`/Library/Frameworks/dwf.framework/Headers/dwf.h` on macOS, wherever the
+# Linux package put it otherwise) rather than assuming the concept is wrong.
+#
+# **DIO pins are a separate physical connector from W1/W2/1+/2+.** Those are
+# flying leads off the analog front end; the digital channels are on their
+# own pin header (DIO0..DIO15 plus grounds). Bring the pin you use to an
+# analog scope channel with a jumper wire if you want to see what it
+# actually delivers, same as every stimulus in this file.
+
+DIGITAL_OUT_TYPE_PULSE = 0
+
+
+def digital_out_square(h, channel, freq, symmetry=50.0):
+    """Free-running square wave on one DIO pin, at whatever logic level the
+    device's digital bank runs at (not settable here the way an AnalogOut
+    amplitude is -- this device's `power_status()` shows no separate DIO/VIO
+    channel, which suggests it is fixed, presumably at 3.3 V to match this
+    chip's rail, but that has not been confirmed against a scope).
+
+    Frequency is set as clock-divider-and-counter, not a direct Hz value,
+    because that is how the SDK's pulse generator works: an internal clock
+    (read back, never assumed) divided down, then held low for
+    `low_ticks` of that divided clock and high for `high_ticks`.
+    """
+    clock = c_double()
+    dwf.FDwfDigitalOutInternalClockInfo(h, byref(clock))
+    period_ticks = clock.value / freq
+    high_ticks = max(1, round(period_ticks * symmetry / 100.0))
+    low_ticks = max(1, round(period_ticks - high_ticks))
+    dwf.FDwfDigitalOutReset(h)
+    dwf.FDwfDigitalOutEnableSet(h, c_int(channel), c_int(1))
+    dwf.FDwfDigitalOutTypeSet(h, c_int(channel), c_int(DIGITAL_OUT_TYPE_PULSE))
+    dwf.FDwfDigitalOutDividerSet(h, c_int(channel), c_int(1))
+    dwf.FDwfDigitalOutCounterSet(h, c_int(channel), c_int(low_ticks), c_int(high_ticks))
+    dwf.FDwfDigitalOutConfigure(h, c_int(1))
+
+
+def digital_out_stop(h):
+    """Stop the digital pattern generator -- one engine for all DIO
+    channels, unlike AnalogOut's per-channel Configure. `close()` does not
+    call this, so a script using digital_out_square() must call it itself.
+    """
+    dwf.FDwfDigitalOutConfigure(h, c_int(0))
+
 
 # ---------------------------------------------------------------------------
 # Programmable supplies (V+ / V-)
@@ -376,6 +529,92 @@ def _find_supply(h, channel):
         f"this device has no analog IO channel matching {channel!r}.\n"
         f"  What it does report:\n{listing or '    (nothing)'}\n"
         "  Match on the label (V+, V-) or any part of the name.")
+
+
+def power_status(h) -> dict[str, dict[str, float]]:
+    """{channel label or name: {node name: value}} for every AnalogIO
+    channel the device reports -- not just the settable V+/V- supplies
+    `supply()` covers.
+
+    WaveForms' own app can refuse to arm the analog front end at all --
+    "the analog circuit of the device is turned off ... PLL Not Locked" --
+    when the USB port cannot deliver the current the AD3 wants, and that
+    condition is invisible to a script that only ever reads back the
+    channels it explicitly asked to set. The AD3 exposes its own input
+    power (and on some units, temperature) as ordinary AnalogIO channels
+    alongside V+/V-, read the same way `supply_status()` reads a rail.
+
+    **Which channel/node names actually carry that information is not
+    hard-coded here, deliberately** -- see `_io_map()`'s docstring for why:
+    a name guessed instead of read from the device is how a check ends up
+    silently never firing. Call this once and look at what comes back
+    before trusting `check_power()`'s pattern match on it.
+
+    On an AD3 (verified 2026-08-31, `tools/ad3/check_ad3_power.py`) that
+    information sits in one channel labelled "System", not one labelled
+    "USB": nodes `vusb`/`iusb` (and `vaux`/`iaux`), reading 4.91 V / 656 mA
+    on a good cable and 4.73 V / 105 mA on the cable/port that triggered
+    WaveForms' "analog circuit is turned off" warning. The *current*
+    collapsed 6x while the voltage barely moved -- the port was current-
+    limiting rather than sagging -- which is why `check_power()` gates on
+    `iusb`, not on a voltage threshold.
+    """
+    dwf.FDwfAnalogIOStatus(h)
+    out = {}
+    for idx, (name, label, nodes) in _io_map(h).items():
+        values = {}
+        for nname, (nidx, _units) in nodes.items():
+            value = c_double()
+            dwf.FDwfAnalogIOChannelNodeStatus(h, c_int(idx), c_int(nidx), byref(value))
+            values[nname] = value.value
+        out[label or name] = values
+    return out
+
+
+def check_power(h, min_iusb_amps=0.5, min_vusb_volts=4.5) -> str | None:
+    """None if the device's own USB input power looks healthy, else a
+    warning naming which reading does not.
+
+    Matches on the *node* name (`vusb`/`iusb`, or `vaux`/`iaux`) rather
+    than the channel label -- on the one AD3 this has been checked against
+    the channel is called "System", not "USB", so a label match never
+    fires at all. Any channel/node absent is silently skipped rather than
+    treated as a failure, since a device or SDK version that does not
+    expose it says nothing about whether the underlying problem exists.
+
+    **`iusb` is the one to trust, not `vusb`.** Verified 2026-08-31
+    (`tools/ad3/check_ad3_power.py`, both dumps recorded in
+    `power_status()`'s docstring): the cable/port that made WaveForms'
+    own app report "the analog circuit of the device is turned off" moved
+    vusb from 4.91 to 4.73 V -- barely past `min_vusb_volts` -- while iusb
+    fell from 656 to 105 mA, well past `min_iusb_amps`. The port was
+    current-limiting rather than sagging, so a voltage-only check would
+    have missed this specific, real fault. Both are still checked, since a
+    long/thin cable's resistive drop is a different failure mode that
+    would show up as low voltage first.
+    """
+    problems = []
+    for label, nodes in power_status(h).items():
+        iusb = next((v for k, v in nodes.items() if "iusb" in k.lower()), None)
+        vusb = next((v for k, v in nodes.items() if "vusb" in k.lower()), None)
+        if iusb is not None and iusb < min_iusb_amps:
+            problems.append(f"{label}: iusb reads {iusb * 1000:.0f} mA "
+                            f"(want >= {min_iusb_amps * 1000:.0f} mA)")
+        if vusb is not None and vusb < min_vusb_volts:
+            problems.append(f"{label}: vusb reads {vusb:.2f} V "
+                            f"(want >= {min_vusb_volts:.2f} V)")
+    if not problems:
+        return None
+    return (
+        "the Analog Discovery itself is reporting low input power:\n    "
+        + "\n    ".join(problems)
+        + "\n\n  This is the same condition WaveForms' own app shows as \"the analog\n"
+          "  circuit of the device is turned off\" / \"PLL Not Locked\" -- the AD3\n"
+          "  wants ~3 W / 600 mA and the USB port is not delivering it, so nothing\n"
+          "  measured while this is true is trustworthy, chip or no chip. Try a\n"
+          "  different cable/port (rear ports over front, no hub/extension), or a\n"
+          "  powered hub / 5 V auxiliary supply."
+    )
 
 
 def supply(h, volts, channel="V+", current_limit=None, settle=0.3):

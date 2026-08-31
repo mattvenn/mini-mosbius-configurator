@@ -17,7 +17,9 @@ curves are at the `tt` corner with the default 10x probe (`rprobe=10meg`,
 |---|---|---|---|
 | trip point (out = in) | 1.605 V | 1.600 V | 1.599 V |
 | small-signal gain there | -14.79 V/V | -14.49 V/V | -16.90 V/V |
-| 10%-90% rise, 500 ns pulse | 8.16 ns | 24.63 ns | not measured |
+| 10%-90% rise, 500 ns pulse | 8.16 ns | 24.63 ns | 38.84 ns |
+
+Digilent AD3 was too slow to measure rise time so Keysight HD304MSO was used instead.
 
 ## Try this
 
@@ -39,7 +41,11 @@ the host. [`../README.md`](../README.md#running-each-examples-commands)
 has the docker invocation.
 
 ```bash
-sh tools/sim/check_example_sim.sh inverter   # as drawn and as routed, in the container
-python3 tools/ad3/measure_inverter_ad3.py    # on silicon, on the host
-python3 tools/plot_inverter_comparison.py    # the figure and the table
+sh tools/sim/check_example_sim.sh inverter          # as drawn and as routed, in the container
+python3 tools/ad3/measure_inverter_ad3.py           # trip point and gain, on the host
+python3 tools/plot_inverter_comparison.py           # the figure and the table
+python3 tools/measure_inverter_risetime_keysight.py <VISA resource>   # rise time, needs a
+                                                     # wideband scope -- the AD3's own analog
+                                                     # front end cannot resolve this edge, see
+                                                     # the note under the table
 ```

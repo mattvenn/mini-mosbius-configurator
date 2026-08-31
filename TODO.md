@@ -6,23 +6,7 @@ anything is removed, so cite an item by describing it, not by its number.
 
 ## Bench and hardware in the loop
 
-1 measure the inverter's rise time on silicon. `examples/inverter/`'s
-table has a hole in it: the 10%-90% rise row reads 8.16 ns as drawn and
-24.63 ns as routed, and "not measured" on the chip. It is the one row
-where the switch matrix makes a large difference, so it is the row worth
-having.
-
-Two things make it harder than the DC sweep already in
-`tools/ad3/measure_inverter_ad3.py`. The edge is a few tens of nanoseconds, so
-the stimulus needs a source with a much faster edge than the AD3's
-waveform generator, and its own settling has to be subtracted or ruled
-out; the AD3's digital output is one candidate and is untested here. And
-the meter is part of the circuit: the AD3's 1 MOhm / 24 pF input is a much
-heavier load than the 10 pF the committed testbench assumes, so the
-comparison has to be against a deck re-run at `rprobe=1meg cprobe=24p`,
-which the testbench already parameterises.
-
-2 no device-setting cycler bit has ever been varied on silicon, and the
+1 no device-setting cycler bit has ever been varied on silicon, and the
 mirror ratio is the cheapest one to check.
 
 All 11 cyclers -- four FET widths, four mirror ratios, three tails --
@@ -59,17 +43,17 @@ measured. The ratio experiment is what tells those two apart.
 
 ## Examples
 
-3 make it easy for people to submit designs to the examples
+2 make it easy for people to submit designs to the examples
 
 ## Tooling and library
 
-4 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+3 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
 ## Docs and user-facing text
 
-5 check all the schematic texts
+4 check all the schematic texts
 
-6 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+5 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-7 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+6 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library

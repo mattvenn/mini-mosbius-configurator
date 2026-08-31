@@ -8,8 +8,6 @@ V {}
 S {}
 F {}
 E {}
-N -700 160 -700 -100 {lab=ibias}
-N -700 -100 -400 -100 {lab=ibias}
 T {Draw your circuit here. Wire it to the ports below --} -170 -360 0 0 0.25 0.25 {}
 T {those are exactly the chip's real pins (SPEC.md Sec 3.1b):} -170 -330 0 0 0.25 0.25 {}
 T {ibias, ua1..ua5, VAPWR (3.3V), VDPWR (1.8V), VGND. Use} -170 -300 0 0 0.25 0.25 {}
@@ -17,6 +15,8 @@ T {mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/} -170 -270 0 0 0.25 
 T {mosbius_ota from mosbius_lib -- the router (M3) maps them} -170 -240 0 0 0.25 0.25 {}
 T {onto real chip devices. You cannot wire anything except} -170 -210 0 0 0.25 0.25 {}
 T {through these ports -- there is no "off chip" by construction.} -170 -180 0 0 0.25 0.25 {}
+N -700 -100 -700 160 {lab=ibias}
+N -700 -100 -400 -100 {lab=ibias}
 N -190 -140 400 -140 {lab=VAPWR}
 N -200 210 400 210 {lab=VGND}
 N -110 40 -80 40 {lab=ua1}
