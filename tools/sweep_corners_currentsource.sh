@@ -16,7 +16,7 @@
 # Run inside the IIC-OSIC-TOOLS container from the repo root, after
 # tools/sim/check_example_sim.sh currentsource has produced build/tb_currentsource.spice:
 #
-#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
 #       --skip bash -lc 'sh tools/sweep_corners_currentsource.sh'
 #
 # Budget ~2 minutes per corner: sky130A's combined model library takes

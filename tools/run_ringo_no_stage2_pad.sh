@@ -21,7 +21,7 @@ mkdir -p build
 
 echo "== Netlisting tb_mosbius_ringo.sch (unmodified) from ttsky-mini-mosbius/xschem =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/ttsky-mini-mosbius/xschem \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q \
       -o /work/build tb_mosbius_ringo.sch
@@ -81,7 +81,7 @@ cp .spiceinit build/.spiceinit
 
 echo "== Running ngspice (budget ~2min+ for sky130A model load, more for the full deck) =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/build \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     ngspice -b tb_mosbius_ringo_no_stage2_pad.spice
   '

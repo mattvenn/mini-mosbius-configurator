@@ -74,7 +74,7 @@ MEASURED_BITSTREAM="380088007001000010000404250109000400000040000014"
 
 echo "== Netlisting tb_mosbius_ringo.sch to obtain the verified device library (mosbius, pad_model, tt_asw_3v3, etc.) =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/ttsky-mini-mosbius/xschem \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q \
       -o /work/build tb_mosbius_ringo.sch
@@ -383,7 +383,7 @@ cp .spiceinit build/.spiceinit
 
 echo "== Running ngspice (budget ~2min+ for sky130A model load, more for the full deck plus 150 caps and 3 pads -- likely the heaviest run in this investigation, needs a machine with real RAM headroom) =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/build \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     ngspice -b ringo_measured_wire_cap.spice
   '

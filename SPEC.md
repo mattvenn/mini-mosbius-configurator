@@ -1023,7 +1023,7 @@ mini-mosbius-configurator/
 ### 4.1 Environment
 
 Target is the **already-installed** `~/IIC-OSIC-TOOLS` Docker setup
-(`hpretl/iic-osic-tools:latest`), which provides xschem, ngspice, magic and the
+(`hpretl/iic-osic-tools:2026.05`), which provides xschem, ngspice, magic and the
 sky130A PDK. Verified on xschem 3.4.8RC: netlisting `mosbius.sch` under `latest`
 and under the pinned `2025.07` gives byte-identical switch connectivity and device
 instances, so the bit map does not depend on the image version. Nothing is installed natively on this Mac, and we will not try to

@@ -15,7 +15,7 @@
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from
 # the repo root:
 #
-#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
 #       --skip bash -lc 'sh tools/sim/check_example_sim.sh inverter'
 #
 # Budget a couple of minutes whichever example you pick: sky130A's combined
@@ -102,8 +102,41 @@ netlist_schematic "examples/$dir/tb_$design.sch"
 
 echo "== running ngspice"
 cp .spiceinit build/.spiceinit
-( cd build && ngspice -b "tb_$design.spice" > "ngspice_tb_$design.log" 2>&1 ) \
-    || { echo "ngspice exited non-zero -- tail of build/ngspice_tb_$design.log:"; \
-         tail -40 "build/ngspice_tb_$design.log"; exit 1; }
+log="build/ngspice_tb_$design.log"
+if ! ( cd build && ngspice -b "tb_$design.spice" > "ngspice_tb_$design.log" 2>&1 ); then
+    # "Fatal: Pclm = ... is not positive" is a known ngspice-44.2 evaluation
+    # bug (bundled in older hpretl/iic-osic-tools images, e.g. :2025.07) on
+    # a BSIM4 bin the switch matrix's analog pad mux always uses -- verified
+    # 2026-08-31 by diffing the PDK's model card byte-for-byte between
+    # ngspice-44.2 and ngspice-46: identical text, different result, so this
+    # is an ngspice bug, not a PDK data problem or a schematic problem. It
+    # is fatal per-analysis but does not stop the run, so it is buried near
+    # the top of the log while everything downstream fails as a symptom --
+    # a generic `tail -40` on a short log shows only the symptoms. See
+    # CLAUDE.md's traps section for the full writeup.
+    if grep -q "^Fatal: Pclm .* is not positive" "$log"; then
+        cat >&2 <<EOF
+ngspice's BSIM4 parameter check just rejected a device the switch
+matrix's analog pad mux always uses -- this is not your schematic:
 
-python3 "tools/sim/check_${check}_sim.py" "build/ngspice_tb_$design.log"
+$(grep -A1 "^Fatal: Pclm" "$log" | sed 's/^/    /')
+
+This is a known evaluation bug in ngspice-44.2 (bundled in older
+hpretl/iic-osic-tools images, e.g. :2025.07): the PDK's model card for
+this device is byte-identical whether or not the bug fires, so the
+model data is fine -- ngspice-44.2 just computes this one binned
+parameter wrong. ngspice-46, bundled in hpretl/iic-osic-tools:2026.05,
+does not have this bug.
+
+Fix: on the machine running this container,
+    docker pull hpretl/iic-osic-tools:2026.05
+and use that tag (every script and doc in this repo already does).
+EOF
+        exit 1
+    fi
+    echo "ngspice exited non-zero -- tail of $log:"
+    tail -40 "$log"
+    exit 1
+fi
+
+python3 "tools/sim/check_${check}_sim.py" "$log"

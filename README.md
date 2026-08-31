@@ -33,6 +33,18 @@ through from a blank sheet, one instruction at a time.
 Nothing is installed natively: xschem and ngspice run inside the
 [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS) container,
 while the Python tooling runs on the host, where the USB serial port is.
+Every docker invocation in this repo is pinned to
+`hpretl/iic-osic-tools:2026.05`, not `:latest` -- an older cached image
+can carry a buggy ngspice that fails a real switch-matrix device with a
+cryptic `Pclm is not positive` (CLAUDE.md's traps section has the story).
+
+If you run xschem/ngspice from a native install instead (some people
+will), the same constraint applies even though the container isn't
+involved: use ngspice >=46 -- the bug above was in ngspice's own
+evaluation of a model, not the PDK's data, so any reasonably current
+sky130A PDK is fine. Run `sh tools/sim/check_example_sim.sh inverter`
+once to confirm your setup actually simulates before trusting anything
+else out of it.
 
 ```bash
 pip install -e .                     # the `mosbius` command

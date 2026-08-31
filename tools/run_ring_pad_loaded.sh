@@ -47,7 +47,7 @@ RING_BITSTREAM="3f008803f004001801000020100804000060040100000021"
 
 echo "== Netlisting tb_mosbius_ringo.sch to obtain the verified device library (mosbius, pad_model, etc.) =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/ttsky-mini-mosbius/xschem \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q \
       -o /work/build tb_mosbius_ringo.sch
@@ -219,7 +219,7 @@ cp .spiceinit build/.spiceinit
 
 echo "== Running ngspice (budget ~2min+ for sky130A model load, more for the full deck -- needs a machine with real RAM headroom, see TODO.md Sec 1) =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/build \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     ngspice -b ring_pad_loaded.spice
   '

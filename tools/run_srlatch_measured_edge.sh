@@ -20,7 +20,7 @@
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from
 # the repo root:
 #
-#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
 #       --skip bash -lc 'sh tools/run_srlatch_measured_edge.sh'
 #
 # Takes an optional process corner, default tt:

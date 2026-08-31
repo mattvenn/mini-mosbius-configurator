@@ -637,7 +637,7 @@ Batch netlisting is the same thing without the GUI, and needs no `-o`,
 since `netlist_dir` already points at `build/`:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
   --skip bash -lc 'xschem -n -q examples/ringosc/ring.sch'
 ```
 
@@ -767,6 +767,29 @@ These were all got wrong once. The sources that look authoritative are not.
     1.605 V, ring 2.083 -> 2.289 GHz, diff amp base 1.985 -> 2.012 V;
     otabuf and currentsource were inside tolerance, as their `ratio`/`tail`
     sizing predicts). The SR latch needed a design change with it, below.
+
+11. **A fatal `Pclm = ... is not positive` from ngspice's BSIM4 parameter
+    checker is an ngspice bug, not a PDK or schematic problem.**
+    ngspice-44.2 (bundled in `hpretl/iic-osic-tools:2025.07` and presumably
+    older tags) miscomputes a binned parameter for the switch matrix's
+    analog pad mux transistor (`sky130_fd_pr__nfet_g5v0d10v5`, the
+    `tt_asw_3v3`-style pass FET at `W=60 nf=12 L=0.5`, which every routed
+    design that uses any `ua` pin depends on) and refuses to simulate it --
+    verified 2026-08-31 by diffing that bin's model card byte-for-byte
+    between the ngspice-44.2 and ngspice-46 images: identical text
+    (`pclm=1.031822874 lpclm=-2.60274315776336e-9`), different result.
+    ngspice-46, bundled in `hpretl/iic-osic-tools:2026.05`, simulates it
+    fine. `ngspice -b` does exit non-zero on this, but the fatal error
+    lands near the top of a short log while everything downstream fails as
+    a symptom (`meas ... failed`, `no such vector ...`), so a naive
+    `tail -N` on the log shows only the symptoms and hides the actual
+    cause -- this is what a user hit running the inverter example on an
+    unpinned `:latest` that happened to resolve to an old cached image.
+    `tools/sim/check_example_sim.sh` now greps its ngspice log for this
+    specific message and prints the real cause and the fix instead of
+    tailing the log. Every docker invocation in this repo is pinned to
+    `hpretl/iic-osic-tools:2026.05` for exactly this reason -- do not float
+    any of them back to `:latest`.
 
 ## Useful facts
 

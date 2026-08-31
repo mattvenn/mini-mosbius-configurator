@@ -27,7 +27,7 @@ mkdir -p build mosbius/data
 
 echo "== Netlisting tb_mosbius_ringo.sch from ttsky-mini-mosbius/xschem =="
 docker run --rm -v "$REPO_ROOT:/work" -w /work/ttsky-mini-mosbius/xschem \
-  hpretl/iic-osic-tools:latest --skip bash -lc '
+  hpretl/iic-osic-tools:2026.05 --skip bash -lc '
     export PDK=sky130A PDK_ROOT=/foss/pdks
     xschem --rcfile $PDK_ROOT/sky130A/libs.tech/xschem/xschemrc -n -q \
       -o /work/build tb_mosbius_ringo.sch

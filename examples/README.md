@@ -24,7 +24,7 @@ ngspice, which are not installed natively, so it is run through
 IIC-OSIC-TOOLS from the repo root:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
     --skip bash -lc 'sh tools/sim/check_example_sim.sh inverter'
 ```
 

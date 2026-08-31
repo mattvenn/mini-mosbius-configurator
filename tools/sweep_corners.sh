@@ -6,7 +6,7 @@
 # Run inside the IIC-OSIC-TOOLS container from the repo root, after the
 # ordinary check_*_sim.sh scripts have produced the netlists:
 #
-#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:latest \
+#   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
 #       --skip bash -lc 'sh tools/sweep_corners.sh'
 #
 # Then compare against the bench with:
