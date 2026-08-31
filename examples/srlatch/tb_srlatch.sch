@@ -100,7 +100,7 @@ Vgnd VGND 0 0
 
 .option reltol=0.01
 .control
-  save all
+  save v(set) v(reset) v(out_drawn) v(out_routed)
   tran 100p 300n
   meas tran qd_after_set FIND v(out_drawn) AT=110n
   meas tran qr_after_set FIND v(out_routed) AT=110n

@@ -99,7 +99,7 @@ Vgnd VGND 0 0
 
 .option reltol=0.01
 .control
-  save all
+  save v(in) v(out_drawn) v(out_routed)
   tran 5n 15u
   meas tran vin_lo         FIND v(in)          AT=3.76u
   meas tran vout_drawn_lo  FIND v(out_drawn)   AT=3.76u
