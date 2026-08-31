@@ -9,7 +9,7 @@ modelled in the testbench), on the routing the router produces
 today.
 
 Run by tools/check_inverter_sim.sh (the full netlist/route/simulate/ngspice
-pipeline), which .github/workflows/spice-regression.yml runs once a month
+pipeline), which .github/workflows/spice-regression.yml runs on every push
 alongside the ring, diff amp, SR latch, OTA follower and current source
 checks.
 

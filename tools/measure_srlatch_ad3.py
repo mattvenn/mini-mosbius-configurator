@@ -66,7 +66,12 @@ from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import pads_in_use  # noqa: E402
 
-# examples/srlatch as the router places it: ua1 SET, ua2 RESET, ua3 Q.
+# examples/srlatch as the router placed it on 2026-08-29: ua1 SET, ua2 RESET,
+# ua3 Q -- the configuration this example's silicon numbers were measured with.
+# It is a record of an experiment, not a cached build artifact: if the
+# router's allocation ever changes, re-route and re-measure rather than
+# editing this string, or the published numbers quietly stop describing
+# the configuration that was actually on the chip.
 BITSTREAM = "0c008000c020008808000000008821000220200800000038"
 PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"

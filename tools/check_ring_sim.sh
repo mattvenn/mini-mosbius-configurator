@@ -1,10 +1,10 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/ringosc: netlists it, routes it,
+# Regression check for examples/ringosc: netlists it, routes it,
 # builds the routed subcircuit, runs the real tb_ring.sch testbench through
 # ngspice, and checks freq_drawn/freq_routed land near the reference
 # measurements in examples/ringosc/README.md via check_ring_sim.py. This is
-# what .github/workflows/spice-regression.yml runs once a month, alongside
+# what .github/workflows/spice-regression.yml runs on every push, alongside
 # the inverter, diff amp, SR latch, OTA follower and current source
 # checks.
 #

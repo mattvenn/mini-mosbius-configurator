@@ -14,7 +14,7 @@ land on. The bitstream is unchanged by that -- there were never width bits
 behind the request -- so nothing about the chip or its measurements moved.
 
 Run by tools/check_srlatch_sim.sh, which
-.github/workflows/spice-regression.yml runs once a month alongside the
+.github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, both diff amps, OTA follower and current source
 checks.
 

@@ -5,7 +5,7 @@ the reference measurements in examples/ringosc/README.md:
 freq_drawn=2.289GHz, freq_routed=43.89MHz, last re-run 2026-08-29.
 
 Run by tools/check_ring_sim.sh, which
-.github/workflows/spice-regression.yml runs once a month alongside the
+.github/workflows/spice-regression.yml runs on every push alongside the
 inverter, diff amp, SR latch, OTA follower and current source checks.
 
 All six examples guard different things, which is why all six run. The

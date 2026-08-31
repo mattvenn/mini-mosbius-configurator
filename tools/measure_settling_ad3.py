@@ -68,6 +68,13 @@ AD3_CPROBE, SHEET_CPROBE = 24e-12, 10e-12
 
 IN_CH, OUT_CH = 0, 1
 
+# Each profile's bitstream is its example as the router placed it on
+# 2026-08-29 -- the same strings tools/measure_otabuf_ad3.py and
+# tools/measure_diffamp_ad3.py program, and the configurations the step
+# responses below were measured against. They are records of experiments,
+# not cached build artifacts: if the router's allocation ever changes,
+# re-route and re-measure rather than editing these strings, or the
+# published numbers quietly stop describing what was on the chip.
 PROFILES = {
     "otabuf": {
         "bitstream": "404000000000000000000000000000000000000000850210",

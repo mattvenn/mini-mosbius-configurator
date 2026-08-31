@@ -1,17 +1,16 @@
 name: Spice Regression
 
-# **Temporarily on every push, while the examples are still being
-# developed (2026-08-29).** The steady state for this workflow is the
-# monthly canary below: the decks rarely change, and most of each job is
+# **On every push, and that is the steady state (decided 2026-08-31).**
+# This was a monthly cron with push as a temporary measure while the
+# examples were being developed; the cron is gone. Most of each job is
 # ngspice parsing sky130A's model library rather than simulating anything
-# (see CLAUDE.md). It is on push for now because they are changing daily
-# and a break is worth hearing about the same day -- the seven jobs run in
-# parallel, so that costs about five minutes of waiting. TODO.md carries
-# the item to put it back.
+# (see CLAUDE.md), so it is not cheap -- but the seven jobs run in
+# parallel, so it costs about five minutes of waiting, and it is the only
+# thing in the repo that exercises the whole schematic -> netlist -> route
+# -> simulate path on a real design. A month was long enough for a broken
+# example to be discovered by someone at a bench rather than by CI.
 on:
   push:
-  schedule:
-    - cron: "0 6 1 * *"
   workflow_dispatch:
 
 jobs:

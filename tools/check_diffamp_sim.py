@@ -19,7 +19,7 @@ old ideal model gave it 200 uA. See that README's "The bias-reference
 correction".
 
 Run by tools/check_diffamp_sim.sh, which
-.github/workflows/spice-regression.yml runs once a month alongside the
+.github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, SR latch, OTA follower and current source checks.
 
 Each example guards something the others cannot. The inverter is

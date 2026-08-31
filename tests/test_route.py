@@ -25,6 +25,14 @@ from mosbius.route import (
     route,
 )
 
+# Every mirror leg, tail bank and the OTA copies the chip's single bias
+# reference, so a design using one needs exactly one mosbius_bias block --
+# check.py's B1, an ERROR that stops cli.py and watch.py before routing.
+# route() itself does not care (mosbius_bias is not in DEVICE_PINS, so it
+# never becomes a device), but a fixture without it is a composition the
+# product refuses, so the fixtures below carry one.
+BIAS_GENERATOR = "XBIAS ibias ibias_p VGND VAPWR mosbius_bias\n"
+
 INVERTER_NETLIST = """
 nfeta_0 ua1 ua2 VGND net1 mosbius_nmos w=1
 pfeta_1 ua1 ua2 VAPWR net2 mosbius_pmos w=1
@@ -133,7 +141,7 @@ def test_two_ota_devices_reports_doesnt_fit():
     netlist = """
     x1 inp1 inm1 outp1 outm1 ib1 bn1 bp1 mosbius_ota tail=2
     x2 inp2 inm2 outp2 outm2 ib2 bn2 bp2 mosbius_ota tail=2
-    """
+    """ + BIAS_GENERATOR
     design = parse_netlist(netlist)
     with pytest.raises(RouteError, match="only one OTA"):
         route(design)
@@ -152,7 +160,7 @@ def test_width_property_round_trips_through_decode():
 # tail current a schematic can set.
 # ---------------------------------------------------------------------------
 
-OTA_NETLIST = "x1 ua1 ua4 ua2 ua5 ibias VGND VAPWR mosbius_ota tail=4\n"
+OTA_NETLIST = "x1 ua1 ua4 ua2 ua5 ibias VGND VAPWR mosbius_ota tail=4\n" + BIAS_GENERATOR
 
 
 def test_single_ota_routes():
@@ -266,13 +274,13 @@ NTAIL_NETLIST = """
 XM1 ua1 ua3 net1 VGND mosbius_nmos w=1
 XM2 ua2 ua4 net1 VGND mosbius_nmos w=1
 XT1 net1 ibias VGND mosbius_ntail tail=6
-"""
+""" + BIAS_GENERATOR
 
 PTAIL_NETLIST = """
 XM1 ua1 ua3 net1 VAPWR mosbius_pmos w=1
 XM2 ua2 ua4 net1 VAPWR mosbius_pmos w=1
 XT1 net1 ibias_p VAPWR mosbius_ptail tail=8
-"""
+""" + BIAS_GENERATOR
 
 
 def test_a_drawn_tail_claims_its_two_halves():
@@ -331,7 +339,7 @@ def test_a_malformed_tail_does_not_crash_route_it_falls_back():
     netlist = """
     XM1 ua1 ua3 net1 VGND mosbius_nmos w=1
     XT1 net1 ibias VGND mosbius_ntail tail=6
-    """
+    """ + BIAS_GENERATOR
     routed = route(parse_netlist(netlist))
     assert routed.device_roles["XM1"] == "nmos_a"   # ordinary pass 2, tail ignored
     assert routed.device_roles["XT1"] == "ntail"     # still gets its own role
@@ -709,7 +717,7 @@ def test_shared_source_on_a_package_pin_is_refused():
 
 
 def test_a_drawn_tail_bank_may_share_the_source_node():
-    netlist = PAIR_ON_INTERNAL_NET + "XT1 tailnet ibias VGND mosbius_ntail tail=4\n"
+    netlist = PAIR_ON_INTERNAL_NET + "XT1 tailnet ibias VGND mosbius_ntail tail=4\n" + BIAS_GENERATOR
     routed = route(parse_netlist(netlist))
     assert routed.device_roles["XT1"] == "ntail"
     assert routed.undeclared_tails == ()
@@ -741,7 +749,7 @@ def test_r3_warns_about_a_tail_current_nobody_asked_for():
 
 def test_r3_is_silent_when_the_tail_is_declared_or_tied():
     for netlist in (
-        PAIR_ON_INTERNAL_NET + "XT1 tailnet ibias VGND mosbius_ntail tail=4\n",
+        PAIR_ON_INTERNAL_NET + "XT1 tailnet ibias VGND mosbius_ntail tail=4\n" + BIAS_GENERATOR,
         PAIR_ON_INTERNAL_NET.replace("tailnet", "VGND"),
     ):
         report = check_routing(route(parse_netlist(netlist)))
@@ -779,7 +787,7 @@ def test_a_one_sided_rail_net_still_takes_the_nearest_tap():
     """No touch on the far side means no cfg_bus_short and no partner row,
     so the bridge ranking must not push these off bus_A[4]."""
     netlist = ("XF1 VAPWR ua1 outa VGND mosbius_nmos w=1\n"
-               "XS1 ua2 ibias VGND mosbius_nsink ratio=2\n")
+               "XS1 ua2 ibias VGND mosbius_nsink ratio=2\n") + BIAS_GENERATOR
     routed = route(parse_netlist(netlist))
     assert routed.net_rows["VAPWR"] == {"A": 4}
     assert check(routed.config).errors == []

@@ -64,6 +64,12 @@ from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
+# examples/pdiffamp as the router placed it on 2026-08-29 -- the configuration
+# the 17.82 V/V fit and the +18 mV input offset were measured with.
+# It is a record of an experiment, not a cached build artifact: if the
+# router's allocation ever changes, re-route and re-measure rather than
+# editing this string, or the published numbers quietly stop describing
+# the configuration that was actually on the chip.
 BITSTREAM = "0c0000040000000000000120840000000820100800000030"
 PROJECT, SHUTTLE = "tt_um_tnt_mosbius", "ttsky25a"
 

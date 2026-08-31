@@ -9,7 +9,7 @@ ibias_amps=100u:
     nsink_a   (sink)     -201.3 uA drawn   -203.9 uA routed   (-200 uA ideal)
 
 Run by tools/check_currentsource_sim.sh, which
-.github/workflows/spice-regression.yml runs once a month alongside the
+.github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, diff amp, SR latch and OTA follower checks.
 
 What this one guards that the others cannot. It is the only example that

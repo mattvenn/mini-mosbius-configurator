@@ -1,11 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/inverter: netlists it, routes it,
+# Regression check for examples/inverter: netlists it, routes it,
 # builds the routed subcircuit, runs the real tb_inverter.sch testbench
 # through ngspice, and checks trise_drawn/trise_routed land near the
 # reference measurements in examples/inverter/README.md via
 # check_inverter_sim.py. This is what
-# .github/workflows/spice-regression.yml runs once a month, alongside the
+# .github/workflows/spice-regression.yml runs on every push, alongside the
 # ring, diff amp, SR latch, OTA follower and current source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from

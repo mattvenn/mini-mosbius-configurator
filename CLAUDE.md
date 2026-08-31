@@ -292,6 +292,29 @@ substituted in -- for a netlist, a missing/unreadable path, JSON with no
 is covered too: a routed design JSON handed to `route`/`watch` now says
 so, instead of "no mosbius_* instances found in this netlist".
 
+**The spice regression runs on every push, and the example bitstreams are
+deliberately not pinned (2026-08-31).** The monthly cron is gone from
+`.github/workflows/spice-regression.yml`; seven parallel docker jobs cost
+about five minutes and are the only thing exercising schematic -> netlist
+-> route -> simulate on a real design, and a month was long enough for a
+break to reach a bench before CI. Two things were considered with it and
+rejected, so don't re-propose either. *Committing golden bitstreams for the
+examples* would put a second copy of a generated file in git -- `build/` is
+gitignored precisely because the bitstream is build output -- which is the
+shape of the stale-netlist bug this project already fixed once. *Asserting
+that the six bench scripts' hard-coded `BITSTREAM` constants equal
+`route(example)`* is worse, and for a subtler reason: those constants are
+provenance for measurements that already happened on silicon, not cached
+build output, so a red job demanding they be re-blessed would push someone
+to edit the record of a past experiment and silently change what the
+published numbers claim to describe. Each is now commented with the date it
+was routed and an instruction to re-route and re-measure rather than edit.
+(`tools/measure_currentsource_ad3.py` reads its routed JSON at runtime
+instead, correctly: its experiment is four bitstreams you generate
+yourself, with no historical measurement to preserve.) The check scripts do
+assert simulated numbers against the READMEs at +-5%, which is what guards
+the examples.
+
 Closed on 2026-08-23, so don't re-report it: the 192 config-bit ties
 `mosbius/spice.py` emits are no longer written as a literal `0` ohms.
 ngspice refuses a zero-ohm resistor, silently substitutes 1e-12 and warns

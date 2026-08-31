@@ -1,11 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/diffamp: netlists it, routes it,
+# Regression check for examples/diffamp: netlists it, routes it,
 # builds the routed subcircuit, runs the real tb_diffamp.sch testbench
 # through ngspice, and checks the gains and the operating point land near
 # the reference measurements in examples/diffamp/README.md via
 # check_diffamp_sim.py. This is what
-# .github/workflows/spice-regression.yml runs once a month, alongside the
+# .github/workflows/spice-regression.yml runs on every push, alongside the
 # inverter, ring, SR latch, OTA follower and current source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from

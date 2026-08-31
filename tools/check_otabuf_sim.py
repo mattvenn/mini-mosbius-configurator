@@ -13,7 +13,7 @@ ibias_amps=100u, tail=4:
         42.9 V/us drawn    15.4 V/us routed
 
 Run by tools/check_otabuf_sim.sh, which
-.github/workflows/spice-regression.yml runs once a month alongside the
+.github/workflows/spice-regression.yml runs on every push alongside the
 inverter, ring, diff amp, SR latch and current source checks.
 
 What this one guards that the others cannot. It is the only example that

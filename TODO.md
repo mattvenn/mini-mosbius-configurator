@@ -66,67 +66,15 @@ measured. The ratio experiment is what tells those two apart.
 4 look at combining the tests with the github tests and the spice regression and the AD3 tests. at
 the moment I think they're all a bit separate. possiblity to reuse
 
-5 the unit tests build their netlists as hand-written strings, and 20 of
-them describe designs `mosbius route` would reject. Investigated
-2026-08-28; the numbers below are measured, not estimated.
-
-57 of 271 tests embed a `mosbius_*` device line, and they split in two.
-37 are error-path tests -- a reversed drain/source, a tail with three
-matching sources, a circuit that doesn't fit -- and those have to stay
-hand-written, because the input is a deliberately broken circuit that no
-committed schematic could reasonably carry. The other 20 are happy-path
-"does this route to the right bits" tests, and those could read a real
-xschem netlist instead.
-
-**The gap worth closing first needs no fixtures at all.** `check_design`'s
-B1 (exactly one bias generator) is an ERROR for any design using
-`mosbius_nsink`/`psource`/`ntail`/`ptail`/`ota` without a `mosbius_bias`
-block, and both `cli.py` and `watch.py` run `check_design` before routing.
-The test strings mostly have no such block -- `test_route.py` has 16
-bias-referenced device lines and no `mosbius_bias`, `test_netlist.py` 12
-and none -- so those tests call `route()` underneath a gate the product
-applies. The bits they assert are right; the composition is one the user
-can never reach. Adding the missing line to the existing strings is a
-ten-minute change and closes it. (Designs without a mirror are unaffected:
-B1 is silent for a plain inverter, so the inverter, SR latch and ring
-strings are already realistic.)
-
-**Real netlists would work as fixtures if we go further.** All six
-examples parse, route clean and reproduce their documented bitstreams
-from `build/*.spice`, and the hand-written and real inverter netlists give
-byte-identical bitstreams despite differing instance names (`nfeta_0`
-against `XM1`) and the `**.subckt` markers. Cost is about 17 KB for all
-six, mostly symbol bodies -- the inverter is 55 lines of which 13 are the
-design block.
-
-The dependency question that comes with it: committed fixtures do *not*
-put xschem in pytest's path, they put staleness there instead. Two things
-make that manageable. The netlists are byte-reproducible (no timestamps,
-no version stamp), so a freshness check is a plain diff; and
-`schematic_for_netlist()` already falls back to a same-named `.sch` under
-`examples/`, so a fixture written with a container path resolves fine on
-a host, which means `check_netlist_fresh()` works on fixtures and pytest
-could assert one is not older than its schematic with no docker at all. A
-CI job that re-netlists the six and diffs is the stronger version, and
-would also be the fast route-only check that the monthly regression is
-too slow to provide.
-
-The argument against is worth keeping in view: a committed fixture is a
-second copy of a generated file, which is the shape of the stale-netlist
-bug this project already fixed once (see CLAUDE.md on netlisting twice).
-The difference is that a fixture is declared to be a snapshot and has a
-job policing it. Related to the question about combining the test suites
-that the item above raises.
-
 ## Tooling and library
 
-6 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
+5 there will be various versions of mini mosbius (multiple pdks and multple chips). this might need tracking / handling in the tool.
 ideally the same bitstreams will produce similiar results, but at least the routed spice will need to take intou account the pdk. and possible future versions of mosbius might have  a new feature that won't be available in older ones. we should be able to get a list of which chips the design is present on with the api
 
 ## Docs and user-facing text
 
-7 check all the schematic texts
+6 check all the schematic texts
 
-8 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+7 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
 
-9 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+8 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library

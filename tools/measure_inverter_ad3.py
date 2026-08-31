@@ -34,7 +34,13 @@ from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import pads_in_use  # noqa: E402
 
-# examples/inverter as the router places it: ua1 in, ua2 out.
+# examples/inverter as the router placed it on 2026-08-28: ua1 in, ua2 out.
+# This is the configuration every silicon number in that example's README
+# was measured with.
+# It is a record of an experiment, not a cached build artifact: if the
+# router's allocation ever changes, re-route and re-measure rather than
+# editing this string, or the published numbers quietly stop describing
+# the configuration that was actually on the chip.
 BITSTREAM = "080000004010000001000000000000000040000400000000"
 PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"

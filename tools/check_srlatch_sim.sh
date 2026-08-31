@@ -1,11 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/srlatch: netlists it, routes it,
+# Regression check for examples/srlatch: netlists it, routes it,
 # builds the routed subcircuit, runs the real tb_srlatch.sch testbench
 # through ngspice, and checks the stored levels and the reset delays land
 # near the reference measurements in examples/srlatch/README.md via
 # check_srlatch_sim.py. This is what
-# .github/workflows/spice-regression.yml runs once a month, alongside the
+# .github/workflows/spice-regression.yml runs on every push, alongside the
 # inverter, ring, differential amplifier, OTA follower and current
 # source checks.
 #

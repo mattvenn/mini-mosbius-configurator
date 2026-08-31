@@ -1,11 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/currentsource: netlists it, routes it,
+# Regression check for examples/currentsource: netlists it, routes it,
 # builds the routed subcircuit, runs the real tb_currentsource.sch testbench
 # through ngspice, and checks the two mirror legs' currents land
 # near the reference measurements in examples/currentsource/README.md via
 # check_currentsource_sim.py. This is what
-# .github/workflows/spice-regression.yml runs once a month, alongside the
+# .github/workflows/spice-regression.yml runs on every push, alongside the
 # inverter, ring, diff amp, SR latch and OTA follower checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from

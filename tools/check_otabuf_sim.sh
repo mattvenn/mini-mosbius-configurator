@@ -1,11 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Monthly regression check for examples/otabuf: netlists it, routes it,
+# Regression check for examples/otabuf: netlists it, routes it,
 # builds the routed subcircuit, runs the real tb_otabuf.sch testbench
 # through ngspice, and checks the follower's offsets and slew rates land
 # near the reference measurements in examples/otabuf/README.md via
 # check_otabuf_sim.py. This is what
-# .github/workflows/spice-regression.yml runs once a month, alongside the
+# .github/workflows/spice-regression.yml runs on every push, alongside the
 # inverter, ring, diff amp, SR latch and current source checks.
 #
 # Needs xschem/ngspice, so run it inside the IIC-OSIC-TOOLS container from

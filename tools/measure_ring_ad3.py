@@ -49,6 +49,12 @@ from mosbius.bitstream import unpack  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import pads_in_use  # noqa: E402
 
+# examples/ringosc as the router placed it on 2026-08-28 -- the exact
+# configuration the 39.528 MHz measurement was taken with.
+# It is a record of an experiment, not a cached build artifact: if the
+# router's allocation ever changes, re-route and re-measure rather than
+# editing this string, or the published numbers quietly stop describing
+# the configuration that was actually on the chip.
 BITSTREAM = "3f008803f004001401000210188406000050040100000019"
 PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"
