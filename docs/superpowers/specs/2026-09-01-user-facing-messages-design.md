@@ -79,6 +79,25 @@ Where a function returns a `list[str]` of report lines (`format_device_roles`,
 each literal line template moves; the loop that builds the list from
 routed-design data stays put.
 
+**Tests assert against `messages.py`, not against a second copy of the
+prose.** Today a test that checks the right error fired does
+`assert "is out of date" in str(e)` -- a hand-typed fragment of the
+message, duplicated from the source. That makes the message text load-bearing
+for the test, so a later rewording in `messages.py` (the very thing this
+project exists to make easy) breaks every test that quoted the old
+wording, for no behavioral reason. Migrating a site therefore includes
+rewriting its test to import the same constant and assert against it,
+e.g. `assert messages.SIMULATE_STALE_ROUTED.format(routed_path=..., what=...) in str(e)`
+or, where the test only needs to confirm which message fired rather than
+recheck every interpolated value, a narrower
+`assert str(e).startswith(messages.SIMULATE_STALE_ROUTED.split("{")[0])`-style
+anchor to the template's fixed lead-in. Either way, the test now re-derives
+current wording from the same source the code uses, so a pure reword in
+`messages.py` never requires a matching test edit -- only a test that
+checks a specific interpolated *fact* (a path, a count, a command) still
+needs updating, and only when that fact's presence, not its phrasing,
+changes.
+
 ## Migration order
 
 Module by module, running the full test suite after each, since 57
@@ -96,24 +115,28 @@ existing tests assert on substrings of these messages:
 6. `cli.py` last -- it calls into every other module's formatters, so
    migrating it last means every helper it prints has already moved.
 
-After each module: run `pytest`, and update any of the 57 substring
-assertions that broke purely because wording now lives in a constant
-(not because the rendered text changed) -- a rendered message should be
-byte-identical before and after moving it, so a test failure here means
-either a transcription slip in the move or an assertion that was already
-coupled to incidental formatting; fix the former, tighten the latter.
+Migrating a module means, for each of its message sites: move the text to
+`messages.py`, change the call site to use it, and rewrite that site's
+test(s) to assert against the `messages.py` constant instead of a
+hand-typed fragment (see "Tests assert against `messages.py`" above).
+Run `pytest` after each module before moving to the next.
 
 ## Testing
 
 - No new test file. The existing test suite (`tests/test_*.py`) already
-  exercises every raise site and formatter by triggering the condition
-  and asserting on the resulting message; moving the string constants
-  does not remove coverage.
+  exercises every raise site and formatter by triggering the condition;
+  what changes is *what* each assertion compares against, not which
+  conditions are tested. Moving the string constants and rewriting the
+  assertions to reference them does not remove coverage.
 - The migration's own correctness check is textual equality: every
   rendered message before the move must equal the same call's rendered
-  message after, for every code path the existing tests already reach.
-  No behavior changes, so no new test scenarios are needed -- this is a
-  refactor of where text lives, not of what the tool does.
+  message after, for every code path the existing tests already reach --
+  a test failure that isn't explained by the assertion now correctly
+  re-deriving current wording means a transcription slip in the move.
+- The payoff is checked by construction, not by a separate test: once a
+  site is migrated, rewording its entry in `messages.py` alone (no test
+  file touched) should leave that site's tests passing, because they no
+  longer hold a second copy of the old wording.
 
 ## Risks / open questions
 
