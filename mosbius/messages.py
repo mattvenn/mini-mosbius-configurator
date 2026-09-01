@@ -991,3 +991,23 @@ PROGRAM_VERIFY_FAILED = (
     "  The chain may have lost sync mid-shift (a bad connection, clock too\n"
     "  fast, or a level issue). Try a slower clock or re-seating the board."
 )
+
+
+# --- decode.py ---------------------------------------------------------
+
+DECODE_SUMMARY_DEVICES_HEADING = "Devices in use"
+
+DECODE_SUMMARY_DEVICES_EMPTY = (
+    "Devices in use\n  (none -- this config wires nothing to a live device)"
+)
+
+DECODE_SUMMARY_DEVICE_LINE = "  {name:<11} {terms}  {settings}"
+
+DECODE_SUMMARY_NETS_HEADING = "Nets"
+
+# Each pin against the segment it is bonded to.
+DECODE_SUMMARY_NET_PIN = "{pin} ({bus_node})"
+
+DECODE_SUMMARY_NET_LINE = "  {net:<8} {pin_desc}{terms}"
+
+DECODE_SUMMARY_IBIAS = "ibias = {amps:.1f} uA"

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from mosbius import messages
 from mosbius.model import (
     DEVICE_TERMINALS,
     EXTERNAL_PINS,
@@ -138,13 +139,17 @@ def decode(config: SwitchConfig) -> DecodedDesign:
 def format_summary(decoded: DecodedDesign) -> str:
     lines = []
     if decoded.devices:
-        lines.append("Devices in use")
+        lines.append(messages.DECODE_SUMMARY_DEVICES_HEADING)
         for dev in decoded.devices:
             terms = "  ".join(f"{t}={net}" for t, net in dev.terminals.items())
             settings = "  ".join(f"{k}={v}" for k, v in dev.settings.items())
-            lines.append(f"  {dev.name:<11} {terms}  {settings}")
+            lines.append(
+                messages.DECODE_SUMMARY_DEVICE_LINE.format(
+                    name=dev.name, terms=terms, settings=settings
+                )
+            )
     else:
-        lines.append("Devices in use\n  (none -- this config wires nothing to a live device)")
+        lines.append(messages.DECODE_SUMMARY_DEVICES_EMPTY)
 
     # Only nets that actually carry a device terminal are worth showing --
     # SPEC.md Sec 3.8 step 6 drops fully-isolated devices for the same
@@ -156,7 +161,7 @@ def format_summary(decoded: DecodedDesign) -> str:
             net_terminals.setdefault(net_name, []).append(f"{dev.name}.{t}")
 
     lines.append("")
-    lines.append("Nets")
+    lines.append(messages.DECODE_SUMMARY_NETS_HEADING)
     for net in decoded.nets:
         if net.name not in net_terminals:
             continue
@@ -170,11 +175,18 @@ def format_summary(decoded: DecodedDesign) -> str:
         pin_desc = ""
         if pins:
             pin_desc = "  ".join(
-                f"{pin} ({bus_node(*EXTERNAL_PINS[pin])})" for pin in pins
+                messages.DECODE_SUMMARY_NET_PIN.format(
+                    pin=pin, bus_node=bus_node(*EXTERNAL_PINS[pin])
+                )
+                for pin in pins
             ) + "  "
         terms = "  ".join(net_terminals[net.name])
-        lines.append(f"  {net.name:<8} {pin_desc}{terms}")
+        lines.append(
+            messages.DECODE_SUMMARY_NET_LINE.format(
+                net=net.name, pin_desc=pin_desc, terms=terms
+            )
+        )
 
     lines.append("")
-    lines.append(f"ibias = {decoded.ibias * 1e6:.1f} uA")
+    lines.append(messages.DECODE_SUMMARY_IBIAS.format(amps=decoded.ibias * 1e6))
     return "\n".join(lines)

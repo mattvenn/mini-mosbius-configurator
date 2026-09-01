@@ -10,8 +10,9 @@ available on the map before real hardware (M4) exists.
 
 from __future__ import annotations
 
+from mosbius import messages
 from mosbius.decode import decode, format_summary
-from mosbius.model import SwitchConfig
+from mosbius.model import DEFAULT_IBIAS, SwitchConfig
 
 from .conftest import bit_for
 
@@ -59,16 +60,18 @@ def test_decode_drops_devices_with_all_terminals_isolated():
 
 def test_format_summary_mentions_devices_and_nets(inverter_config):
     text = format_summary(decode(inverter_config))
+    assert messages.DECODE_SUMMARY_DEVICES_HEADING in text
+    assert messages.DECODE_SUMMARY_NETS_HEADING in text
     assert "nmos_a" in text
     assert "pmos_a" in text
     assert "ua[1]" in text
     assert "ua[2]" in text
-    assert "ibias" in text
+    assert messages.DECODE_SUMMARY_IBIAS.format(amps=DEFAULT_IBIAS * 1e6) in text
 
 
 def test_format_summary_empty_design_says_so():
     text = format_summary(decode(SwitchConfig(bits=frozenset())))
-    assert "none" in text.lower()
+    assert messages.DECODE_SUMMARY_DEVICES_EMPTY in text
 
 
 def test_net_line_names_the_segment_each_pin_is_really_bonded_to():
@@ -82,5 +85,5 @@ def test_net_line_names_the_segment_each_pin_is_really_bonded_to():
 
     config = SwitchConfig.from_bitstream("3f008803f00400140100021018840600005004010000001d")
     text = format_summary(decode(config))
-    assert "ua[4] (bus_B[2])" in text
-    assert "ua[4] (bus_A[2])" not in text
+    assert messages.DECODE_SUMMARY_NET_PIN.format(pin="ua[4]", bus_node="bus_B[2]") in text
+    assert messages.DECODE_SUMMARY_NET_PIN.format(pin="ua[4]", bus_node="bus_A[2]") not in text
