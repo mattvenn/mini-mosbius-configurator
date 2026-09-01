@@ -22,6 +22,8 @@ from pathlib import Path
 import re
 from dataclasses import dataclass
 
+from mosbius import messages
+
 # Pin order for each generic device, exactly as declared in its .sym
 # (xschem/mosbius_lib/mosbius_*.sym B{} box order, then its `extra` order
 # -- confirmed by netlisting each symbol directly, see M2 notes and
@@ -216,15 +218,9 @@ def check_netlist_fresh(netlist_path: Path) -> None:
     if sch.stat().st_mtime <= netlist_path.stat().st_mtime:
         return
     raise StaleNetlistError(
-        f"{netlist_path} is older than the schematic it came from\n\n"
-        f"  {sch}\n  was edited after {netlist_path} was written, so routing this\n"
-        f"  file would route the circuit as it used to be -- and it would\n"
-        f"  most likely succeed, print a bitstream, and tell you nothing was\n"
-        f"  wrong.\n\n"
-        f"  To fix: press Netlist in xschem with {sch.name} open (with xschem\n"
-        f"  launched from the top of the repo, so it writes to build/), then\n"
-        f"  run this command again. Or do the whole chain in one step:\n\n"
-        f"    sh tools/regenerate_routed.sh {sch}\n"
+        messages.NETLIST_STALE.format(
+            netlist_path=netlist_path, sch=sch, sch_name=sch.name,
+        )
     )
 
 
@@ -275,15 +271,7 @@ def parse_netlist(text: str) -> MosbiusDesign:
     # mistake -- and "no mosbius_* instances found" would be a true but
     # unhelpful thing to say about it.
     if text.lstrip().startswith("{") and '"bitstream"' in text:
-        raise NetlistError(
-            "this is a routed design, not an xschem netlist\n"
-            "  A file with a \"bitstream\" entry in it is what\n"
-            "  `mosbius route --out <file>` writes: routing's answer, not the\n"
-            "  question it was asked. `mosbius route` and `mosbius watch` read the\n"
-            "  netlist xschem writes for your schematic, `build/<name>.spice`.\n"
-            "  To simulate the routing this file already holds, the command is\n"
-            "  `python3 -m mosbius.cli simulate <this file>`."
-        )
+        raise NetlistError(messages.NETLIST_ROUTED_JSON_GIVEN)
 
     block = _design_block(text)
     devices: list[DeviceRequest] = []
@@ -298,10 +286,10 @@ def parse_netlist(text: str) -> MosbiusDesign:
         nets = m.group("nets").split()
         if len(nets) != len(pins):
             raise NetlistError(
-                f"{m.group('name')}: mosbius_{kind} takes {len(pins)} connections "
-                f"({', '.join(pins)}) but the netlist gives {len(nets)}\n"
-                f"  This usually means the .sym and this parser's DEVICE_PINS table "
-                f"have drifted apart -- check xschem/mosbius_lib/mosbius_{kind}.sym."
+                messages.NETLIST_PIN_COUNT_MISMATCH.format(
+                    name=m.group("name"), kind=kind, n_pins=len(pins),
+                    pin_names=", ".join(pins), n_nets=len(nets),
+                )
             )
         terminals = dict(zip(pins, nets))
         properties = {k: int(v) for k, v in _PROP_RE.findall(m.group("props"))}
@@ -310,13 +298,7 @@ def parse_netlist(text: str) -> MosbiusDesign:
         ))
 
     if not devices:
-        raise NetlistError(
-            "no mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/mosbius_ota/"
-            "mosbius_ntail/mosbius_ptail instances found in this netlist\n"
-            "  Draw your circuit using the generic devices from xschem/mosbius_lib "
-            "(SPEC.md Sec 3.4), not raw sky130 transistors -- the router only "
-            "understands those seven."
-        )
+        raise NetlistError(messages.NETLIST_NO_DEVICES_FOUND)
     return MosbiusDesign(
         devices=devices, bias_generators=_count_bias_generators(block),
     )

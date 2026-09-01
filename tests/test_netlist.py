@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+from mosbius import messages
 from mosbius.netlist import DeviceRequest, NetlistError, PORT_NAMES, parse_netlist
 
 
@@ -96,8 +97,11 @@ def test_tail_pin_order():
 
 def test_wrong_connection_count_raises():
     # mosbius_nmos takes 4 connections (g,d,s,b); this line only gives 3.
-    with pytest.raises(NetlistError, match="4 connections"):
+    with pytest.raises(NetlistError) as excinfo:
         parse_netlist("M1 a b c mosbius_nmos w=1\n")
+    assert str(excinfo.value) == messages.NETLIST_PIN_COUNT_MISMATCH.format(
+        name="M1", kind="nmos", n_pins=4, pin_names="g, d, s, b", n_nets=3,
+    )
 
 
 def test_routed_design_json_is_named_as_such():
@@ -108,14 +112,13 @@ def test_routed_design_json_is_named_as_such():
     routed_json = '{\n  "bitstream": "00" ,\n  "device_roles": {}\n}\n'
     with pytest.raises(NetlistError) as excinfo:
         parse_netlist(routed_json)
-    message = str(excinfo.value)
-    assert "routed design, not an xschem netlist" in message
-    assert "mosbius.cli simulate" in message
+    assert str(excinfo.value) == messages.NETLIST_ROUTED_JSON_GIVEN
 
 
 def test_no_devices_raises():
-    with pytest.raises(NetlistError, match="no mosbius_"):
+    with pytest.raises(NetlistError) as excinfo:
         parse_netlist("** empty netlist, no mosbius devices\n.end\n")
+    assert str(excinfo.value) == messages.NETLIST_NO_DEVICES_FOUND
 
 
 def test_port_names_match_mini_mosbius_ports():
@@ -163,9 +166,11 @@ def test_netlist_older_than_its_schematic_is_refused(tmp_path):
     netlist = _pair(tmp_path, sch_newer=True)
     with pytest.raises(StaleNetlistError) as e:
         check_netlist_fresh(netlist)
+    sch = tmp_path / "ring.sch"
     # The message has to name the fix, not just the problem (SPEC.md Sec 1.1).
-    assert "regenerate_routed.sh" in str(e.value)
-    assert "Netlist" in str(e.value)
+    assert str(e.value) == messages.NETLIST_STALE.format(
+        netlist_path=netlist, sch=sch, sch_name=sch.name,
+    )
 
 
 def test_netlist_newer_than_its_schematic_passes(tmp_path):

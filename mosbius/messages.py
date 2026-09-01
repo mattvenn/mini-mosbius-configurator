@@ -1011,3 +1011,43 @@ DECODE_SUMMARY_NET_PIN = "{pin} ({bus_node})"
 DECODE_SUMMARY_NET_LINE = "  {net:<8} {pin_desc}{terms}"
 
 DECODE_SUMMARY_IBIAS = "ibias = {amps:.1f} uA"
+
+
+# --- netlist.py --------------------------------------------------------
+
+NETLIST_STALE = (
+    "{netlist_path} is older than the schematic it came from\n\n"
+    "  {sch}\n  was edited after {netlist_path} was written, so routing this\n"
+    "  file would route the circuit as it used to be -- and it would\n"
+    "  most likely succeed, print a bitstream, and tell you nothing was\n"
+    "  wrong.\n\n"
+    "  To fix: press Netlist in xschem with {sch_name} open (with xschem\n"
+    "  launched from the top of the repo, so it writes to build/), then\n"
+    "  run this command again. Or do the whole chain in one step:\n\n"
+    "    sh tools/regenerate_routed.sh {sch}\n"
+)
+
+NETLIST_ROUTED_JSON_GIVEN = (
+    "this is a routed design, not an xschem netlist\n"
+    "  A file with a \"bitstream\" entry in it is what\n"
+    "  `mosbius route --out <file>` writes: routing's answer, not the\n"
+    "  question it was asked. `mosbius route` and `mosbius watch` read the\n"
+    "  netlist xschem writes for your schematic, `build/<name>.spice`.\n"
+    "  To simulate the routing this file already holds, the command is\n"
+    "  `python3 -m mosbius.cli simulate <this file>`."
+)
+
+NETLIST_PIN_COUNT_MISMATCH = (
+    "{name}: mosbius_{kind} takes {n_pins} connections "
+    "({pin_names}) but the netlist gives {n_nets}\n"
+    "  This usually means the .sym and this parser's DEVICE_PINS table "
+    "have drifted apart -- check xschem/mosbius_lib/mosbius_{kind}.sym."
+)
+
+NETLIST_NO_DEVICES_FOUND = (
+    "no mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/mosbius_ota/"
+    "mosbius_ntail/mosbius_ptail instances found in this netlist\n"
+    "  Draw your circuit using the generic devices from xschem/mosbius_lib "
+    "(SPEC.md Sec 3.4), not raw sky130 transistors -- the router only "
+    "understands those seven."
+)
