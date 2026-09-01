@@ -16,6 +16,7 @@ import json
 
 import pytest
 
+from mosbius import messages
 from mosbius.model import SwitchConfig
 from mosbius.simulate import (
     SimulateError,
@@ -170,11 +171,10 @@ def test_netlist_instead_of_routed_json_explains_the_difference(tmp_path):
     with pytest.raises(SimulateError) as excinfo:
         simulate_from_routed_json(netlist)
 
-    message = str(excinfo.value)
-    assert "xschem netlist" in message
-    # The way out, with this user's own filenames already substituted in.
-    assert f"route {netlist} --out {tmp_path / 'inverter.mosbius.json'}" in message
-    assert f"simulate {tmp_path / 'inverter.mosbius.json'}" in message
+    routed = tmp_path / "inverter.mosbius.json"
+    route_hint = messages.SIMULATE_ROUTE_HINT.format(netlist=netlist, routed=routed)
+    expected = messages.SIMULATE_XSCHEM_NETLIST_GIVEN.format(path=netlist, route_hint=route_hint)
+    assert str(excinfo.value) == expected
 
 
 def test_missing_file_says_how_to_produce_it(tmp_path):
@@ -183,19 +183,21 @@ def test_missing_file_says_how_to_produce_it(tmp_path):
     with pytest.raises(SimulateError) as excinfo:
         simulate_from_routed_json(missing)
 
-    message = str(excinfo.value)
-    assert "no file at" in message
-    # Routing a <name>.mosbius.json that doesn't exist yet starts from the
-    # netlist of the same name, not from the missing file itself.
-    assert f"route {tmp_path / 'ring.spice'} --out {missing}" in message
+    netlist = tmp_path / "ring.spice"
+    route_hint = messages.SIMULATE_ROUTE_HINT.format(netlist=netlist, routed=missing)
+    reason = f"there is no file at {missing}"
+    expected = messages.SIMULATE_UNREADABLE.format(reason=reason, route_hint=route_hint)
+    assert str(excinfo.value) == expected
 
 
 def test_json_without_a_bitstream_is_not_a_routed_design(tmp_path):
     path = tmp_path / "notrouted.json"
     path.write_text(json.dumps({"device_roles": {}}))
 
-    with pytest.raises(SimulateError, match="not a routed design"):
+    with pytest.raises(SimulateError) as excinfo:
         simulate_from_routed_json(path)
+
+    assert str(excinfo.value) == messages.SIMULATE_NO_BITSTREAM_KEY.format(path=path)
 
 
 def test_unreadable_bitstream_keeps_the_underlying_explanation(tmp_path):
@@ -207,7 +209,8 @@ def test_unreadable_bitstream_keeps_the_underlying_explanation(tmp_path):
 
     message = str(excinfo.value)
     assert "isn't a usable configuration" in message
-    # bitstream.py's own count-the-characters explanation survives.
+    # bitstream.py's own count-the-characters explanation survives -- not
+    # yet migrated (Task 8), so still checked as a literal fragment here.
     assert "8 hex characters" in message
 
 
@@ -237,19 +240,15 @@ def test_routing_older_than_its_netlist_is_refused(tmp_path):
     routed = _chain(tmp_path, netlist_mtime=2000, sch_mtime=500)
     with pytest.raises(SimulateError) as e:
         check_routed_fresh(routed)
-    assert "netlist" in str(e.value)
+    assert "netlist" in str(e.value)  # unchanged: checks the `what` table's row label, not prose
 
 
 def test_routing_older_than_the_schematic_is_refused_even_if_the_netlist_is_old(tmp_path):
-    """The netlist can be older than the routing while the drawing is
-    newer than both -- someone edited the schematic and never pressed
-    Netlist. That is the case `route` cannot see, because it is never run.
-    """
     routed = _chain(tmp_path, netlist_mtime=500, sch_mtime=2000)
     with pytest.raises(SimulateError) as e:
         check_routed_fresh(routed)
     assert "schematic" in str(e.value)
-    assert "regenerate_routed.sh" in str(e.value)
+    assert "regenerate_routed.sh" in str(e.value)  # unchanged: checks messages.SIMULATE_STALE_FIX_REGENERATE fired, not its wording
 
 
 def test_current_routing_passes(tmp_path):

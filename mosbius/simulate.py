@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from mosbius import messages
 from mosbius.bitstream import BitstreamError
 from mosbius.netlist import schematic_for_netlist
 from mosbius.model import DEFAULT_IBIAS, EXTERNAL_PINS, SwitchConfig, bus_node, connected_components
@@ -201,10 +202,7 @@ def _route_hint(path: Path) -> str:
     name = name_from_routed_path(path)
     netlist = path if path.suffix == ".spice" else path.with_name(f"{name}.spice")
     routed = path.with_name(f"{name}.mosbius.json")
-    return (
-        f"      python3 -m mosbius.cli route {netlist} --out {routed}\n"
-        f"      python3 -m mosbius.cli simulate {routed}"
-    )
+    return messages.SIMULATE_ROUTE_HINT.format(netlist=netlist, routed=routed)
 
 
 def check_routed_fresh(routed_path: Path) -> None:
@@ -240,22 +238,13 @@ def check_routed_fresh(routed_path: Path) -> None:
     what = "\n".join(f"    {kind:<10} {path}" for kind, path in newer)
     sch_for_cmd = next((p for kind, p in newer if kind == "schematic"), None)
     if sch_for_cmd is not None:
-        fix = f"    sh tools/regenerate_routed.sh {sch_for_cmd}\n"
+        fix = messages.SIMULATE_STALE_FIX_REGENERATE.format(sch=sch_for_cmd)
     else:
-        fix = (
-            f"    python3 -m mosbius.cli route {netlist} --out {routed_path}\n"
-            f"    python3 -m mosbius.cli simulate {routed_path}\n"
+        fix = messages.SIMULATE_STALE_FIX_ROUTE_AND_SIMULATE.format(
+            netlist=netlist, routed_path=routed_path,
         )
     raise SimulateError(
-        f"{routed_path} is out of date\n\n"
-        f"  These were changed after it was written:\n\n"
-        f"{what}\n\n"
-        f"  So this file still describes the circuit as it used to be routed.\n"
-        f"  Simulating it would build a routed netlist for that old circuit,\n"
-        f"  and a drawn-vs-routed testbench would then compare two different\n"
-        f"  designs -- which runs, and produces numbers, and means nothing.\n\n"
-        f"  To fix:\n\n"
-        f"{fix}"
+        messages.SIMULATE_STALE_ROUTED.format(routed_path=routed_path, what=what, fix=fix)
     )
 
 
@@ -270,23 +259,13 @@ def simulate_from_routed_json(path: Path) -> tuple[str, str]:
     try:
         text = path.read_text()
     except OSError as e:
-        # Anything the operating system refuses to hand us: usually the
-        # file simply isn't there, occasionally it's a directory or
-        # unreadable. Say which, then say what the file should have been.
         reason = (
             f"there is no file at {path}"
             if isinstance(e, FileNotFoundError)
             else f"{path} can't be read: {e.strerror.lower() if e.strerror else e}"
         )
         raise SimulateError(
-            f"{reason}\n"
-            f"  `mosbius simulate` reads a routed design: the JSON file that\n"
-            f"  `mosbius route --out <file>` writes. That file records which hardware\n"
-            f"  device and which bus row every part of your schematic became, which is\n"
-            f"  what a simulation of the real switch matrix needs to know.\n"
-            f"  If you haven't routed this design yet, route it first and simulate what\n"
-            f"  routing wrote:\n\n"
-            f"{_route_hint(path)}"
+            messages.SIMULATE_UNREADABLE.format(reason=reason, route_hint=_route_hint(path))
         ) from None
 
     try:
@@ -294,48 +273,23 @@ def simulate_from_routed_json(path: Path) -> tuple[str, str]:
     except json.JSONDecodeError:
         if _looks_like_xschem_netlist(text):
             raise SimulateError(
-                f"{path} is an xschem netlist, not a routed design\n"
-                f"  `mosbius simulate` starts from the JSON file that\n"
-                f"  `mosbius route --out <file>` writes, not from the netlist itself.\n"
-                f"  The netlist says what you drew; routing is the step that decides\n"
-                f"  which of the chip's hardware devices each drawn device becomes and\n"
-                f"  which bus row each net becomes, and the simulation is built out of\n"
-                f"  exactly those decisions -- it can't make them for you.\n"
-                f"  Route this netlist first, then simulate what routing wrote:\n\n"
-                f"{_route_hint(path)}"
+                messages.SIMULATE_XSCHEM_NETLIST_GIVEN.format(
+                    path=path, route_hint=_route_hint(path),
+                )
             ) from None
-        raise SimulateError(
-            f"{path} is not a routed design: it isn't JSON at all\n"
-            f"  `mosbius simulate` reads the JSON file that\n"
-            f"  `mosbius route --out <file>` writes. Check you passed the path you\n"
-            f"  meant to -- a routed design is named <name>.mosbius.json and starts\n"
-            f"  with a '{{' character."
-        ) from None
+        raise SimulateError(messages.SIMULATE_NOT_JSON.format(path=path)) from None
 
     if not isinstance(data, dict) or "bitstream" not in data:
-        raise SimulateError(
-            f"{path} is JSON, but not a routed design\n"
-            f"  A routed design is what `mosbius route --out <file>` writes, and it\n"
-            f"  always carries a \"bitstream\" entry (the 48 hex characters that\n"
-            f"  configure the chip) -- this file has no such entry, so there is no\n"
-            f"  configuration here to build a simulation from. Re-run `mosbius route`\n"
-            f"  with --out pointing at this path to write a real one."
-        )
+        raise SimulateError(messages.SIMULATE_NO_BITSTREAM_KEY.format(path=path))
 
     try:
         config = SwitchConfig.from_bitstream(data["bitstream"], ibias=data.get("ibias", DEFAULT_IBIAS))
     except (BitstreamError, TypeError) as e:
-        # The underlying message is itself a multi-line explanation, so
-        # indent every line of it to sit under this one.
         detail = "\n".join(
             line if line.startswith("  ") else f"  {line}" for line in str(e).splitlines()
         )
         raise SimulateError(
-            f"{path} has a \"bitstream\" entry that isn't a usable configuration\n"
-            f"{detail}\n"
-            f"  A routed design's bitstream is written by `mosbius route --out`, so a\n"
-            f"  broken one usually means the file was hand-edited. Re-run `mosbius\n"
-            f"  route` with --out pointing at this path to rewrite it."
+            messages.SIMULATE_BAD_BITSTREAM.format(path=path, detail=detail)
         ) from None
 
     name = name_from_routed_path(path)
