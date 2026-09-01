@@ -14,7 +14,7 @@ import urllib.error
 
 import pytest
 
-from mosbius import pads
+from mosbius import messages, pads
 from mosbius.bitstream import unpack
 from mosbius.model import SwitchConfig
 
@@ -145,8 +145,11 @@ def test_a_project_with_no_analog_pins_is_explained(cached_entry):
     printing an empty table.
     """
     cached_entry({"macro": "tt_um_digital", "analog_pins": []}, macro="tt_um_digital")
-    with pytest.raises(pads.PadLookupError, match="has no analog pins"):
+    with pytest.raises(pads.PadLookupError) as excinfo:
         pads.pad_map("ttsky25a", "tt_um_digital")
+    url = pads.PROJECT_INDEX_URL.format(shuttle="ttsky25a", macro="tt_um_digital")
+    expected = messages.PADS_NO_ANALOG_PINS.format(macro="tt_um_digital", shuttle="ttsky25a", url=url)
+    assert str(excinfo.value) == expected
 
 
 def test_the_wrong_json_saved_by_hand_says_which_file_was_wanted(cached_entry):
@@ -167,8 +170,15 @@ def test_an_analog_pin_the_carrier_cannot_reach_refuses_to_guess(cached_entry):
     to clip a probe somewhere, so this stops rather than inventing one.
     """
     cached_entry({"analog_pins": [0, 12]})
-    with pytest.raises(pads.PadLookupError, match="only brings out"):
+    with pytest.raises(pads.PadLookupError) as excinfo:
         pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
+    # ua0 -> internal 0 is fine; ua1 -> internal 12 is off the end of the
+    # carrier's 12-entry table, which is the one that raises.
+    expected = messages.PADS_INTERNAL_PIN_NOT_ON_CARRIER.format(
+        macro="tt_um_tnt_mosbius", shuttle="ttsky25a", ua=1, internal=12,
+        n_pads=len(pads.ETR_CARRIER_PADS), pads=", ".join(pads.ETR_CARRIER_PADS),
+    )
+    assert str(excinfo.value) == expected
 
 
 def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_entry):
@@ -181,7 +191,7 @@ def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_entry):
     assert "nmos_a gate" in table and "pmos_a drain" in table
     # the pads this configuration does not use are worth saying too, so
     # nobody probes a pin that is connected to nothing
-    assert "Nothing is on the other analog pads" in table
+    assert messages.PADS_TABLE_IDLE.split("{which}")[0] in table
     assert "G (ua4)" in table
 
 
@@ -200,7 +210,7 @@ def test_pad_table_shows_the_bias_pad_only_when_something_draws_on_it(cached_ent
         "ttsky25a", "tt_um_tnt_mosbius",
     )
     assert "K         ibias" in biased
-    assert "bias current in, 100.0 uA -- drawn by ndiffpair" in biased
+    assert messages.PADS_TABLE_IBIAS_ROW.format(amps=100.0, drawn_by="ndiffpair") in biased
     # one pair, named once -- not both halves of it
     assert "ndiffpair+, ndiffpair-" not in biased
 
@@ -266,9 +276,9 @@ def test_pad_table_draws_the_header(cached_entry):
     cached_entry()
     config = SwitchConfig(bits=unpack(INVERTER))
     out = pads.format_pad_table(config, "ttsky25a", "tt_um_tnt_mosbius")
-    assert "ANALOG header" in out
+    assert messages.PADS_HEADER_TITLE in out
     assert "[C]" in out and "[J]" in out
-    assert "ground to any square marked gnd" in out
+    assert messages.PADS_HEADER_CAPTION.splitlines()[-1] in out
 
 
 def test_an_unreachable_index_says_how_to_work_offline(cached_entry):
@@ -297,8 +307,13 @@ def test_a_missing_index_entry_names_the_project_and_shuttle(cached_entry, monke
         raise urllib.error.HTTPError("u", 404, "Not Found", {}, None)
     monkeypatch.setattr(pads.urllib.request, "urlopen", not_found)
 
-    with pytest.raises(pads.PadLookupError, match="no project tt_um_tnt_mosbius"):
+    with pytest.raises(pads.PadLookupError) as excinfo:
         pads.pad_map("ttsky25a", "tt_um_tnt_mosbius")
+    url = pads.PROJECT_INDEX_URL.format(shuttle="ttsky25a", macro="tt_um_tnt_mosbius")
+    expected = messages.PADS_PROJECT_NOT_ON_SHUTTLE.format(
+        macro="tt_um_tnt_mosbius", shuttle="ttsky25a", url=url,
+    )
+    assert str(excinfo.value) == expected
 
 
 def test_a_fetched_entry_is_cached_for_next_time(cached_entry, monkeypatch, tmp_path):

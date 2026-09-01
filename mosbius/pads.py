@@ -61,6 +61,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from mosbius import messages
 from mosbius.decode import decode
 from mosbius.model import SwitchConfig
 from mosbius.route import TERMINAL_WORD
@@ -171,33 +172,21 @@ def _analog_pins(shuttle: str, macro: str) -> list[int]:
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 raise PadLookupError(
-                    f"the shuttle index has no project {macro} on shuttle {shuttle}.\n\n"
-                    f"  That usually means the chip in the socket is not the one this\n"
-                    f"  design was taped out on, or --project names a macro that is not\n"
-                    f"  on this shuttle. The demoboard reports its shuttle from the\n"
-                    f"  chip's own ROM, so check --project first. The index is public,\n"
-                    f"  so you can look for yourself:\n"
-                    f"      {url}"
+                    messages.PADS_PROJECT_NOT_ON_SHUTTLE.format(
+                        macro=macro, shuttle=shuttle, url=url,
+                    )
                 ) from exc
             raise PadLookupError(
-                f"can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
-                f"  It is where the ua -> analog pin numbering comes from, and which\n"
-                f"  PCB pad to probe is built from that.\n"
-                f"  Save {url}\n"
-                f"  as {cache} and re-run to work offline."
+                messages.PADS_CANT_FETCH_ENTRY_ANALOG.format(
+                    macro=macro, shuttle=shuttle, exc=exc, url=url, cache=cache,
+                )
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise PadLookupError(
-                f"can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
-                f"  Which PCB pad a design's ua[k] comes out on depends on where the\n"
-                f"  project sits on that shuttle, so it cannot be assumed -- the same\n"
-                f"  design on the next shuttle can come out on different pads. Two\n"
-                f"  ways forward:\n"
-                f"    - save {url}\n"
-                f"      as {cache} and re-run, or\n"
-                f"    - read the Analog pins table off the project's own page, which\n"
-                f"      has the same answer already composed:\n"
-                f"      {PROJECT_PAGE_URL.format(shuttle=shuttle, macro=macro)}"
+                messages.PADS_CANT_FETCH_ENTRY_PCB.format(
+                    macro=macro, shuttle=shuttle, exc=exc, url=url, cache=cache,
+                    page_url=PROJECT_PAGE_URL.format(shuttle=shuttle, macro=macro),
+                )
             ) from exc
         CACHE_DIR.mkdir(exist_ok=True)
         cache.write_text(body)
@@ -208,21 +197,14 @@ def _analog_pins(shuttle: str, macro: str) -> list[int]:
         pins = [int(index) for index in analog_pins]
     except (ValueError, TypeError, KeyError) as exc:
         raise PadLookupError(
-            f"{cache if cache.exists() else url} is not a project entry this can\n"
-            f"  read ({exc}). It should be one project's JSON from the shuttle\n"
-            f"  index, with an `analog_pins` list in it -- ua -> internal analog\n"
-            f"  pin number. If you saved it by hand, check you saved\n"
-            f"      {url}\n"
-            f"  and not the whole-shuttle index or the project's web page."
+            messages.PADS_UNREADABLE_ENTRY.format(
+                source=cache if cache.exists() else url, exc=exc, url=url,
+            )
         ) from exc
 
     if not pins:
         raise PadLookupError(
-            f"{macro} on {shuttle} has no analog pins, so there is nothing to\n"
-            f"  probe. A purely digital project has none; if you expected this one\n"
-            f"  to have some, check --project names the macro you meant. The index\n"
-            f"  entry this read is public:\n"
-            f"      {url}"
+            messages.PADS_NO_ANALOG_PINS.format(macro=macro, shuttle=shuttle, url=url)
         )
     return pins
 
@@ -245,15 +227,10 @@ def pad_map(shuttle: str, macro: str) -> dict[str, str]:
     for ua, internal in enumerate(pins):
         if not 0 <= internal < len(pads):
             raise PadLookupError(
-                f"{macro} on {shuttle} says its ua{ua} is analog pin {internal},\n"
-                f"  and the chip carrier this shuttle ships with only brings out\n"
-                f"  {len(pads)} of them ({', '.join(pads)}). Either the carrier is a\n"
-                f"  newer one than mosbius/pads.py knows about -- in which case its\n"
-                f"  wiring needs adding to mosbius/pads.py's carrier_pads(), from\n"
-                f"  that carrier's own KiCad layout -- or the index entry is not\n"
-                f"  the project you meant.\n"
-                f"  Nothing here will guess a pad letter, because a wrong one reads\n"
-                f"  exactly like a right one at the bench."
+                messages.PADS_INTERNAL_PIN_NOT_ON_CARRIER.format(
+                    macro=macro, shuttle=shuttle, ua=ua, internal=internal,
+                    n_pads=len(pads), pads=", ".join(pads),
+                )
             )
         mapping["ibias" if ua == 0 else f"ua{ua}"] = pads[internal]
     return mapping
@@ -335,16 +312,17 @@ def format_analog_header(in_use: dict[str, str]) -> str:
             cells.append(label.center(width))
         rows.append("".join(cells).rstrip())
     marked = sorted(in_use.values())
+    label = messages.PADS_HEADER_LABEL_ONE if len(marked) == 1 else messages.PADS_HEADER_LABEL_MANY
+    plural = "" if len(marked) == 1 else "s"
     return "\n".join([
-        "  The ANALOG header, along the top edge of the board:",
+        messages.PADS_HEADER_TITLE,
         "",
         "   " + rows[0],
         "   " + rows[1],
         "",
-        f"  {'The pad in brackets is' if len(marked) == 1 else 'The pads in brackets are'}"
-        f" the one{'' if len(marked) == 1 else 's'} above"
-        f" -- {', '.join(marked)}. Clip the instrument's",
-        "  ground to any square marked gnd; they are all the same net.",
+        messages.PADS_HEADER_CAPTION.format(
+            label=label, plural=plural, pad_list=", ".join(marked),
+        ),
     ])
 
 
@@ -372,9 +350,9 @@ def format_pad_table(config: SwitchConfig, shuttle: str, macro: str) -> str:
         # Both halves of one differential pair draw through the same tail,
         # so naming the pair once reads as what it is.
         users = list(dict.fromkeys(d.rstrip("+-") for d in _bias_users(decoded)))
-        drawn_by = ", ".join(users) if users else "the bias reference"
+        drawn_by = ", ".join(users) if users else messages.PADS_TABLE_IBIAS_FALLBACK
         on_pin["ibias"] = [
-            f"bias current in, {decoded.ibias * 1e6:.1f} uA -- drawn by {drawn_by}"
+            messages.PADS_TABLE_IBIAS_ROW.format(amps=decoded.ibias * 1e6, drawn_by=drawn_by)
         ]
 
     def order(name: str) -> tuple[int, str]:
@@ -382,14 +360,14 @@ def format_pad_table(config: SwitchConfig, shuttle: str, macro: str) -> str:
         # is bench setup rather than a signal to look at.
         return (1, "") if name == "ibias" else (0, name)
 
-    lines = [f"Pads in use -- {macro} on {shuttle}", ""]
-    lines.append("  PCB pad   design pin   what this configuration puts on it")
+    lines = [messages.PADS_TABLE_TITLE.format(macro=macro, shuttle=shuttle), ""]
+    lines.append(messages.PADS_TABLE_HEADER)
     lines.append("  -------   ----------   ----------------------------------")
     for pin in sorted(in_use, key=order):
-        what = ", ".join(on_pin.get(pin, [])) or "connected, but no device terminal on it"
-        lines.append(f"  {in_use[pin]:<9s} {pin:<12s} {what}")
+        what = ", ".join(on_pin.get(pin, [])) or messages.PADS_TABLE_NO_TERMINAL
+        lines.append(messages.PADS_TABLE_ROW.format(pad=in_use[pin], pin=pin, what=what))
     if not in_use:
-        lines.append("  (none -- this configuration connects nothing to a package pin)")
+        lines.append(messages.PADS_TABLE_EMPTY)
 
     idle = sorted(
         (pad, pin) for pin, pad in everything.items() if pin not in in_use
@@ -402,13 +380,7 @@ def format_pad_table(config: SwitchConfig, shuttle: str, macro: str) -> str:
         lines.append("")
     if idle:
         which = ", ".join(f"{pad} ({pin})" for pad, pin in idle)
-        lines.append(f"  Nothing is on the other analog pads: {which}.")
+        lines.append(messages.PADS_TABLE_IDLE.format(which=which))
         lines.append("")
-    lines += [
-        f"  These letters are for {macro} as placed on {shuttle}. Its ua ->",
-        "  analog pin numbering is looked up in the Tiny Tapeout shuttle index",
-        "  rather than remembered, and the analog pin -> pad letters are that",
-        "  chip carrier's own wiring. The same design on another shuttle can",
-        "  come out on entirely different pads: both halves are free to change.",
-    ]
+    lines.append(messages.PADS_TABLE_FOOTER.format(macro=macro, shuttle=shuttle))
     return "\n".join(lines)

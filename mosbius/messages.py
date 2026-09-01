@@ -794,3 +794,105 @@ CHECK_B1_TOO_MANY_FIX = (
     "reference diode -- the NMOS with its gate and drain both on "
     "ibias)."
 )
+
+
+# --- pads.py ---------------------------------------------------------------
+
+PADS_PROJECT_NOT_ON_SHUTTLE = (
+    "the shuttle index has no project {macro} on shuttle {shuttle}.\n\n"
+    "  That usually means the chip in the socket is not the one this\n"
+    "  design was taped out on, or --project names a macro that is not\n"
+    "  on this shuttle. The demoboard reports its shuttle from the\n"
+    "  chip's own ROM, so check --project first. The index is public,\n"
+    "  so you can look for yourself:\n"
+    "      {url}"
+)
+
+PADS_CANT_FETCH_ENTRY_ANALOG = (
+    "can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
+    "  It is where the ua -> analog pin numbering comes from, and which\n"
+    "  PCB pad to probe is built from that.\n"
+    "  Save {url}\n"
+    "  as {cache} and re-run to work offline."
+)
+
+PADS_CANT_FETCH_ENTRY_PCB = (
+    "can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
+    "  Which PCB pad a design's ua[k] comes out on depends on where the\n"
+    "  project sits on that shuttle, so it cannot be assumed -- the same\n"
+    "  design on the next shuttle can come out on different pads. Two\n"
+    "  ways forward:\n"
+    "    - save {url}\n"
+    "      as {cache} and re-run, or\n"
+    "    - read the Analog pins table off the project's own page, which\n"
+    "      has the same answer already composed:\n"
+    "      {page_url}"
+)
+
+PADS_UNREADABLE_ENTRY = (
+    "{source} is not a project entry this can\n"
+    "  read ({exc}). It should be one project's JSON from the shuttle\n"
+    "  index, with an `analog_pins` list in it -- ua -> internal analog\n"
+    "  pin number. If you saved it by hand, check you saved\n"
+    "      {url}\n"
+    "  and not the whole-shuttle index or the project's web page."
+)
+
+PADS_NO_ANALOG_PINS = (
+    "{macro} on {shuttle} has no analog pins, so there is nothing to\n"
+    "  probe. A purely digital project has none; if you expected this one\n"
+    "  to have some, check --project names the macro you meant. The index\n"
+    "  entry this read is public:\n"
+    "      {url}"
+)
+
+PADS_INTERNAL_PIN_NOT_ON_CARRIER = (
+    "{macro} on {shuttle} says its ua{ua} is analog pin {internal},\n"
+    "  and the chip carrier this shuttle ships with only brings out\n"
+    "  {n_pads} of them ({pads}). Either the carrier is a\n"
+    "  newer one than mosbius/pads.py knows about -- in which case its\n"
+    "  wiring needs adding to mosbius/pads.py's carrier_pads(), from\n"
+    "  that carrier's own KiCad layout -- or the index entry is not\n"
+    "  the project you meant.\n"
+    "  Nothing here will guess a pad letter, because a wrong one reads\n"
+    "  exactly like a right one at the bench."
+)
+
+# format_analog_header's English labels around the ASCII-art picture itself
+# (the dashes/pipes/brackets of the header drawing are layout, not prose).
+PADS_HEADER_TITLE = "  The ANALOG header, along the top edge of the board:"
+
+PADS_HEADER_LABEL_ONE = "The pad in brackets is"
+PADS_HEADER_LABEL_MANY = "The pads in brackets are"
+
+PADS_HEADER_CAPTION = (
+    "  {label} the one{plural} above"
+    " -- {pad_list}. Clip the instrument's\n"
+    "  ground to any square marked gnd; they are all the same net."
+)
+
+# format_pad_table's prose; its aligned column rule ("  -------   ...") is
+# layout, not a message, and stays in pads.py.
+PADS_TABLE_TITLE = "Pads in use -- {macro} on {shuttle}"
+
+PADS_TABLE_HEADER = "  PCB pad   design pin   what this configuration puts on it"
+
+PADS_TABLE_ROW = "  {pad:<9s} {pin:<12s} {what}"
+
+PADS_TABLE_NO_TERMINAL = "connected, but no device terminal on it"
+
+PADS_TABLE_IBIAS_ROW = "bias current in, {amps:.1f} uA -- drawn by {drawn_by}"
+
+PADS_TABLE_IBIAS_FALLBACK = "the bias reference"
+
+PADS_TABLE_EMPTY = "  (none -- this configuration connects nothing to a package pin)"
+
+PADS_TABLE_IDLE = "  Nothing is on the other analog pads: {which}."
+
+PADS_TABLE_FOOTER = (
+    "  These letters are for {macro} as placed on {shuttle}. Its ua ->\n"
+    "  analog pin numbering is looked up in the Tiny Tapeout shuttle index\n"
+    "  rather than remembered, and the analog pin -> pad letters are that\n"
+    "  chip carrier's own wiring. The same design on another shuttle can\n"
+    "  come out on entirely different pads: both halves are free to change."
+)
