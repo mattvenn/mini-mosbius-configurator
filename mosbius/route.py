@@ -31,7 +31,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mosbius import bitstream
+from mosbius import bitstream, messages
 from mosbius.bitmap import MATRIX_BITS
 from mosbius.model import (
     DEFAULT_IBIAS,
@@ -304,17 +304,9 @@ def _encode_setting(value: int, step: int, *, device: str, prop: str) -> tuple[i
         valid = list(range(1, 5)) if step == 1 else list(range(2, 9, 2))
         options = ", ".join(str(v) for v in valid[:-1]) + f" or {valid[-1]}"
         raise RouteError(
-            f"DOESN'T FIT -- {device}'s {prop}={value} is not a setting this "
-            f"chip has\n\n"
-            f"  {prop}= is stored as a 2-bit cycler: n = {step} * (1 + b_lsb + "
-            f"2*b_msb)\n  (SPEC.md Sec 2.11). That gives exactly four settings, "
-            f"{options},\n  and nothing in between.\n\n"
-            f"  Nothing is rounded to the nearest one on your behalf: the chip "
-            f"would\n  then be built to a different {prop} than your schematic "
-            f"shows, which is\n  the kind of silent difference this tool exists "
-            f"to prevent.\n\n"
-            f"  To fix: set {prop}= to one of {options} on {device} in the "
-            f"schematic,\n  and press Netlist again."
+            messages.ROUTE_SETTING_NOT_VALID.format(
+                device=device, prop=prop, value=value, step=step, options=options,
+            )
         ) from None
 
 
@@ -429,12 +421,7 @@ def _reach_lines(touches: list["_Touch"]) -> str:
 # Why a terminal might reach fewer than six rows. Repeated in every
 # reach-related message, because it is the fact that makes the failure
 # make sense and the reader may be meeting it for the first time.
-_WHY_LIMITED_REACH = (
-    "  Why some terminals reach fewer rows than others: the differential\n"
-    "  pair's and the OTA's *input* crosspoints have a switch to three bus\n"
-    "  rows only, not to all six (SPEC.md Sec 2.12). Every other terminal on\n"
-    "  the chip reaches all six.\n"
-)
+_WHY_LIMITED_REACH = messages.ROUTE_WHY_LIMITED_REACH
 
 
 def _shared_reach(touches: list["_Touch"]) -> frozenset[int]:
@@ -481,7 +468,7 @@ def format_device_roles(routed) -> list[str]:
         tail = routed.device_tails.get(name)
         if tail is not None and tail.programmable and tail.effective is not None:
             note += f"  tail={tail.effective}"
-        lines.append(f"  {name:<12} -> {role:<12}{note}")
+        lines.append(messages.ROUTE_DEVICE_ROLE_LINE.format(name=name, role=role, note=note))
     return lines
 
 
@@ -509,8 +496,8 @@ def format_net_rows(routed) -> list[str]:
         sides = routed.net_rows[net]
         where = " + ".join(bus_node(side, sides[side]) for side in sorted(sides))
         seg = PIN_BOND_SEGMENT.get(net)
-        note = f"   package pin {net} -- bond pad + analog mux" if seg else ""
-        lines.append(f"  {net:<8} {where}{note}")
+        note = messages.ROUTE_NET_ROW_PAD_NOTE.format(net=net) if seg else ""
+        lines.append(messages.ROUTE_NET_ROW_LINE.format(net=net, where=where, note=note))
     return lines
 
 
@@ -529,7 +516,7 @@ def format_pad_note(routed) -> list[str]:
     add = "add" if len(pinned) > 1 else "adds"
     return [
         "",
-        f"  {which} {are} connected to the chip's pads, so {they} {add} extra capacitance.",
+        messages.ROUTE_PAD_NOTE.format(which=which, are=are, they=they, add=add),
     ]
 
 
@@ -785,23 +772,13 @@ def _allocate_fets(
         placed = ", ".join(f"{n} -> {r}" for n, r in roles.items())
         names = ", ".join(d.name for d in requests)
         raise RouteError(
-            f"DOESN'T FIT -- not enough {label} with independent sources\n\n"
-            f"  Your circuit needs {len(requests)} {label} transistors:\n"
-            f"    {names}\n\n"
-            f"  The chip has only {len(independent_roles)} of those whose source you can\n"
-            f"  route wherever you like:\n"
-            f"    {', '.join(independent_roles)}\n\n"
-            f"  There are {len(pair_roles)} more, but they are the two halves of a\n"
-            f"  differential pair and share one source between them:\n"
-            f"    {', '.join(pair_roles)}\n"
-            f"  So they suit two transistors that want a common source, or a\n"
-            f"  single transistor if that shared source is tied to {pair_rail}.\n\n"
-            f"  Currently placed: {placed if placed else '(none)'}.\n"
-            f"  Couldn't place: {', '.join(d.name for d in final_unassigned)}.\n\n"
-            f"  Ideas:\n"
-            f"    - If two of these could share a source, they'd fit the pair.\n"
-            f"    - A programmable current sink/source (mosbius_nsink/psource) can\n"
-            f"      often replace a source-degenerated transistor."
+            messages.ROUTE_NOT_ENOUGH_FETS.format(
+                label=label, count=len(requests), names=names,
+                indep_count=len(independent_roles), indep_list=", ".join(independent_roles),
+                pair_count=len(pair_roles), pair_list=", ".join(pair_roles),
+                pair_rail=pair_rail, placed=placed if placed else "(none)",
+                couldnt_place=", ".join(d.name for d in final_unassigned),
+            )
         )
 
     return roles
@@ -820,17 +797,9 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
     ptail = [d for d in design.devices if d.kind == "ptail"]
 
     if len(ntail) > 1:
-        raise RouteError(
-            f"DOESN'T FIT -- only one NMOS differential-pair tail on this chip\n\n"
-            f"  {len(ntail)} mosbius_ntail devices requested, but there's exactly "
-            f"one NMOS\n  tail bank (role ntail, ctrl_dpn_tail)."
-        )
+        raise RouteError(messages.ROUTE_TOO_MANY_NTAIL.format(count=len(ntail)))
     if len(ptail) > 1:
-        raise RouteError(
-            f"DOESN'T FIT -- only one PMOS differential-pair tail on this chip\n\n"
-            f"  {len(ptail)} mosbius_ptail devices requested, but there's exactly "
-            f"one PMOS\n  tail bank (role ptail, ctrl_dpp_tail)."
-        )
+        raise RouteError(messages.ROUTE_TOO_MANY_PTAIL.format(count=len(ptail)))
 
     # Mirrors/OTA/tails have no allocation freedom -- each request maps
     # 1:1 onto its role, in netlist order -- so decide them first. They
@@ -838,28 +807,20 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
     # gate can share a net with any of these too.
     if len(nsink) > len(NSINK_ROLES):
         raise RouteError(
-            f"DOESN'T FIT -- too many current sinks\n\n"
-            f"  {len(nsink)} mosbius_nsink devices requested, but the chip has only "
-            f"{len(NSINK_ROLES)}\n  (nsink_a, nsink_b)."
+            messages.ROUTE_TOO_MANY_NSINK.format(count=len(nsink), max=len(NSINK_ROLES))
         )
     for d, role in zip(nsink, NSINK_ROLES):
         roles[d.name] = role
 
     if len(psource) > len(PSOURCE_ROLES):
         raise RouteError(
-            f"DOESN'T FIT -- too many current sources\n\n"
-            f"  {len(psource)} mosbius_psource devices requested, but the chip has "
-            f"only {len(PSOURCE_ROLES)}\n  (psource_a, psource_b)."
+            messages.ROUTE_TOO_MANY_PSOURCE.format(count=len(psource), max=len(PSOURCE_ROLES))
         )
     for d, role in zip(psource, PSOURCE_ROLES):
         roles[d.name] = role
 
     if len(ota) > 1:
-        raise RouteError(
-            f"DOESN'T FIT -- only one OTA on this chip\n\n"
-            f"  {len(ota)} mosbius_ota devices requested, but there's exactly one "
-            f"(ota)."
-        )
+        raise RouteError(messages.ROUTE_TOO_MANY_OTA.format(count=len(ota)))
     for d in ota:
         roles[d.name] = "ota"
     for d in ntail:
@@ -931,26 +892,20 @@ def _matrix_bit(touch: _Touch, row: int, net: str) -> int:
                 options = usable[0]
             else:
                 options = "no package pin at all, on this chip"  # unreachable today
-            why = (
-                f"  '{net}' is a package pin, and its bus row is a permanent bond "
-                f"wire\n  rather than something the router picks: {net} is always "
-                f"bus_{PORT_ROW[net][0]}[{row}]\n  (SPEC.md Sec 2.10).\n\n"
-                f"{_WHY_LIMITED_REACH}\n"
-                f"  To fix: move this signal to a pin bonded to a row this "
-                f"terminal can\n  reach ({options}), or arrange for the restricted "
-                f"device not to be the\n  one sitting on this net."
+            why = messages.ROUTE_PORT_NET_UNREACHABLE_ROW.format(
+                net=net, side=PORT_ROW[net][0], row=row,
+                why_limited_reach=_WHY_LIMITED_REACH, options=options,
             )
         else:
-            why = (
-                f"  '{net}' was placed on bus row {row}, which this terminal has no "
-                f"switch\n  to.\n\n{_WHY_LIMITED_REACH}"
+            why = messages.ROUTE_INTERNAL_NET_UNREACHABLE_ROW.format(
+                net=net, row=row, why_limited_reach=_WHY_LIMITED_REACH,
             )
         error = RouteError(
-            f"DOESN'T FIT -- {_describe_touch(touch)} cannot reach "
-            f"bus_{touch.side}[{row}]\n\n"
-            f"  {touch.role}.{touch.terminal} reaches {_fmt_rows(reachable)}, "
-            f"and nothing else.\n\n"
-            f"{why}"
+            messages.ROUTE_CANNOT_REACH_ROW.format(
+                touch_desc=_describe_touch(touch), side=touch.side, row=row,
+                role=touch.role, terminal=touch.terminal,
+                rows_reach=_fmt_rows(reachable), why=why,
+            )
         )
         raise error from None
 
@@ -1059,32 +1014,28 @@ def _check_shared_source_is_reachable(
             continue
 
         if is_pin:
-            problem = f"'{net}' is a package pin, and this node cannot reach one."
+            problem = messages.ROUTE_SHARED_SOURCE_PROBLEM_PIN.format(net=net)
             if others:
-                problem += f" It also carries {_join_and(others)}."
+                problem += messages.ROUTE_SHARED_SOURCE_ALSO_CARRIES.format(
+                    others=_join_and(others)
+                )
         else:
-            problem = f"'{net}' also carries {_join_and(others)}."
+            problem = messages.ROUTE_SHARED_SOURCE_PROBLEM_OTHER.format(
+                net=net, others=_join_and(others)
+            )
 
         raise RouteError(_wrap(
             "DOESN'T FIT -- ",
-            f"nothing else can connect to '{net}'",
-            f"{_join_and(halves)} share a source on '{net}', which is what made "
-            f"them the two halves of a differential pair "
-            f"({_join_and([roles[h] for h in halves])}): the chip wires those "
-            f"two sources together in silicon. That shared node has no switch "
-            f"of its own onto the bus (SPEC.md Sec 2.12), so nothing outside "
-            f"the pair can be joined to it -- not another device, and not a "
-            f"package pin.",
+            messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net=net),
+            messages.ROUTE_SHARED_SOURCE_EXPLAIN.format(
+                halves=_join_and(halves), net=net,
+                pair_roles=_join_and([roles[h] for h in halves]),
+            ),
             problem,
-            f"What can go on that node: nothing at all, with the source named "
-            f"{rail} -- the pair then uses its free tie to that rail, which is "
-            f"what a pair of ordinary common-source FETs wants. Or a "
-            f"{tail_symbol}, whose one drawn pin declares the pair's tail "
-            f"current (tail=2, 4, 6 or 8 multiples of ibias); "
-            f"examples/diffamp/ has that end to end.",
-            f"To measure the tail current, measure it where it comes from: "
-            f"ibias feeds every tail bank on the chip, and the demoboard "
-            f"drives that pin.",
+            messages.ROUTE_SHARED_SOURCE_WHAT_CAN_GO_THERE.format(
+                rail=rail, tail_symbol=tail_symbol,
+            ),
+            messages.ROUTE_SHARED_SOURCE_HOW_TO_MEASURE,
         ))
 
 
@@ -1155,11 +1106,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         owner = row_owner.get(key)
         if owner is not None and owner != net:
             raise RouteError(
-                f"DOESN'T FIT -- bus_{side}[{row}] is needed by both "
-                f"'{net}' and '{owner}'\n\n"
-                f"  Only one net can occupy a bus row at a time. Try moving one "
-                f"of these\n  nets' devices to the other side of the chip, if the "
-                f"device allocation allows it."
+                messages.ROUTE_ROW_CONFLICT.format(side=side, row=row, net=net, owner=owner)
             )
         row_owner[key] = net
 
@@ -1169,13 +1116,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             if s == side and row_owner.get((s, row)) in (None, net)
         )
         if not free:
-            raise RouteError(
-                f"DOESN'T FIT -- no free bus_{side}[] row left for '{net}'\n\n"
-                f"  All 6 rows on side {side} are already claimed by other nets, "
-                f"ports\n  or rail taps. Try routing this net through the other "
-                f"side, or freeing\n  up a row by sharing it with a net that's "
-                f"already there."
-            )
+            raise RouteError(messages.ROUTE_NO_FREE_ROW.format(side=side, net=net))
         # Not every row suits every terminal: a diff-pair or OTA input has
         # a switch to rows 1-3 only, so picking the lowest free row blind
         # is how this used to end in a KeyError.
@@ -1183,22 +1124,11 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         candidates = [row for row in free if row in reachable]
         if not candidates:
             raise RouteError(
-                f"DOESN'T FIT -- no bus_{side}[] row that every device on "
-                f"'{net}' can reach\n\n"
-                f"  '{net}' connects:\n{_reach_lines(touches)}\n\n"
-                f"  Free on side {side} right now: bus {_fmt_rows(free)}. The "
-                f"terminals above can\n  share only bus {_fmt_rows(reachable)}, "
-                f"and none of that is free.\n\n"
-                f"{_WHY_LIMITED_REACH}\n"
-                f"  Ideas:\n"
-                f"    - Free up one of bus {_fmt_rows(reachable)} on side {side}, by "
-                f"moving another\n      net elsewhere.\n"
-                f"    - Give this net a package pin (name it ua1..ua5) if you can\n"
-                f"      spare one: that pins it to the row the pin is bonded to,\n"
-                f"      which may be a row the restricted terminal can reach.\n"
-                f"    - Rearrange the circuit so the restricted device is not on\n"
-                f"      this net at all -- only differential-pair and OTA inputs\n"
-                f"      are limited."
+                messages.ROUTE_NO_REACHABLE_FREE_ROW.format(
+                    side=side, net=net, reach_lines=_reach_lines(touches),
+                    free_rows=_fmt_rows(free), reachable_rows=_fmt_rows(reachable),
+                    why_limited_reach=_WHY_LIMITED_REACH,
+                )
             )
         return candidates[0]
 
@@ -1262,19 +1192,15 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         if not usable:
             unreachable_note = ""
             if free:
-                unreachable_note = (
-                    f"  The {rail} taps still free are {_fmt_taps(free)},\n"
-                    f"  but these terminals can share only bus "
-                    f"{_fmt_rows(reachable)}:\n{_reach_lines(remaining)}\n\n"
-                    f"{_WHY_LIMITED_REACH}\n"
+                unreachable_note = messages.ROUTE_RAIL_TAP_UNREACHABLE_NOTE.format(
+                    rail=rail, free_taps=_fmt_taps(free),
+                    reachable_rows=_fmt_rows(reachable), reach_lines=_reach_lines(remaining),
+                    why_limited_reach=_WHY_LIMITED_REACH,
                 )
             raise RouteError(
-                f"DOESN'T FIT -- no usable {rail} tap for '{net}'\n\n"
-                f"{unreachable_note}"
-                f"  {rail} can only be reached from specific bus rows "
-                f"(SPEC.md Sec 2.7),\n  and none of the ones this net could use is "
-                f"available. If the device\n  has a source terminal, tying it "
-                f"directly to {rail} costs no bus row\n  at all."
+                messages.ROUTE_NO_USABLE_RAIL_TAP.format(
+                    rail=rail, net=net, unreachable_note=unreachable_note,
+                )
             )
         usable.sort(key=lambda sr: (bridge_cost(*sr)[0], sr[1]))
         side, row = usable[0]
@@ -1319,37 +1245,15 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             # on this net cannot reach it. That is a rule rather than bad
             # luck, and it is worth saying which rule.
             raise RouteError(
-                f"DOESN'T FIT -- '{net}' spans both bus sides and no row can "
-                f"join them\n\n"
-                f"  '{net}' connects:\n{_reach_lines(touches)}\n\n"
-                f"  A net that touches both sides has to sit on the *same* row\n"
-                f"  number on side A and on side B, bridged by cfg_bus_short. Free\n"
-                f"  on both sides here: bus {_fmt_rows(both_free)}. The terminals "
-                f"above can share\n  only bus {_fmt_rows(reachable)}.\n\n"
-                f"{_WHY_LIMITED_REACH}\n"
-                f"  And bus {_fmt_rows(ROWS_FREE_ON_BOTH_SIDES)} is the only row "
-                f"ever free on both sides at once:\n  the others are permanently "
-                f"bonded to a ua[] pin on one side or the\n  other (SPEC.md Sec "
-                f"2.10). So this is a rule rather than a near miss:\n  a "
-                f"differential-pair or OTA input can never sit on an internal net\n"
-                f"  that spans both bus sides, whichever package pins you use.\n\n"
-                f"  Ideas:\n"
-                f"    - Get every device on '{net}' onto one bus side. Which side a\n"
-                f"      device is on follows from the hardware slot it was given, so\n"
-                f"      in practice this means changing which devices share a source.\n"
-                f"    - Give the net a package pin (name it ua1..ua5). A port net is\n"
-                f"      pinned to that pin's own row, which a restricted input may\n"
-                f"      well reach, and the other side is still bridged with\n"
-                f"      cfg_bus_short."
+                messages.ROUTE_NO_JOINING_ROW.format(
+                    net=net, reach_lines=_reach_lines(touches),
+                    both_free_rows=_fmt_rows(both_free), reachable_rows=_fmt_rows(reachable),
+                    why_limited_reach=_WHY_LIMITED_REACH,
+                    rows_free_both=_fmt_rows(ROWS_FREE_ON_BOTH_SIDES),
+                )
             )
 
-        raise RouteError(
-            f"DOESN'T FIT -- '{net}' needs a free row on both sides, joined\n\n"
-            f"  This net connects devices on both side A and side B, which needs "
-            f"a\n  matching free row on each side plus a cfg_bus_short. No such "
-            f"pair is\n  available -- every free row on at least one side is "
-            f"already claimed."
-        )
+        raise RouteError(messages.ROUTE_NO_FREE_ROW_BOTH_SIDES.format(net=net))
 
     # -- Route in order of how little choice each net has, not
     # alphabetically. A port net has none at all: its row is a bond wire,
@@ -1370,14 +1274,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
     for net in sorted(touches_by_net, key=route_order):
         touches = touches_by_net[net]
         if net == "VDPWR":
-            raise RouteError(
-                f"DOESN'T FIT -- VDPWR isn't reachable through the switch matrix\n\n"
-                f"  VDPWR (1.8V) only powers the switches' own level-shifters "
-                f"internally\n  -- no cfg_bus_pwr tap or source tie reaches it "
-                f"(SPEC.md Sec 2.7 only\n  lists VAPWR/VGND taps). Route this "
-                f"signal through VAPWR or VGND\n  instead, or reconsider whether "
-                f"this net needs an explicit connection."
-            )
+            raise RouteError(messages.ROUTE_VDPWR_UNREACHABLE)
         if net in ("VAPWR", "VGND"):
             route_rail_net(net, net, touches)
         elif net in PORT_ROW:

@@ -13,6 +13,7 @@ import itertools
 
 import pytest
 
+from mosbius import messages
 from mosbius.check import check, check_routing
 from mosbius.decode import decode
 from mosbius.netlist import NetlistError, parse_netlist
@@ -126,6 +127,9 @@ def test_too_many_independent_source_nmos_reports_doesnt_fit():
     m3 g3 d3 s3 b3 mosbius_nmos w=1
     """
     design = parse_netlist(netlist)
+    # Fragment, not the full messages.ROUTE_NOT_ENOUGH_FETS text: which
+    # instance lands on which slot ("placed") is an internal allocation
+    # detail, not part of what this test is pinning down.
     with pytest.raises(RouteError, match="not enough NMOS"):
         route(design)
 
@@ -133,8 +137,9 @@ def test_too_many_independent_source_nmos_reports_doesnt_fit():
 def test_vdpwr_net_is_rejected():
     netlist = "m1 g d VDPWR b mosbius_nmos w=1\n"
     design = parse_netlist(netlist)
-    with pytest.raises(RouteError, match="VDPWR"):
+    with pytest.raises(RouteError) as excinfo:
         route(design)
+    assert str(excinfo.value) == messages.ROUTE_VDPWR_UNREACHABLE
 
 
 def test_two_ota_devices_reports_doesnt_fit():
@@ -143,8 +148,9 @@ def test_two_ota_devices_reports_doesnt_fit():
     x2 inp2 inm2 outp2 outm2 ib2 bn2 bp2 mosbius_ota tail=2
     """ + BIAS_GENERATOR
     design = parse_netlist(netlist)
-    with pytest.raises(RouteError, match="only one OTA"):
+    with pytest.raises(RouteError) as excinfo:
         route(design)
+    assert str(excinfo.value) == messages.ROUTE_TOO_MANY_OTA.format(count=2)
 
 
 def test_width_property_round_trips_through_decode():
@@ -248,17 +254,23 @@ def test_ota_without_a_tail_property_gets_the_symbol_default():
 
 def test_a_tail_the_cycler_cannot_express_is_explained():
     netlist = OTA_NETLIST.replace("tail=4", "tail=5")
-    with pytest.raises(RouteError, match="tail=5") as excinfo:
+    with pytest.raises(RouteError) as excinfo:
         route(parse_netlist(netlist))
-    assert "2, 4, 6 or 8" in str(excinfo.value)
+    expected = messages.ROUTE_SETTING_NOT_VALID.format(
+        device="x1", prop="tail", value=5, step=2, options="2, 4, 6 or 8",
+    )
+    assert str(excinfo.value) == expected
 
 
 def test_a_width_the_cycler_cannot_express_is_explained():
     # Same wrapper, the other setting: this used to be a bare ValueError
     # traceback out of encode_cycler.
-    with pytest.raises(RouteError, match="w=7") as excinfo:
+    with pytest.raises(RouteError) as excinfo:
         route(parse_netlist("m1 g d VGND b mosbius_nmos w=7\n"))
-    assert "1, 2, 3 or 4" in str(excinfo.value)
+    expected = messages.ROUTE_SETTING_NOT_VALID.format(
+        device="m1", prop="w", value=7, step=1, options="1, 2, 3 or 4",
+    )
+    assert str(excinfo.value) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -310,8 +322,9 @@ def test_a_drawn_pmos_tail_uses_the_pmos_bit():
 
 def test_two_tails_of_the_same_polarity_reports_doesnt_fit():
     netlist = NTAIL_NETLIST + "XT2 net1 ibias VGND mosbius_ntail tail=2\n"
-    with pytest.raises(RouteError, match="only one NMOS differential-pair tail"):
+    with pytest.raises(RouteError) as excinfo:
         route(parse_netlist(netlist))
+    assert str(excinfo.value) == messages.ROUTE_TOO_MANY_NTAIL.format(count=2)
 
 
 def test_no_tail_drawn_keeps_the_old_rail_tie_behaviour():
@@ -517,6 +530,9 @@ def test_a_genuinely_unroutable_design_still_explains_itself():
     # the one that existed before the search did.
     with pytest.raises(RouteError) as excinfo:
         route(parse_netlist(GENUINELY_UNROUTABLE))
+    # Fragments of messages.ROUTE_NO_JOINING_ROW, not the full text: the
+    # rest of it (reach_lines) depends on internal touch reachability
+    # bookkeeping this test isn't set up to re-derive independently.
     message = str(excinfo.value)
     assert "'shared_gate' spans both bus sides" in message
     assert "row 6" in message
@@ -544,13 +560,22 @@ def test_an_unreachable_row_is_a_route_error_wherever_it_is_asked_for():
     # The backstop under every _MATRIX_BIT_BY_PIN_ROW lookup: the row
     # pickers try not to ask, but a missing (pin, row) is always the same
     # fault and always deserves the same explanation rather than a KeyError.
-    from mosbius.route import _matrix_bit, _Touch
+    from mosbius.route import _describe_touch, _fmt_rows, _matrix_bit, _Touch, rows_reachable
 
     touch = _Touch(device="XM4", role="ndiffpair-", terminal="g",
                    side="B", pin="cfgb_dpn_inm")
     assert _matrix_bit(touch, 3, "net1") is not None
-    with pytest.raises(RouteError, match="cannot reach bus_B\\[6\\]"):
+    with pytest.raises(RouteError) as excinfo:
         _matrix_bit(touch, 6, "net1")
+    why = messages.ROUTE_INTERNAL_NET_UNREACHABLE_ROW.format(
+        net="net1", row=6, why_limited_reach=messages.ROUTE_WHY_LIMITED_REACH,
+    )
+    expected = messages.ROUTE_CANNOT_REACH_ROW.format(
+        touch_desc=_describe_touch(touch), side="B", row=6,
+        role="ndiffpair-", terminal="g",
+        rows_reach=_fmt_rows(rows_reachable("cfgb_dpn_inm")), why=why,
+    )
+    assert str(excinfo.value) == expected
 
 
 def test_a_diff_pair_gate_on_an_out_of_range_pin_no_longer_gets_stuck_there():
@@ -659,8 +684,8 @@ def test_net_rows_report_flags_only_the_pin_bonded_nets():
         assert flagged == line.split()[0].startswith("ua")
 
     note = "\n".join(format_pad_note(routed))
-    assert "ua2, ua3" in note
-    assert "extra capacitance" in note
+    expected = messages.ROUTE_PAD_NOTE.format(which="ua2, ua3", are="are", they="they", add="add")
+    assert note == "\n" + expected
 
 
 def test_internal_nets_never_land_on_a_bonded_row():
@@ -702,7 +727,14 @@ XM2 ua2 ua3 tailnet VGND mosbius_nmos w=4
 
 def test_third_device_on_the_shared_source_is_refused():
     netlist = PAIR_ON_INTERNAL_NET + "XM3 ua1 tailnet VGND VGND mosbius_nmos w=1\n"
-    with pytest.raises(RouteError, match="nothing else can connect to 'tailnet'") as e:
+    # Fragments of the _wrap()-composed message (messages.ROUTE_SHARED_
+    # SOURCE_HEADLINE / _PROBLEM_OTHER / _WHAT_CAN_GO_THERE), not the full
+    # text: reproducing that exactly would mean re-deriving which halves
+    # got which diff-pair role, an internal allocation detail this test
+    # isn't pinning down.
+    with pytest.raises(
+        RouteError, match=messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net="tailnet")
+    ) as e:
         route(parse_netlist(netlist))
     assert "XM3's drain" in str(e.value)
     assert "mosbius_ntail" in str(e.value)
@@ -711,7 +743,9 @@ def test_third_device_on_the_shared_source_is_refused():
 def test_shared_source_on_a_package_pin_is_refused():
     # The plausible version of the mistake: bring the tail out to measure it.
     netlist = PAIR_ON_INTERNAL_NET.replace("tailnet", "ua4")
-    with pytest.raises(RouteError, match="nothing else can connect to 'ua4'") as e:
+    with pytest.raises(
+        RouteError, match=messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net="ua4")
+    ) as e:
         route(parse_netlist(netlist))
     assert "package pin" in str(e.value)
 
