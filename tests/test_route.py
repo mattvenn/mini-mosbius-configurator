@@ -660,7 +660,7 @@ def test_net_rows_report_flags_only_the_pin_bonded_nets():
 
     note = "\n".join(format_pad_note(routed))
     assert "ua2, ua3" in note
-    assert "ua1..ua5" in note  # tells the user how to opt out
+    assert "extra capacitance" in note
 
 
 def test_internal_nets_never_land_on_a_bonded_row():
