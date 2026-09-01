@@ -1088,6 +1088,18 @@ def main() -> None:
         if args.mode not in ("ratio", "background"):
             print(f"== programming {args.config}")
             run_program(str(args.config), args.ibias, args.port)
+        elif args.mode == "ratio":
+            # mode_ratio() below programs each of --configs in turn, but
+            # measure_zero() just above left the all-switches-open
+            # bitstream on the chip -- the leg is disconnected. Without
+            # this, confirm_bias_reaches_chip() ran against that
+            # disconnected state and always reported no current, on a
+            # circuit that was actually fine (caught on a real bench
+            # 2026-09-01: an independent ammeter read 93.6 uA on the same
+            # leg this was reporting 0.02 uA for). ratio/i_nom above are
+            # already this config's own, so program it here to match.
+            print(f"== programming {args.configs[0]}")
+            run_program(str(args.configs[0]), args.ibias, args.port)
         # The bias goes on AFTER the zero, so the zero is unambiguously a
         # no-current reading, and before the measurement, because without
         # it this board's mirrors have no operating point and the sweep

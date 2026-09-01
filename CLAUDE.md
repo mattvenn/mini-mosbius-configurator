@@ -393,6 +393,34 @@ yourself, with no historical measurement to preserve.) The check scripts do
 assert simulated numbers against the READMEs at +-5%, which is what guards
 the examples.
 
+**TODO.md's cycler-bits question is answered, and answering it needed two
+bugs fixed first (2026-09-01).** `measure_currentsource_ad3.py --mode ratio`
+always reported the measured leg at ~0 uA, on a circuit that was actually
+fine -- an independent ammeter in series with the sense resistor read 93.6 uA
+where the script read 0.02. Root cause: `confirm_bias_reaches_chip()` ran
+against whatever `measure_zero()` had just left on the chip, which is
+deliberately the all-switches-open bitstream, and `--mode ratio`'s branch
+skipped re-programming a real config before that check -- every other mode
+either reprograms first or skips the check too; `ratio` did neither.
+Programming `--configs[0]` there first fixed it, verified live:
+`psource_a`'s bias check went from `0.02 uA` to `+96.07 uA`, matching the
+ammeter's 96 uA on the bias leg to within the resistor's own tolerance. With
+that fixed, `ratio` 1-4 on both mirror legs came out evenly spaced
+(1.3%/1.6% -- `examples/currentsource/README.md`), closing TODO.md's
+question of whether any device-setting cycler bit had ever been exercised on
+silicon: this is the first of the chip's 11.
+
+The bug that made it hard to trust the fix at first: `program()` could
+report `ok: True` while the chip stayed on `tt_um_factory_test` -- caught on
+the bench by the factory test's own boot LED still counting after a
+supposedly clean upload of `mosbius`. `enable()` raising nothing is not
+proof the mux selection stuck; `mosbius/program.py`'s generated device
+script now reads back `tt.shuttle.enabled` after calling it, and `program()`
+raises if the design actually selected doesn't match what was asked for.
+Every board boots into `tt_um_factory_test`, auto-clocked at 10 Hz, until
+something calls `enable()` -- that auto-clock stopping is itself part of
+what the new check confirms.
+
 Closed on 2026-08-23, so don't re-report it: the 192 config-bit ties
 `mosbius/spice.py` emits are no longer written as a literal `0` ohms.
 ngspice refuses a zero-ohm resistor, silently substitutes 1e-12 and warns

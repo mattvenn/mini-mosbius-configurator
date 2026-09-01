@@ -29,15 +29,29 @@ current, which on a demoboard without a programmable source is a bench
 supply through a resistor and is the least trustworthy number in the
 measurement.*
 
-## Try this
+## The ratio cycler bits, confirmed on silicon
 
-Check that `ratio` means what the bit map says it means. Everything above
-was taken at `ratio=2`, and `ratio` and the bias current enter the answer
-only as a product, so nothing here separates them. Route the same sheet at
-`ratio` 1, 2, 3 and 4 -- four bitstreams -- and measure one leg at each.
-The ratio of two currents from the same reference cancels the bias source
-entirely, so this is the one measurement on this example that an
-uncalibrated bias cannot spoil.
+Checked 2026-09-01: routed the same sheet at `ratio` 1, 2, 3 and 4 (four
+bitstreams, via `tools/sweep_ratio_currentsource.sh`, which rewrites the
+netlist rather than the schematic -- the committed sheet and every number
+above stay at `ratio=2`) and measured one leg at each with
+`measure_currentsource_ad3.py --mode ratio`. `psource_a` stayed on `ua2` and
+`nsink_a` on `ua3` in all four, so the bitstreams differ only in the ratio
+cycler bits.
+
+| ratio | `psource_a` (source) | per unit | `nsink_a` (sink) | per unit |
+|---|---|---|---|---|
+| 1 | +96.07 uA | +96.07 uA | -110.21 uA | -110.21 uA |
+| 2 | +190.41 uA | +95.21 uA | -219.25 uA | -109.62 uA |
+| 3 | +285.87 uA | +95.29 uA | -325.81 uA | -108.60 uA |
+| 4 | +379.17 uA | +94.79 uA | -433.63 uA | -108.41 uA |
+
+Spread across the four per-unit values: 1.3% (source), 1.6% (sink) -- evenly
+spaced. The ratio of two currents from the same bias reference cancels the
+demoboard's uncalibrated bias entirely, which is what makes this the one
+measurement here an uncalibrated bias can't spoil. The mirror-ratio bits mean
+what the bit map says they mean: the first of the chip's 11 device-setting
+cycler bit-groups exercised on real silicon (CLAUDE.md, TODO.md).
 
 ## Reproducing the numbers
 
@@ -50,4 +64,12 @@ sh tools/sim/check_example_sim.sh currentsource                 # as drawn and a
 python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000   # set the bias rail
 python3 tools/ad3/measure_currentsource_ad3.py                  # on silicon, on the host
 python3 tools/plot_currentsource_comparison.py                  # the figure
+
+sh tools/sweep_ratio_currentsource.sh                            # the four ratio configs
+python3 tools/ad3/measure_currentsource_ad3.py --mode ratio --leg source \
+    --configs build/currentsource_r1.mosbius.json build/currentsource_r2.mosbius.json \
+              build/currentsource_r3.mosbius.json build/currentsource_r4.mosbius.json
+python3 tools/ad3/measure_currentsource_ad3.py --mode ratio --leg sink \
+    --configs build/currentsource_r1.mosbius.json build/currentsource_r2.mosbius.json \
+              build/currentsource_r3.mosbius.json build/currentsource_r4.mosbius.json
 ```
