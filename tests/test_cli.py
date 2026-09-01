@@ -425,12 +425,10 @@ class TestIbiasWarning:
         return SwitchConfig(bits=unpack("0" * 48), ibias=ibias)
 
     def test_names_the_current_and_what_it_affects(self):
+        from mosbius import messages
         from mosbius.program import ibias_warning
         text = ibias_warning({"ibias_set": False}, self._config(100e-6))
-        assert "100.0 uA" in text
-        assert "mosbius_ota" in text and "mosbius_nsink" in text
-        assert "tools/ad3/measure_ibias_clamp_ad3.py" in text
-        assert "on the chip and correct" in text  # not a failed upload
+        assert text == messages.PROGRAM_IBIAS_NOT_SET.format(ibias_ua=100.0)
 
     def test_silent_when_the_board_did_set_it(self):
         from mosbius.program import ibias_warning

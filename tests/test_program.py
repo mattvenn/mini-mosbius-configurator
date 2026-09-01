@@ -26,6 +26,7 @@ from unittest.mock import patch
 
 import pytest
 
+from mosbius import messages
 from mosbius.check import check
 from mosbius.model import SwitchConfig
 from mosbius.program import (
@@ -163,9 +164,14 @@ def test_program_refuses_a_config_with_errors_without_reaching_mpremote():
     assert report.has_errors  # sanity: this fixture IS unsafe
 
     with patch("mosbius.program._run_mpremote") as mock_run:
-        with pytest.raises(ProgramError, match="UPLOAD BLOCKED"):
+        with pytest.raises(ProgramError) as excinfo:
             program(SwitchConfig(bits=SHORTED_BITS), report=report)
         mock_run.assert_not_called()
+    paths = "\n\n".join(f.message for f in report.errors)
+    expected = messages.PROGRAM_UPLOAD_BLOCKED.format(
+        n=len(report.errors), plural="s" if len(report.errors) != 1 else "", paths=paths,
+    )
+    assert str(excinfo.value) == expected
 
 
 def test_program_force_bypasses_the_safety_gate():
@@ -190,8 +196,11 @@ def test_program_safe_config_reaches_mpremote():
 def test_program_raises_on_device_side_error():
     with patch("mosbius.program._run_mpremote") as mock_run:
         mock_run.return_value = {"ok": False, "error": "project not found on this shuttle"}
-        with pytest.raises(ProgramError, match="project not found"):
+        with pytest.raises(ProgramError) as excinfo:
             program(make_inverter_config())
+    assert str(excinfo.value) == messages.PROGRAM_UPLOAD_ERROR.format(
+        error="project not found on this shuttle"
+    )
 
 
 def test_program_raises_when_the_selected_design_does_not_match():
@@ -205,8 +214,11 @@ def test_program_raises_when_the_selected_design_does_not_match():
             "ok": True, "error": None, "verify_ok": None,
             "enabled_design": "tt_um_factory_test (1) @ ",
         }
-        with pytest.raises(ProgramError, match="tt_um_factory_test"):
+        with pytest.raises(ProgramError) as excinfo:
             program(make_inverter_config(), project="tt_um_tnt_mosbius")
+    assert str(excinfo.value) == messages.PROGRAM_UPLOAD_DIDNT_STICK.format(
+        enabled="tt_um_factory_test (1) @ ", project="tt_um_tnt_mosbius",
+    )
 
 
 def test_program_passes_when_the_selected_design_matches():
@@ -232,12 +244,16 @@ def test_program_skips_the_check_against_an_older_board_result():
 
 
 def test_program_raises_when_verify_readback_mismatches():
+    config = make_inverter_config()
     with patch("mosbius.program._run_mpremote") as mock_run:
         mock_run.return_value = {
             "ok": True, "error": None, "verify_ok": False, "captured": "0" * 192,
         }
-        with pytest.raises(ProgramError, match="VERIFY FAILED"):
-            program(make_inverter_config(), verify=True)
+        with pytest.raises(ProgramError) as excinfo:
+            program(config, verify=True)
+    assert str(excinfo.value) == messages.PROGRAM_VERIFY_FAILED.format(
+        sent=config.to_bitstream(), captured="0" * 192,
+    )
 
 
 def test_program_passes_when_verify_readback_matches():
@@ -253,16 +269,21 @@ def test_program_passes_when_verify_readback_matches():
 
 def test_run_mpremote_raises_clearly_when_binary_missing():
     with patch("mosbius.program.shutil.which", return_value=None):
-        with pytest.raises(ProgramError, match="mpremote isn't installed"):
+        with pytest.raises(ProgramError) as excinfo:
             _run_mpremote("print('hi')", port=None)
+    assert str(excinfo.value) == messages.PROGRAM_MPREMOTE_NOT_INSTALLED.format(what="CAN'T PROGRAM")
 
 
 def test_run_mpremote_raises_clearly_when_no_result_line():
     fake_proc = type("P", (), {"stdout": "some unrelated boot noise\n", "stderr": "", "returncode": 0})()
     with patch("mosbius.program.shutil.which", return_value="/usr/bin/mpremote"), \
          patch("mosbius.program.subprocess.run", return_value=fake_proc):
-        with pytest.raises(ProgramError, match="no result from the board"):
+        with pytest.raises(ProgramError) as excinfo:
             _run_mpremote("print('hi')", port=None)
+    assert str(excinfo.value) == messages.PROGRAM_NO_RESULT_LINE.format(
+        what="CAN'T PROGRAM", returncode=0, port_hint=messages.PROGRAM_PORT_HINT_AUTODETECT,
+        stdout="some unrelated boot noise\n", stderr="",
+    )
 
 
 def test_run_mpremote_parses_result_line():
@@ -338,8 +359,9 @@ def test_read_board_identity_returns_what_the_rom_said():
 def test_read_board_identity_explains_a_board_that_reports_no_shuttle():
     which, run = _fake_board({"ok": True, "error": None})
     with which, run:
-        with pytest.raises(ProgramError, match="reported no shuttle"):
+        with pytest.raises(ProgramError) as excinfo:
             read_board_identity()
+    assert str(excinfo.value) == messages.PROGRAM_NO_SHUTTLE_REPORTED
 
 
 def test_read_board_identity_does_not_call_itself_a_failed_upload():
@@ -350,6 +372,11 @@ def test_read_board_identity_does_not_call_itself_a_failed_upload():
          patch("mosbius.program.subprocess.run", return_value=proc):
         with pytest.raises(ProgramError) as excinfo:
             read_board_identity()
+    expected = messages.PROGRAM_NO_RESULT_LINE.format(
+        what="CAN'T READ THE BOARD", returncode=1, port_hint=messages.PROGRAM_PORT_HINT_AUTODETECT,
+        stdout="boot noise\n", stderr="",
+    )
+    assert str(excinfo.value) == expected
     assert "CAN'T READ THE BOARD" in str(excinfo.value)
     assert "CAN'T PROGRAM" not in str(excinfo.value)
 

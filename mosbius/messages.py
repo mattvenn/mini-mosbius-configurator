@@ -896,3 +896,98 @@ PADS_TABLE_FOOTER = (
     "  chip carrier's own wiring. The same design on another shuttle can\n"
     "  come out on entirely different pads: both halves are free to change."
 )
+
+
+# --- program.py ------------------------------------------------------------
+
+PROGRAM_MPREMOTE_NOT_INSTALLED = (
+    "{what} -- mpremote isn't installed\n\n"
+    "  program.py drives the demoboard through mpremote, the official\n"
+    "  MicroPython tool. Install it with 'pip install mpremote' and try\n"
+    "  again."
+)
+
+# The two port_hint branches _run_mpremote() picks between before building
+# PROGRAM_NO_RESULT_LINE.
+PROGRAM_PORT_HINT_AUTODETECT = (
+    "  mpremote autodetects the port by default, and picks the wrong\n"
+    "  serial device when more than one is plugged in (or the wrong one\n"
+    "  claims the port first). Tell it which one is the demoboard with\n"
+    "  --port, e.g. --port /dev/ttyACM0, and try again.\n\n"
+)
+
+PROGRAM_PORT_HINT_EXPLICIT = (
+    "  --port {port} was given explicitly, so this isn't mpremote picking\n"
+    "  the wrong device -- check the board is powered, plugged in, and\n"
+    "  actually enumerating at that path.\n\n"
+)
+
+PROGRAM_NO_RESULT_LINE = (
+    "{what} -- no result from the board\n\n"
+    "  mpremote exited with code {returncode} and didn't print a result line.\n"
+    "  This usually means the board isn't connected, is running the wrong\n"
+    "  firmware, or crashed before finishing.\n\n"
+    "{port_hint}"
+    "Raw output:\n\n"
+    "{stdout}\n{stderr}"
+)
+
+# The bare "CAN'T READ THE BOARD -- {error}" / "CAN'T PROGRAM -- {error}"
+# ProgramError raises that just wrap the device script's own reported
+# result["error"] -- not in the plan's site table, added on a full read of
+# program.py since each is a complete standalone raise-site message like
+# every other one here, not a fragment embedded in a larger template.
+PROGRAM_READ_BOARD_ERROR = "CAN'T READ THE BOARD -- {error}"
+
+PROGRAM_NO_SHUTTLE_REPORTED = (
+    "CAN'T READ THE BOARD -- it answered, but reported no shuttle\n\n"
+    "  The demoboard reads the shuttle from the chip carrier's own ROM\n"
+    "  at boot. Getting nothing back usually means no carrier is seated,\n"
+    "  or the firmware is older than chip ROM support. Pass --shuttle\n"
+    "  yourself to carry on regardless."
+)
+
+PROGRAM_IBIAS_NOT_SET = (
+    "\n  BIAS CURRENT NOT SET -- this demoboard has no current source.\n\n"
+    "  The bitstream is on the chip and correct. But {ibias_ua:.1f} uA was\n"
+    "  asked for, and this board revision has no `analog_current_source`:\n"
+    "  the RP2350-controlled bias circuit arrived on later ETR demoboards.\n"
+    "  So the chip's bias pin is floating, and anything in this design that\n"
+    "  mirrors it -- mosbius_nsink, mosbius_psource, mosbius_ntail,\n"
+    "  mosbius_ptail, mosbius_ota -- has no operating point.\n\n"
+    "  Feed it externally instead (SPEC.md Sec 3.4b): a bench supply through a\n"
+    "  series resistor into the bias pad, sized so most of the supply is\n"
+    "  dropped across the resistor. To confirm the pad and set the current:\n\n"
+    "    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000\n\n"
+    "  A design of plain mosbius_nmos/mosbius_pmos FETs needs none of this."
+)
+
+PROGRAM_UPLOAD_BLOCKED = (
+    "UPLOAD BLOCKED -- {n} safety error{plural} found\n\n"
+    "{paths}\n\n"
+    "  Fix the design above, or re-run with force=True if you're certain\n"
+    "  this is safe (SPEC.md Sec 3.1) -- there is no other way past this gate."
+)
+
+PROGRAM_UPLOAD_ERROR = "CAN'T PROGRAM -- {error}"
+
+PROGRAM_UPLOAD_DIDNT_STICK = (
+    "UPLOAD DIDN'T STICK -- the board says '{enabled}' is selected, "
+    "not {project!r}.\n\n"
+    "  tt.shuttle.get(...).enable() ran with no error, but the chip's mux\n"
+    "  selection did not end up on this project. Every board boots into\n"
+    "  tt_um_factory_test, auto-clocked at 10 Hz -- an LED counting on the\n"
+    "  board is that test running, not this design -- and enable() is what\n"
+    "  is supposed to stop it and switch over; this time it did not. The\n"
+    "  192 bits went somewhere, but not to a chip that is actually addressed\n"
+    "  as this project. Re-run; if it keeps happening, check the board is\n"
+    "  fully seated and try a fresh USB connection."
+)
+
+PROGRAM_VERIFY_FAILED = (
+    "VERIFY FAILED -- readback doesn't match what was sent\n\n"
+    "  sent:      {sent}\n"
+    "  captured:  {captured}\n\n"
+    "  The chain may have lost sync mid-shift (a bad connection, clock too\n"
+    "  fast, or a level issue). Try a slower clock or re-seating the board."
+)

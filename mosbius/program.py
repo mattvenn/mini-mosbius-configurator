@@ -30,6 +30,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from mosbius import messages
 from mosbius.check import SafetyReport, check
 from mosbius.model import SwitchConfig
 from mosbius.pads import DEFAULT_PROJECT
@@ -203,12 +204,7 @@ def _run_mpremote(script: str, *, port: str | None, what: str = "CAN'T PROGRAM")
     a read-only identity lookup doesn't report itself as a failed upload.
     """
     if shutil.which("mpremote") is None:
-        raise ProgramError(
-            f"{what} -- mpremote isn't installed\n\n"
-            "  program.py drives the demoboard through mpremote, the official\n"
-            "  MicroPython tool. Install it with 'pip install mpremote' and try\n"
-            "  again."
-        )
+        raise ProgramError(messages.PROGRAM_MPREMOTE_NOT_INSTALLED.format(what=what))
     with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
         f.write(script)
         script_path = f.name
@@ -228,24 +224,15 @@ def _run_mpremote(script: str, *, port: str | None, what: str = "CAN'T PROGRAM")
     )
     if result_line is None:
         port_hint = (
-            "  mpremote autodetects the port by default, and picks the wrong\n"
-            "  serial device when more than one is plugged in (or the wrong one\n"
-            "  claims the port first). Tell it which one is the demoboard with\n"
-            "  --port, e.g. --port /dev/ttyACM0, and try again.\n\n"
+            messages.PROGRAM_PORT_HINT_AUTODETECT
             if port is None else
-            f"  --port {port} was given explicitly, so this isn't mpremote picking\n"
-            f"  the wrong device -- check the board is powered, plugged in, and\n"
-            f"  actually enumerating at that path.\n\n"
+            messages.PROGRAM_PORT_HINT_EXPLICIT.format(port=port)
         )
         raise ProgramError(
-            f"{what} -- no result from the board\n\n"
-            f"  mpremote exited with code {proc.returncode} and didn't print a "
-            f"result line.\n"
-            f"  This usually means the board isn't connected, is running the "
-            f"wrong\n  firmware, or crashed before finishing.\n\n"
-            f"{port_hint}"
-            f"Raw output:\n\n"
-            f"{proc.stdout}\n{proc.stderr}"
+            messages.PROGRAM_NO_RESULT_LINE.format(
+                what=what, returncode=proc.returncode, port_hint=port_hint,
+                stdout=proc.stdout, stderr=proc.stderr,
+            )
         )
     return json.loads(result_line[len("MOSBIUS_RESULT:"):])
 
@@ -301,15 +288,9 @@ def read_board_identity(*, project: str | None = None, port: str | None = None) 
         generate_identity_script(project), port=port, what="CAN'T READ THE BOARD",
     )
     if not result.get("ok"):
-        raise ProgramError(f"CAN'T READ THE BOARD -- {result.get('error')}")
+        raise ProgramError(messages.PROGRAM_READ_BOARD_ERROR.format(error=result.get('error')))
     if not result.get("shuttle"):
-        raise ProgramError(
-            "CAN'T READ THE BOARD -- it answered, but reported no shuttle\n\n"
-            "  The demoboard reads the shuttle from the chip carrier's own ROM\n"
-            "  at boot. Getting nothing back usually means no carrier is seated,\n"
-            "  or the firmware is older than chip ROM support. Pass --shuttle\n"
-            "  yourself to carry on regardless."
-        )
+        raise ProgramError(messages.PROGRAM_NO_SHUTTLE_REPORTED)
     return result
 
 
@@ -325,20 +306,7 @@ def ibias_warning(result: dict, config: SwitchConfig) -> str | None:
     """
     if result.get("ibias_set") is not False or not config.ibias:
         return None
-    return (
-        "\n  BIAS CURRENT NOT SET -- this demoboard has no current source.\n\n"
-        f"  The bitstream is on the chip and correct. But {config.ibias * 1e6:.1f} uA was\n"
-        "  asked for, and this board revision has no `analog_current_source`:\n"
-        "  the RP2350-controlled bias circuit arrived on later ETR demoboards.\n"
-        "  So the chip's bias pin is floating, and anything in this design that\n"
-        "  mirrors it -- mosbius_nsink, mosbius_psource, mosbius_ntail,\n"
-        "  mosbius_ptail, mosbius_ota -- has no operating point.\n\n"
-        "  Feed it externally instead (SPEC.md Sec 3.4b): a bench supply through a\n"
-        "  series resistor into the bias pad, sized so most of the supply is\n"
-        "  dropped across the resistor. To confirm the pad and set the current:\n\n"
-        "    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000\n\n"
-        "  A design of plain mosbius_nmos/mosbius_pmos FETs needs none of this."
-    )
+    return messages.PROGRAM_IBIAS_NOT_SET.format(ibias_ua=config.ibias * 1e6)
 
 
 def program(
@@ -362,41 +330,27 @@ def program(
     if report.has_errors and not force:
         paths = "\n\n".join(f.message for f in report.errors)
         raise ProgramError(
-            f"UPLOAD BLOCKED -- {len(report.errors)} safety error"
-            f"{'s' if len(report.errors) != 1 else ''} found\n\n"
-            f"{paths}\n\n"
-            f"  Fix the design above, or re-run with force=True if you're "
-            f"certain\n  this is safe (SPEC.md Sec 3.1) -- there is no other "
-            f"way past this gate."
+            messages.PROGRAM_UPLOAD_BLOCKED.format(
+                n=len(report.errors),
+                plural="s" if len(report.errors) != 1 else "",
+                paths=paths,
+            )
         )
 
     script = generate_device_script(config, project=project, reset=reset, verify=verify)
     result = _run_mpremote(script, port=port)
 
     if not result["ok"]:
-        raise ProgramError(f"CAN'T PROGRAM -- {result['error']}")
+        raise ProgramError(messages.PROGRAM_UPLOAD_ERROR.format(error=result['error']))
     enabled = result.get("enabled_design")
     if enabled is not None and project not in enabled:
         raise ProgramError(
-            f"UPLOAD DIDN'T STICK -- the board says '{enabled}' is selected, "
-            f"not {project!r}.\n\n"
-            "  tt.shuttle.get(...).enable() ran with no error, but the chip's "
-            "mux\n  selection did not end up on this project. Every board "
-            "boots into\n  tt_um_factory_test, auto-clocked at 10 Hz -- an LED "
-            "counting on the\n  board is that test running, not this design -- "
-            "and enable() is what\n  is supposed to stop it and switch over; "
-            "this time it did not. The\n  192 bits went somewhere, but not to "
-            "a chip that is actually addressed\n  as this project. Re-run; if "
-            "it keeps happening, check the board is\n  fully seated and try a "
-            "fresh USB connection."
+            messages.PROGRAM_UPLOAD_DIDNT_STICK.format(enabled=enabled, project=project)
         )
     if verify and result.get("verify_ok") is False:
         raise ProgramError(
-            f"VERIFY FAILED -- readback doesn't match what was sent\n\n"
-            f"  sent:      {config.to_bitstream()}\n"
-            f"  captured:  {result.get('captured', '?')}\n\n"
-            f"  The chain may have lost sync mid-shift (a bad connection, "
-            f"clock too\n  fast, or a level issue). Try a slower clock or "
-            f"re-seating the board."
+            messages.PROGRAM_VERIFY_FAILED.format(
+                sent=config.to_bitstream(), captured=result.get('captured', '?'),
+            )
         )
     return result
