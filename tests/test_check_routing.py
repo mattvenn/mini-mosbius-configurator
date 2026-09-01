@@ -232,7 +232,8 @@ def test_a_tail_on_a_diff_pair_half_is_reported_not_dropped():
     codes = [f.code for f in report.warnings]
     assert "R2" in codes
     r2 = [f for f in report.warnings if f.code == "R2"][0]
-    assert r2.message.startswith("WARNING -- XM5's tail=6 was ignored")
+    assert r2.message.startswith("WARNING -- " + messages.CHECK_R2_HEADLINE_ONE.format(
+        name="XM5", requested=6, role="ndiffpair+"))
 
 
 def test_the_tail_message_points_at_the_tail_symbols():
