@@ -113,6 +113,23 @@ def test_demoboard_get_takes_no_arguments():
     assert "tt.mode = RPMode.ASIC_RP_CONTROL" in script
 
 
+def test_device_script_reports_which_design_actually_got_selected():
+    """Every board boots into tt_um_factory_test, auto-clocked -- watched on
+    a real bench 2026-09-01, where enable() returned with no error but the
+    board kept running the factory test's LED pattern instead of switching
+    over. enable() raising nothing is not proof the mux selection stuck;
+    tt.shuttle.enabled is the board's own answer to what's actually
+    selected, and has to be read back after enable() to catch that.
+    """
+    script = generate_device_script(make_inverter_config(), project="tt_um_tnt_mosbius")
+    enable_call = script.index("tt.shuttle.get(PROJECT).enable()")
+    readback = script.index('result["enabled_design"] = str(tt.shuttle.enabled)')
+    assert enable_call < readback, (
+        "the readback must come after enable(), or it would report the "
+        "design that was selected before this upload ran"
+    )
+
+
 # ---------------------------------------------------------------------------
 # _ibias_level()
 # ---------------------------------------------------------------------------
@@ -175,6 +192,43 @@ def test_program_raises_on_device_side_error():
         mock_run.return_value = {"ok": False, "error": "project not found on this shuttle"}
         with pytest.raises(ProgramError, match="project not found"):
             program(make_inverter_config())
+
+
+def test_program_raises_when_the_selected_design_does_not_match():
+    """The regression this guards: enable() can return with no error while
+    the board stays on tt_um_factory_test -- caught on a real bench
+    2026-09-01 by the factory test's LED still counting after a supposedly
+    clean upload. ok=True alone is not enough; enabled_design has to agree.
+    """
+    with patch("mosbius.program._run_mpremote") as mock_run:
+        mock_run.return_value = {
+            "ok": True, "error": None, "verify_ok": None,
+            "enabled_design": "tt_um_factory_test (1) @ ",
+        }
+        with pytest.raises(ProgramError, match="tt_um_factory_test"):
+            program(make_inverter_config(), project="tt_um_tnt_mosbius")
+
+
+def test_program_passes_when_the_selected_design_matches():
+    with patch("mosbius.program._run_mpremote") as mock_run:
+        mock_run.return_value = {
+            "ok": True, "error": None, "verify_ok": None,
+            "enabled_design": "tt_um_tnt_mosbius (239) @ ",
+        }
+        result = program(make_inverter_config(), project="tt_um_tnt_mosbius")
+        assert result["ok"] is True
+
+
+def test_program_skips_the_check_against_an_older_board_result():
+    """A result with no 'enabled_design' key at all -- from firmware or a
+    cached mock predating this check -- must not be treated as a mismatch.
+    Same backward-compatibility stance program.py already takes with
+    ibias_set.
+    """
+    with patch("mosbius.program._run_mpremote") as mock_run:
+        mock_run.return_value = {"ok": True, "error": None, "verify_ok": None}
+        result = program(make_inverter_config())
+        assert result["ok"] is True
 
 
 def test_program_raises_when_verify_readback_mismatches():

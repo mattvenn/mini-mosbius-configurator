@@ -113,7 +113,8 @@ DO_RESET = {reset!r}
 DO_VERIFY = {verify!r}
 IBIAS_LEVEL = {ibias_level!r}
 
-result = {{"ok": False, "error": None, "verify_ok": None, "ibias_set": None}}
+result = {{"ok": False, "error": None, "verify_ok": None, "ibias_set": None,
+          "enabled_design": None}}
 try:
     # DemoBoard.get() takes no arguments (it's a bare singleton accessor --
     # mode comes from config.ini on creation); set the mode explicitly
@@ -125,6 +126,14 @@ try:
     if not tt.shuttle.has(PROJECT):
         raise RuntimeError("project %s not found on this shuttle" % PROJECT)
     tt.shuttle.get(PROJECT).enable()
+
+    # enable() raising nothing is not proof the mux selection stuck. Every
+    # board boots into tt_um_factory_test, auto-clocked at 10 Hz (an LED
+    # counting on the board is that test running, not this design) -- caught
+    # on a real bench 2026-09-01, where enable() returned cleanly but the
+    # board stayed on the factory test. tt.shuttle.enabled is the board's own
+    # answer to what is actually selected, read back so the host can tell.
+    result["enabled_design"] = str(tt.shuttle.enabled)
 
     # Whether the bias current was actually delivered is reported in its own
     # field, not in result["error"]. It used to be the latter, which meant it
@@ -366,6 +375,21 @@ def program(
 
     if not result["ok"]:
         raise ProgramError(f"CAN'T PROGRAM -- {result['error']}")
+    enabled = result.get("enabled_design")
+    if enabled is not None and project not in enabled:
+        raise ProgramError(
+            f"UPLOAD DIDN'T STICK -- the board says '{enabled}' is selected, "
+            f"not {project!r}.\n\n"
+            "  tt.shuttle.get(...).enable() ran with no error, but the chip's "
+            "mux\n  selection did not end up on this project. Every board "
+            "boots into\n  tt_um_factory_test, auto-clocked at 10 Hz -- an LED "
+            "counting on the\n  board is that test running, not this design -- "
+            "and enable() is what\n  is supposed to stop it and switch over; "
+            "this time it did not. The\n  192 bits went somewhere, but not to "
+            "a chip that is actually addressed\n  as this project. Re-run; if "
+            "it keeps happening, check the board is\n  fully seated and try a "
+            "fresh USB connection."
+        )
     if verify and result.get("verify_ok") is False:
         raise ProgramError(
             f"VERIFY FAILED -- readback doesn't match what was sent\n\n"
