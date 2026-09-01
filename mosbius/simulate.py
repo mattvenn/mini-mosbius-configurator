@@ -259,6 +259,9 @@ def simulate_from_routed_json(path: Path) -> tuple[str, str]:
     try:
         text = path.read_text()
     except OSError as e:
+        # Anything the operating system refuses to hand us: usually the
+        # file simply isn't there, occasionally it's a directory or
+        # unreadable. Say which, then say what the file should have been.
         reason = (
             f"there is no file at {path}"
             if isinstance(e, FileNotFoundError)
@@ -285,6 +288,8 @@ def simulate_from_routed_json(path: Path) -> tuple[str, str]:
     try:
         config = SwitchConfig.from_bitstream(data["bitstream"], ibias=data.get("ibias", DEFAULT_IBIAS))
     except (BitstreamError, TypeError) as e:
+        # The underlying message is itself a multi-line explanation, so
+        # indent every line of it to sit under this one.
         detail = "\n".join(
             line if line.startswith("  ") else f"  {line}" for line in str(e).splitlines()
         )

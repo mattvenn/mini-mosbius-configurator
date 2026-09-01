@@ -244,6 +244,10 @@ def test_routing_older_than_its_netlist_is_refused(tmp_path):
 
 
 def test_routing_older_than_the_schematic_is_refused_even_if_the_netlist_is_old(tmp_path):
+    """The netlist can be older than the routing while the drawing is
+    newer than both -- someone edited the schematic and never pressed
+    Netlist. That is the case `route` cannot see, because it is never run.
+    """
     routed = _chain(tmp_path, netlist_mtime=500, sch_mtime=2000)
     with pytest.raises(SimulateError) as e:
         check_routed_fresh(routed)
