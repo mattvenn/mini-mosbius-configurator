@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mosbius import messages
 from mosbius.check import check_design
 from mosbius.cli import main
 from mosbius.netlist import parse_netlist
@@ -196,7 +197,8 @@ def test_reversed_pmos_is_a_warning_naming_every_offender():
     assert [f.code for f in report.warnings] == ["D2"]
     assert report.errors == []
     message = report.warnings[0].message
-    assert message.startswith("WARNING -- drain and source look swapped on M2, M4, M6")
+    headline = messages.CHECK_D2_DRAIN_SOURCE_SWAPPED.split("\n\n")[0].format(names="M2, M4, M6")
+    assert message.startswith(headline)
 
 
 def test_reversed_pmos_message_connects_to_the_failure_the_user_sees():
@@ -271,21 +273,22 @@ def test_a_tail_with_no_matching_sources_is_an_error():
     report = check_design(design(*orphan))
     assert len(report.errors) == 1
     assert report.errors[0].code == "D3"
-    assert "nothing else in the design has its source" in report.errors[0].message
+    assert messages.CHECK_D3_FOUND_NONE.format(node="net1") in report.errors[0].message
 
 
 def test_a_tail_with_one_matching_source_names_it():
     one_half = ("XM1 ua1 ua3 net1 VGND mosbius_nmos w=1",
                 "XT1 net1 ibias VGND mosbius_ntail tail=6")
     message = check_design(design(*one_half)).errors[0].message
-    assert "1 mosbius_nmos devices have their source there: XM1" in message
+    assert messages.CHECK_D3_FOUND_SOME.format(
+        n=1, fet_symbol="mosbius_nmos", names="XM1") in message
 
 
 def test_a_tail_with_three_matching_sources_is_also_wrong_arity():
     three = HEALTHY_TAIL + ("XM3 ua5 ua4 net1 VGND mosbius_nmos w=1",)
     message = check_design(design(*three)).errors[0].message
-    assert "3 mosbius_nmos devices have their source there" in message
-    assert "XM1, XM2, XM3" in message
+    assert messages.CHECK_D3_FOUND_SOME.format(
+        n=3, fet_symbol="mosbius_nmos", names="XM1, XM2, XM3") in message
 
 
 def test_a_tail_wired_straight_to_the_rail_is_a_different_error():

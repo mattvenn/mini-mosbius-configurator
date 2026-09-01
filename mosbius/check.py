@@ -33,6 +33,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable
 
+from mosbius import messages
 from mosbius.netlist import IMPLICIT_PINS, PORT_NAMES, MosbiusDesign
 from mosbius.route import FIXED_GEOMETRY, DeviceTail, DeviceWidth
 from mosbius.model import (
@@ -220,18 +221,8 @@ def _check_e1_supply_short(graph: Graph, comp: dict[str, int]) -> list[Finding]:
         return []
     path = _shortest_path(graph, "VAPWR", "VGND")
     n = len(path)
-    message = (
-        f"DANGEROUS -- supply short\n\n"
-        f"  VAPWR is joined to VGND through {n} closed switch{'es' if n != 1 else ''}:\n\n"
-        f"{format_path(path)}\n\n"
-        f"  This draws unlimited current from the 3.3V supply straight to ground.\n"
-        f"  On real silicon that can damage the chip, so the upload is blocked.\n\n"
-        f"  Why it happened: closing every switch on that path ties VAPWR and\n"
-        f"  VGND together somewhere in the matrix -- often a bus_short switch\n"
-        f"  joining a VAPWR-tapped row to a VGND-tapped one, or two rail taps\n"
-        f"  landing on the same bus segment via different switches.\n\n"
-        f"  To fix: open one of the switches on the path above -- moving the\n"
-        f"  net to another row is usually enough."
+    message = messages.CHECK_E1_SUPPLY_SHORT.format(
+        n=n, plural="es" if n != 1 else "", path=format_path(path),
     )
     return [Finding(code="E1", severity=ERROR, message=message)]
 
@@ -242,16 +233,9 @@ def _check_e2_ibias_short(graph: Graph, comp: dict[str, int]) -> list[Finding]:
         if comp["ibias"] != comp[rail]:
             continue
         path = _shortest_path(graph, "ibias", rail)
-        message = (
-            f"DANGEROUS -- ibias shorted to {rail}\n\n"
-            f"  ibias (ua[0]) is joined to {rail} through {len(path)} closed switch"
-            f"{'es' if len(path) != 1 else ''}:\n\n"
-            f"{format_path(path)}\n\n"
-            f"  ibias is a current *input* (SPEC.md Sec 3.4b) that biases every\n"
-            f"  mirror and tail on the chip. Tying it to a rail forces whatever\n"
-            f"  current source drives it directly into {rail}, and every device\n"
-            f"  that depends on ibias loses its bias point.\n\n"
-            f"  To fix: open one of the switches on the path above."
+        n = len(path)
+        message = messages.CHECK_E2_IBIAS_SHORT.format(
+            rail=rail, n=n, plural="es" if n != 1 else "", path=format_path(path),
         )
         findings.append(Finding(code="E2", severity=ERROR, message=message))
     return findings
@@ -264,17 +248,10 @@ def _check_e3_driven_pin_into_rail(graph: Graph, comp: dict[str, int]) -> list[F
             if comp[pin] != comp[rail]:
                 continue
             path = _shortest_path(graph, pin, rail)
-            message = (
-                f"DANGEROUS -- {pin} shorted to {rail}\n\n"
-                f"  {pin} is joined to {rail} through {len(path)} closed switch"
-                f"{'es' if len(path) != 1 else ''}:\n\n"
-                f"{format_path(path)}\n\n"
-                f"  {pin} is a package pin the demoboard can drive as a stimulus.\n"
-                f"  If it ever is, this path sends that drive straight into\n"
-                f"  {rail} -- a hard short the demoboard's output stage may not\n"
-                f"  survive.\n\n"
-                f"  To fix: open one of the switches on the path above, or route\n"
-                f"  this net through a different bus segment."
+            n = len(path)
+            message = messages.CHECK_E3_PIN_INTO_RAIL.format(
+                pin=pin, rail=rail, n=n, plural="es" if n != 1 else "",
+                path=format_path(path),
             )
             findings.append(Finding(code="E3", severity=ERROR, message=message))
     return findings
@@ -293,16 +270,10 @@ def _check_e4_pin_contention(graph: Graph, comp: dict[str, int]) -> list[Finding
                 continue
             seen_pairs.add(pair)
             path = _shortest_path(graph, a, b)
-            message = (
-                f"DANGEROUS -- {a} and {b} are tied together\n\n"
-                f"  They're joined through {len(path)} closed switch"
-                f"{'es' if len(path) != 1 else ''}:\n\n"
-                f"{format_path(path)}\n\n"
-                f"  Both are package pins the demoboard can drive independently.\n"
-                f"  If it ever drives them to different voltages, this path\n"
-                f"  shorts them together.\n\n"
-                f"  To fix: open one of the switches on the path above, or route\n"
-                f"  these nets through different bus segments."
+            n = len(path)
+            message = messages.CHECK_E4_PIN_CONTENTION.format(
+                a=a, b=b, n=n, plural="es" if n != 1 else "",
+                path=format_path(path),
             )
             findings.append(Finding(code="E4", severity=ERROR, message=message))
     return findings
@@ -316,15 +287,12 @@ def _check_w1_shorted_channel(graph: Graph, comp: dict[str, int]) -> list[Findin
         if comp[d] != comp[s]:
             continue
         path = _shortest_path(graph, d, s)
-        message = (
-            f"WARNING -- {name}'s drain and source are tied together\n\n"
-            f"  They're joined through {len(path)} closed switch"
-            f"{'es' if len(path) != 1 else ''}:\n\n"
-            f"{format_path(path) if path else f'    ({name}.d and {name}.s are the same net)'}\n\n"
-            f"  This shorts out {name}'s channel -- current flows straight\n"
-            f"  through instead of being modulated by the gate, so the\n"
-            f"  transistor does nothing useful.\n\n"
-            f"  To fix: route {name}'s drain and source to different nets."
+        n = len(path)
+        path_text = (
+            format_path(path) if path else messages.CHECK_W1_SAME_NET.format(name=name)
+        )
+        message = messages.CHECK_W1_SHORTED_CHANNEL.format(
+            name=name, n=n, plural="es" if n != 1 else "", path=path_text,
         )
         findings.append(Finding(code="W1", severity=WARN, message=message))
     return findings
@@ -395,25 +363,16 @@ def _check_w2_floating_crosspoint(
         terminals = sorted(_terminal_name(n) for n in nodes)
         names = ", ".join(terminals)
         if len(terminals) == 1:
-            headline = f"WARNING -- nothing biases {names}"
-            intro = "  It has a closed switch on it, but the net it sits on\n"
+            headline = messages.CHECK_W2_HEADLINE_ONE.format(names=names)
+            intro = messages.CHECK_W2_INTRO_ONE
         else:
-            headline = f"WARNING -- nothing biases the net joining {names}"
-            intro = "  These terminals are wired together, but the net they form\n"
+            headline = messages.CHECK_W2_HEADLINE_MANY.format(names=names)
+            intro = messages.CHECK_W2_INTRO_MANY
 
         if all(t.endswith((".g", ".inp", ".inm")) for t in terminals):
-            why = (
-                "  Every terminal on it is a gate, so nothing can set its\n"
-                "  voltage -- there is no transistor channel to a rail here,\n"
-                "  and no switch to one either.\n\n"
-            )
+            why = messages.CHECK_W2_WHY_ALL_GATES
         else:
-            why = (
-                "  Nothing reaches it: not a closed switch to a rail or a\n"
-                "  ua[] pin, and not a transistor channel that gets to one\n"
-                "  either (a drain only conducts to a rail if its own source\n"
-                "  is tied to one).\n\n"
-            )
+            why = messages.CHECK_W2_WHY_NOTHING_REACHES
 
         # If a diff-pair half is on this net, its untied tail is the whole
         # reason the channel leads nowhere -- and that is one bit to flip.
@@ -425,24 +384,10 @@ def _check_w2_floating_crosspoint(
         hint = ""
         if untied:
             bits = ", ".join(f"ctrl_{name}" for name in untied)
-            hint = (
-                f"\n\n  Most likely fix here: {bits} is off, so the shared\n"
-                f"  diff-pair tail on this net's transistor is floating too. The\n"
-                f"  tail has no matrix terminal of its own (SPEC.md Sec 2.12) --\n"
-                f"  that bit is the only way to tie it to a rail, and with it set\n"
-                f"  the half works as an ordinary common-source FET."
-            )
+            hint = messages.CHECK_W2_HINT_UNTIED_TAIL.format(bits=bits)
 
-        message = (
-            f"{headline}\n\n"
-            f"{intro}"
-            f"  has no DC path to VAPWR, VGND, or a ua[] pin.\n\n"
-            f"{why}"
-            f"  In SPICE it floats and settles at an arbitrary voltage; on\n"
-            f"  real silicon leakage pulls it somewhere uncontrolled, slowly.\n\n"
-            f"  To fix: connect it to something that drives it -- a drain\n"
-            f"  whose transistor has its source on a rail, a mirror output,\n"
-            f"  or a ua[] pin you can drive from the demoboard.{hint}"
+        message = messages.CHECK_W2_BODY.format(
+            headline=headline, intro=intro, why=why, hint=hint,
         )
         findings.append(Finding(code="W2", severity=WARN, message=message))
     return findings
@@ -455,17 +400,10 @@ def _check_w3_unconnected_terminal(graph: Graph) -> list[Finding]:
         unused = [f"{name}.{t}" for t, xpt in terminals.items() if not graph.get(xpt)]
         if not used or not unused:
             continue
-        message = (
-            f"WARNING -- {name} is partly wired\n\n"
-            f"  {', '.join(used)} {'has' if len(used) == 1 else 'have'} a closed\n"
-            f"  switch, but {', '.join(unused)} {'is' if len(unused) == 1 else 'are'}\n"
-            f"  left with no connection at all.\n\n"
-            f"  A transistor with a floating terminal isn't doing the job it\n"
-            f"  looks like it's doing -- an unconnected gate floats to an\n"
-            f"  arbitrary voltage, an unconnected drain/source leaves the\n"
-            f"  device conducting nowhere.\n\n"
-            f"  To fix: either wire up {', '.join(unused)}, or remove {name}\n"
-            f"  from the design if it isn't meant to be used."
+        message = messages.CHECK_W3_PARTLY_WIRED.format(
+            name=name, used=', '.join(used), unused=', '.join(unused),
+            has_have='has' if len(used) == 1 else 'have',
+            is_are='is' if len(unused) == 1 else 'are',
         )
         findings.append(Finding(code="W3", severity=WARN, message=message))
     return findings
@@ -496,35 +434,36 @@ def _render_i1(subjects: list[str], detail: dict[str, tuple[str, str | None]]) -
     sentences = []
     if empty:
         verb = "has" if len(empty) == 1 else "have"
-        sentences.append(f"{_join_and(empty)} {verb} nothing connected to "
-                         f"{'it' if len(empty) == 1 else 'them'} at all.")
+        it_them = "it" if len(empty) == 1 else "them"
+        sentences.append(messages.CHECK_I1_SENTENCE_EMPTY.format(
+            names=_join_and(empty), verb=verb, it_them=it_them,
+        ))
     if bonded:
         pins = _join_and([detail[seg][1] for seg in bonded])
         if len(bonded) == 1:
-            sentences.append(
-                f"{bonded[0]} is connected only to its package pin ({pins}) -- "
-                f"that bond wire is part of the chip rather than something "
-                f"the schematic added, so it joins the segment to nothing else.")
+            sentences.append(messages.CHECK_I1_SENTENCE_BONDED_ONE.format(
+                seg=bonded[0], pins=pins,
+            ))
         else:
-            sentences.append(
-                f"{_join_and(bonded)} are connected only to their package pins "
-                f"({pins}) -- those bond wires are part of the chip rather "
-                f"than something the schematic added, so each joins its "
-                f"segment to nothing else.")
+            sentences.append(messages.CHECK_I1_SENTENCE_BONDED_MANY.format(
+                names=_join_and(bonded), pins=pins,
+            ))
     if wired:
         verb = "has" if len(wired) == 1 else "have"
         each = "" if len(wired) == 1 else " each"
-        sentences.append(f"{_join_and(wired)} {verb} just one connection{each}.")
+        sentences.append(messages.CHECK_I1_SENTENCE_WIRED.format(
+            names=_join_and(wired), verb=verb, each=each,
+        ))
 
     plural = len(subjects) > 1
-    headline = f"{_join_and(subjects)} {'do' if plural else 'does'} nothing"
+    headline = messages.CHECK_I1_HEADLINE.format(
+        subjects=_join_and(subjects), do_does="do" if plural else "does",
+    )
     consequence = ("none of these segments is" if plural else "this segment isn't")
     return _wrap(
         "INFO -- ", headline,
         " ".join(sentences),
-        "A bus segment needs at least two connections (to actually join two "
-        f"things) to have any effect, so {consequence} wiring anything "
-        f"together.",
+        messages.CHECK_I1_PARAGRAPH2.format(consequence=consequence),
     )
 
 
@@ -594,14 +533,12 @@ def _why_it_costs_the_pair(kind: str, wrong_rail: str) -> str:
     first thing the user sees is the allocator running out of transistors,
     which points at circuit size instead of at the wiring.
     """
-    return (
-        f"  It also costs you the two differential-pair halves. Their shared\n"
-        f"  tail has no terminal on the switch matrix (SPEC.md Sec 2.12), so the\n"
-        f"  only way to give it a voltage is {_PAIR_TAIL_BIT[kind]}, and that bit\n"
-        f"  ties it to {OTHER_RAIL[wrong_rail]}. A half therefore cannot take a device whose\n"
-        f"  source is on {wrong_rail}, which leaves only {_INDEPENDENT_SLOTS[kind]}. That is\n"
-        f"  why this first shows up as \"DOESN'T FIT -- not enough "
-        f"{_ROUTER_LABEL[kind]} with\n  independent sources\".\n\n"
+    return messages.CHECK_D1_WHY_COSTS_PAIR.format(
+        tail_bit=_PAIR_TAIL_BIT[kind],
+        other_rail=OTHER_RAIL[wrong_rail],
+        wrong_rail=wrong_rail,
+        independent_slots=_INDEPENDENT_SLOTS[kind],
+        router_label=_ROUTER_LABEL[kind],
     )
 
 
@@ -647,58 +584,20 @@ def _check_d1_source_on_wrong_rail(design: MosbiusDesign) -> list[Finding]:
         names = _name_list(offenders)
         n = len(offenders)
         if n == 1:
-            subject = f"  {names} is a mosbius_{kind} with its source on {wrong}"
+            subject = messages.CHECK_D1_SUBJECT_ONE.format(names=names, kind=kind, wrong=wrong)
         else:
-            subject = (
-                f"  {n} of your mosbius_{kind} devices have their source on "
-                f"{wrong}:\n    {names}"
-            )
+            subject = messages.CHECK_D1_SUBJECT_MANY.format(n=n, kind=kind, wrong=wrong, names=names)
 
         if home not in wired_nets:
-            message = (
-                f"DANGEROUS -- VAPWR and VGND are joined somewhere in your schematic\n\n"
-                f"{subject}\n\n"
-                f"  Meanwhile {home} does not appear on a single device terminal\n"
-                f"  anywhere in this netlist.\n\n"
-                f"  Why that combination means the rails are shorted: a "
-                f"mosbius_{kind}'s\n"
-                f"  body is hard-wired to {home} on silicon, and its source belongs on\n"
-                f"  that same rail. The body still reads {home} here because it is not a\n"
-                f"  wire you drew -- it comes from the symbol's own template\n"
-                f"  (mosbius_{kind}.sym, template=\"... b={home}\" with extra=\"b\"), so it\n"
-                f"  is the one connection xschem cannot merge with anything else.\n"
-                f"  Everything you did draw as {home} came back as {wrong} instead.\n\n"
-                f"  That is what happens when the two rails are wired together: xschem\n"
-                f"  merges them into a single net, keeps one of the two names, and the\n"
-                f"  short itself vanishes from the netlist before this tool ever sees\n"
-                f"  it. Nothing here can find it by looking at connectivity, because\n"
-                f"  by then there is only one rail left to look at.\n\n"
-                f"  On real silicon this ties the 3.3V supply straight to ground and\n"
-                f"  draws unlimited current, so nothing is routed or uploaded from\n"
-                f"  here.\n\n"
-                f"  To fix: find the wire joining {wrong} and {home} in your schematic,\n"
-                f"  delete it, and press Netlist again. Both rail names should then be\n"
-                f"  back on the terminals you drew them on."
+            message = messages.CHECK_D1_RAILS_SHORTED.format(
+                subject=subject, home=home, kind=kind, wrong=wrong,
             )
             findings.append(Finding(code="D1", severity=ERROR, message=message))
             continue
 
-        message = (
-            f"WARNING -- source on {wrong} where {home} is expected\n\n"
-            f"{subject}.\n"
-            f"  A mosbius_{kind}'s body is hard-wired to {home} on silicon "
-            f"(that is what\n"
-            f"  mosbius_{kind}.sym's template=\"... b={home}\" records), and its source\n"
-            f"  belongs on the same rail.\n\n"
-            f"{_why_it_costs_the_pair(kind, wrong)}"
-            f"  The usual cause is a symbol flipped vertically: mosbius_nmos has its\n"
-            f"  source at the bottom and its drain at the top, and mosbius_pmos is\n"
-            f"  the other way up.\n\n"
-            f"  This is a warning rather than a hard stop because the router can\n"
-            f"  still reach {wrong} from a source terminal, through a bus row and a\n"
-            f"  cfg_bus_pwr tap -- so the circuit may well route. It just probably\n"
-            f"  is not the circuit you meant to draw.\n\n"
-            f"  To fix: wire the source of {names} to {home}."
+        message = messages.CHECK_D1_SOURCE_ON_WRONG_RAIL.format(
+            wrong=wrong, home=home, subject=subject, kind=kind,
+            why_costs_pair=_why_it_costs_the_pair(kind, wrong), names=names,
         )
         findings.append(Finding(code="D1", severity=WARN, message=message))
 
@@ -747,53 +646,16 @@ def _check_d2_drain_and_source_swapped(design: MosbiusDesign) -> list[Finding]:
         nets = ", ".join(sorted({f"'{d.terminals['s']}'" for d in offenders}))
         n = len(offenders)
         if n == 1:
-            subject = (
-                f"  {names} is a mosbius_{kind} with its drain on {rail} and its\n"
-                f"  source on {nets}, an ordinary net inside your circuit."
-            )
+            subject = messages.CHECK_D2_SUBJECT_ONE.format(names=names, kind=kind, rail=rail, nets=nets)
         else:
-            subject = (
-                f"  {n} of your mosbius_{kind} devices have their drain on {rail} "
-                f"and their\n  source on an ordinary net inside your circuit "
-                f"({nets}):\n    {names}"
-            )
+            subject = messages.CHECK_D2_SUBJECT_MANY.format(n=n, kind=kind, rail=rail, nets=nets, names=names)
 
         top, bottom = ("source", "drain") if kind == "pmos" else ("drain", "source")
-        message = (
-            f"WARNING -- drain and source look swapped on {names}\n\n"
-            f"{subject}\n\n"
-            f"  That is back to front for a common-source transistor. A "
-            f"mosbius_{kind}'s\n  source belongs on {rail} -- the rail its body is "
-            f"hard-wired to on\n  silicon -- and its drain is the end that drives "
-            f"the rest of the\n  circuit. As drawn, these two are the other way "
-            f"round.\n\n"
-            f"  Why it is worth saying: nothing downstream can tell a reversed\n"
-            f"  transistor from a deliberate one, so the request is taken at face\n"
-            f"  value and costs you something either way.\n\n"
-            f"  It costs a bus row even when it routes. Only the *source* terminal\n"
-            f"  has a free tie to its rail:\n"
-            f"    {SOURCE_TIE_EXAMPLE[kind]}\n"
-            f"  With the source on an internal net that tie is unusable, so "
-            f"reaching\n  {rail} from the drain instead has to spend a bus row and "
-            f"a cfg_bus_pwr\n  tap.\n\n"
-            f"  And it can cost you the circuit. The chip has only two "
-            f"{kind.upper()} whose\n  source can be routed anywhere at all, so once "
-            f"there are more than two\n  such requests the allocator gives up:\n"
-            f"    \"DOESN'T FIT -- not enough {kind.upper()} with independent "
-            f"sources\"\n"
-            f"  which points at the size of your circuit rather than at the "
-            f"wiring.\n\n"
-            f"  The usual cause is a symbol flipped vertically: mosbius_{kind} has "
-            f"its\n  {top} at the top and its {bottom} at the bottom, the opposite "
-            f"way up\n  from mosbius_{'nmos' if kind == 'pmos' else 'pmos'}. A "
-            f"schematic drawn before 2026-08-21 used the\n  older pin geometry, so "
-            f"a symbol copied from one comes out reversed.\n\n"
-            f"  This is a hint, not a hard stop: a source on an internal net is\n"
-            f"  exactly right in a cascode or a source follower. It is flagged only\n"
-            f"  because the drain is on {rail} as well, and that combination has no\n"
-            f"  sensible reading.\n\n"
-            f"  To fix: swap the two connections on {names}, so the source goes to\n"
-            f"  {rail} and the drain carries the signal."
+        other_kind = "nmos" if kind == "pmos" else "pmos"
+        message = messages.CHECK_D2_DRAIN_SOURCE_SWAPPED.format(
+            names=names, subject=subject, kind=kind, rail=rail,
+            source_tie=SOURCE_TIE_EXAMPLE[kind], kind_upper=kind.upper(),
+            top=top, bottom=bottom, other_kind=other_kind,
         )
         findings.append(Finding(code="D2", severity=WARN, message=message))
 
@@ -845,24 +707,14 @@ def _check_d3_tail_wrong_arity(design: MosbiusDesign) -> list[Finding]:
             symbol = _TAIL_SYMBOL[kind]
             fet_symbol = "mosbius_nmos" if fet_kind == "nmos" else "mosbius_pmos"
             if not halves:
-                found = f"nothing else in the design has its source on '{node}'"
+                found = messages.CHECK_D3_FOUND_NONE.format(node=node)
             else:
-                found = (
-                    f"{len(halves)} {fet_symbol} devices have their source there: "
-                    f"{_name_list(halves)}"
+                found = messages.CHECK_D3_FOUND_SOME.format(
+                    n=len(halves), fet_symbol=fet_symbol, names=_name_list(halves),
                 )
-            message = (
-                f"ERROR -- {tail.name}'s drain doesn't declare a pair\n\n"
-                f"  {tail.name} is a {symbol}, and its drain is wired to "
-                f"'{node}'.\n  Drawing a {symbol} declares that net's two "
-                f"{fet_symbol} devices as a\n  differential pair -- but {found}.\n\n"
-                f"  A {symbol} needs exactly two {fet_symbol} devices sharing its\n"
-                f"  drain net as their source: those become the pair, and "
-                f"{tail.name}'s\n  tail= reaches their shared tail current "
-                f"({_TAIL_BIT[kind]}).\n\n"
-                f"  To fix: wire {tail.name}'s drain to the shared source of "
-                f"exactly two\n  {fet_symbol} devices, or remove {tail.name} if "
-                f"you didn't mean to\n  draw a pair here."
+            message = messages.CHECK_D3_TAIL_WRONG_ARITY.format(
+                tail_name=tail.name, symbol=symbol, node=node,
+                fet_symbol=fet_symbol, found=found, tail_bit=_TAIL_BIT[kind],
             )
             findings.append(Finding(code="D3", severity=ERROR, message=message))
     return findings
@@ -887,22 +739,8 @@ def _check_d4_tail_on_rail(design: MosbiusDesign) -> list[Finding]:
             continue
         symbol = _TAIL_SYMBOL[kind]
         for tail in offenders:
-            message = (
-                f"ERROR -- {tail.name}'s drain is wired straight to {rail}\n\n"
-                f"  {tail.name} is a {symbol}, and its drain -- the node its "
-                f"tail bank\n  feeds -- is wired directly to {rail} instead of "
-                f"to a genuine internal\n  net.\n\n"
-                f"  That node is never the rail itself: it is the diff pair's "
-                f"shared\n  source, which has no matrix terminal of its own "
-                f"(SPEC.md Sec 2.12).\n  {_TAIL_BIT[kind]} (what {tail.name}'s "
-                f"tail= sets) and the rail-tie bit\n  are two different ways to "
-                f"bias that one node, and they are\n  alternatives, never both "
-                f"at once.\n\n"
-                f"  To fix: wire {tail.name}'s drain to the pair halves' actual\n"
-                f"  shared source net, not to {rail}. If you meant the halves "
-                f"tied\n  straight to {rail} instead (CLAUDE.md Traps #3), "
-                f"remove {tail.name}\n  and wire their sources to {rail} "
-                f"directly."
+            message = messages.CHECK_D4_TAIL_ON_RAIL.format(
+                tail_name=tail.name, rail=rail, symbol=symbol, tail_bit=_TAIL_BIT[kind],
             )
             findings.append(Finding(code="D4", severity=ERROR, message=message))
     return findings
@@ -924,34 +762,24 @@ def _render_r1(subjects: list[str], device_roles: dict[str, str], prop: str,
     roles = [device_roles[s] for s in subjects]
     if len(subjects) == 1:
         name, role = subjects[0], roles[0]
-        headline = f"{name}'s {prop}={requested} was ignored: {role} has a fixed width"
-        intro = f"The router put {name} on {role}, one of the two halves of the"
+        headline = messages.CHECK_R1_HEADLINE_ONE.format(name=name, prop=prop, requested=requested, role=role)
+        intro = messages.CHECK_R1_INTRO_ONE.format(name=name, role=role)
     else:
         names, role_list = _join_and(subjects), _join_and(roles)
-        headline = (f"{names} had their {prop}={requested} ignored: "
-                    f"{role_list} have a fixed width")
-        intro = f"The router put {names} on {role_list}, the two halves of the"
+        headline = messages.CHECK_R1_HEADLINE_MANY.format(
+            names=names, prop=prop, requested=requested, role_list=role_list,
+        )
+        intro = messages.CHECK_R1_INTRO_MANY.format(names=names, role_list=role_list)
     return _wrap(
         "WARNING -- ", headline,
-        f"{intro} {kind} differential pair. Those halves have no width bits "
-        f"on the chip -- their geometry is built in silicon -- so there is "
-        f"nothing in the bitstream that could carry {prop}={requested}, and "
-        f"it was dropped.",
-        f"What you get instead is {prop}={effective}. A half is {geometry}, "
-        f"which is exactly the geometry of a programmable FET at its maximum "
-        f"{prop}={effective} ({prog}'s 1x always-on slice plus its switchable "
-        f"1x and 2x slices).",
-        f"Why this matters: it is built at {prop}={effective} where your "
-        f"schematic says {prop}={requested}. In a circuit that looks "
-        f"symmetric -- the three stages of a ring oscillator, say -- the "
-        f"stages that land on the programmable FETs come out at the width "
-        f"you asked for and this one does not, and the mismatch exists only "
-        f"on silicon, not in the drawing.",
-        f"To fix: set the other devices of the same kind to {prop}="
-        f"{effective} as well, so every stage matches deliberately -- "
-        f"examples/ringosc/ring.sch does exactly that. They match in W/L, "
-        f"though not in parasitics: the programmable FET's 1x and 2x slices "
-        f"sit behind drain switches and the diff-pair half does not.",
+        messages.CHECK_R1_PARAGRAPH_DROPPED.format(
+            intro=intro, kind=kind, prop=prop, requested=requested,
+        ),
+        messages.CHECK_R1_PARAGRAPH_INSTEAD.format(
+            prop=prop, effective=effective, geometry=geometry, prog=prog,
+        ),
+        messages.CHECK_R1_PARAGRAPH_WHY.format(prop=prop, effective=effective, requested=requested),
+        messages.CHECK_R1_PARAGRAPH_FIX.format(prop=prop, effective=effective),
     )
 
 
@@ -1004,26 +832,18 @@ def _render_r2(subjects: list[str], device_roles: dict[str, str], requested: int
     roles = [device_roles[s] for s in subjects]
     if len(subjects) == 1:
         name, role = subjects[0], roles[0]
-        headline = f"{name}'s tail={requested} was ignored: {role} has no tail current"
-        intro = (f"The router put {name} on {role}, which has no tail-current "
-                 f"bit of its own")
+        headline = messages.CHECK_R2_HEADLINE_ONE.format(name=name, requested=requested, role=role)
+        intro = messages.CHECK_R2_INTRO_ONE.format(name=name, role=role)
     else:
         names, role_list = _join_and(subjects), _join_and(roles)
-        headline = (f"{names} had their tail={requested} ignored: "
-                    f"{role_list} have no tail current")
-        intro = (f"The router put {names} on {role_list}, which have no "
-                 f"tail-current bit of their own")
+        headline = messages.CHECK_R2_HEADLINE_MANY.format(
+            names=names, requested=requested, role_list=role_list,
+        )
+        intro = messages.CHECK_R2_INTRO_MANY.format(names=names, role_list=role_list)
     return _wrap(
         "WARNING -- ", headline,
-        f"{intro}, so there is nothing here for tail= to set and it was "
-        f"dropped.",
-        "Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail you "
-        "can write in the schematic. If you meant to change how hard this "
-        "device drives, that is w= (1, 2, 3 or 4) on a "
-        "mosbius_nmos/mosbius_pmos, or ratio= on a "
-        "mosbius_nsink/mosbius_psource. If you meant a differential pair's "
-        "tail current, that belongs on a mosbius_ntail/mosbius_ptail wired "
-        "to the pair's shared source, not on either half.",
+        messages.CHECK_R2_PARAGRAPH_DROPPED.format(intro=intro),
+        messages.CHECK_R2_PARAGRAPH_ALTERNATIVES,
     )
 
 
@@ -1073,25 +893,14 @@ def _render_r3(subjects: list[str], undeclared, ibias: float) -> str:
     nets = _join_and([f"'{s}'" for s in subjects])
     devices = _join_and(sorted({d for s in subjects for d in undeclared[s].devices}))
     amps = 2 * ibias * 1e6
+    ibias_uA = ibias * 1e6
     return _wrap(
-        "WARNING -- ", f"the differential pair on {nets} will draw "
-        f"{amps:.0f} uA you did not ask for",
-        f"{devices} became differential-pair halves, and a pair's tail "
-        f"current bank has no off state. Its smallest setting is one "
-        f"always-on transistor (diff_n.sch M8, W=20 against the bias "
-        f"reference's W=10), so the chip sinks 2 x ibias -- {amps:.0f} uA at "
-        f"the {ibias * 1e6:.0f} uA this configuration uses -- out of "
-        f"{nets}, whatever the schematic says. `mosbius decode` shows it as "
-        f"tail=2.",
-        f"Your as-drawn simulation has no such current in it, so the drawn "
-        f"and routed halves of a testbench will disagree, and disagree more "
-        f"the higher you set ibias.",
-        f"Two ways to make them agree. Draw a {one.tail_symbol} on that "
-        f"node and say which tail current you want (2, 4, 6 or 8 multiples "
-        f"of ibias -- see examples/diffamp/), which puts the same current in "
-        f"both. Or name that net {one.rail}, which closes the pair's free "
-        f"source tie and shorts the tail bank out, leaving two ordinary "
-        f"common-source FETs.",
+        "WARNING -- ", messages.CHECK_R3_HEADLINE.format(nets=nets, amps=amps),
+        messages.CHECK_R3_PARAGRAPH_SINKS.format(
+            devices=devices, amps=amps, ibias_uA=ibias_uA, nets=nets,
+        ),
+        messages.CHECK_R3_PARAGRAPH_DISAGREE,
+        messages.CHECK_R3_PARAGRAPH_FIX.format(tail_symbol=one.tail_symbol, rail=one.rail),
     )
 
 
@@ -1157,31 +966,16 @@ def _check_b1_bias_generator(design: MosbiusDesign) -> list[Finding]:
     drew = _join_and([f"mosbius_{k}" for k in users])
     if count == 0:
         message = _wrap(
-            "IMPOSSIBLE -- ", "this design has no bias generator on the sheet",
-            f"You drew {drew}, and every one of those copies the chip's bias "
-            f"reference: they are mirror legs and tail banks, and what sets "
-            f"their current is the voltage that reference makes out of the "
-            f"ibias pin.",
-            "Nothing on this sheet makes it, so in simulation their gates sit "
-            "wherever the DC solver leaves them and the currents mean nothing. "
-            "On silicon the reference is always there, so this is a gap in the "
-            "drawing rather than something the chip could do.",
-            "To fix: place one mosbius_bias from xschem/mosbius_lib and wire it "
-            "to the ibias pin. examples/currentsource/ has it done. Copying a "
-            "fresh mini_mosbius.sch also gets you one.",
+            "IMPOSSIBLE -- ", messages.CHECK_B1_NO_GENERATOR_HEADLINE,
+            messages.CHECK_B1_NO_GENERATOR_DREW.format(drew=drew),
+            messages.CHECK_B1_NO_GENERATOR_GAP,
+            messages.CHECK_B1_NO_GENERATOR_FIX,
         )
     else:
         message = _wrap(
-            "IMPOSSIBLE -- ", f"this design has {count} bias generators, and "
-            f"needs exactly one",
-            "They sit in parallel on the ibias pin, so they share the current "
-            "the demoboard sends: two references make half the reference "
-            "current each, and every mirror, tail bank and OTA tail on the "
-            "sheet comes out at half of what its ratio= or tail= asks for.",
-            "The chip has one, feeding everything. To fix: delete all but one "
-            "mosbius_bias (or, on an older sheet, all but one drawn "
-            "reference diode -- the NMOS with its gate and drain both on "
-            "ibias).",
+            "IMPOSSIBLE -- ", messages.CHECK_B1_TOO_MANY_HEADLINE.format(count=count),
+            messages.CHECK_B1_TOO_MANY_SHARE,
+            messages.CHECK_B1_TOO_MANY_FIX,
         )
     return [Finding(code="B1", severity=ERROR, message=message)]
 

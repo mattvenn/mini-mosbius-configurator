@@ -329,3 +329,468 @@ ROUTE_VDPWR_UNREACHABLE = (
     "signal through VAPWR or VGND\n  instead, or reconsider whether "
     "this net needs an explicit connection."
 )
+
+
+# --- check.py --------------------------------------------------------------
+
+CHECK_E1_SUPPLY_SHORT = (
+    "DANGEROUS -- supply short\n\n"
+    "  VAPWR is joined to VGND through {n} closed switch{plural}:\n\n"
+    "{path}\n\n"
+    "  This draws unlimited current from the 3.3V supply straight to ground.\n"
+    "  On real silicon that can damage the chip, so the upload is blocked.\n\n"
+    "  Why it happened: closing every switch on that path ties VAPWR and\n"
+    "  VGND together somewhere in the matrix -- often a bus_short switch\n"
+    "  joining a VAPWR-tapped row to a VGND-tapped one, or two rail taps\n"
+    "  landing on the same bus segment via different switches.\n\n"
+    "  To fix: open one of the switches on the path above -- moving the\n"
+    "  net to another row is usually enough."
+)
+
+CHECK_E2_IBIAS_SHORT = (
+    "DANGEROUS -- ibias shorted to {rail}\n\n"
+    "  ibias (ua[0]) is joined to {rail} through {n} closed switch"
+    "{plural}:\n\n"
+    "{path}\n\n"
+    "  ibias is a current *input* (SPEC.md Sec 3.4b) that biases every\n"
+    "  mirror and tail on the chip. Tying it to a rail forces whatever\n"
+    "  current source drives it directly into {rail}, and every device\n"
+    "  that depends on ibias loses its bias point.\n\n"
+    "  To fix: open one of the switches on the path above."
+)
+
+CHECK_E3_PIN_INTO_RAIL = (
+    "DANGEROUS -- {pin} shorted to {rail}\n\n"
+    "  {pin} is joined to {rail} through {n} closed switch"
+    "{plural}:\n\n"
+    "{path}\n\n"
+    "  {pin} is a package pin the demoboard can drive as a stimulus.\n"
+    "  If it ever is, this path sends that drive straight into\n"
+    "  {rail} -- a hard short the demoboard's output stage may not\n"
+    "  survive.\n\n"
+    "  To fix: open one of the switches on the path above, or route\n"
+    "  this net through a different bus segment."
+)
+
+CHECK_E4_PIN_CONTENTION = (
+    "DANGEROUS -- {a} and {b} are tied together\n\n"
+    "  They're joined through {n} closed switch"
+    "{plural}:\n\n"
+    "{path}\n\n"
+    "  Both are package pins the demoboard can drive independently.\n"
+    "  If it ever drives them to different voltages, this path\n"
+    "  shorts them together.\n\n"
+    "  To fix: open one of the switches on the path above, or route\n"
+    "  these nets through different bus segments."
+)
+
+CHECK_W1_SAME_NET = "    ({name}.d and {name}.s are the same net)"
+
+CHECK_W1_SHORTED_CHANNEL = (
+    "WARNING -- {name}'s drain and source are tied together\n\n"
+    "  They're joined through {n} closed switch"
+    "{plural}:\n\n"
+    "{path}\n\n"
+    "  This shorts out {name}'s channel -- current flows straight\n"
+    "  through instead of being modulated by the gate, so the\n"
+    "  transistor does nothing useful.\n\n"
+    "  To fix: route {name}'s drain and source to different nets."
+)
+
+# W2 is assembled from several independently-chosen pieces (one-vs-many
+# headline/intro, all-gates-vs-nothing-reaches "why", an optional
+# untied-tail hint) plugged into one body template -- see
+# _check_w2_floating_crosspoint.
+CHECK_W2_HEADLINE_ONE = "WARNING -- nothing biases {names}"
+CHECK_W2_HEADLINE_MANY = "WARNING -- nothing biases the net joining {names}"
+
+CHECK_W2_INTRO_ONE = "  It has a closed switch on it, but the net it sits on\n"
+CHECK_W2_INTRO_MANY = (
+    "  These terminals are wired together, but the net they form\n"
+)
+
+CHECK_W2_WHY_ALL_GATES = (
+    "  Every terminal on it is a gate, so nothing can set its\n"
+    "  voltage -- there is no transistor channel to a rail here,\n"
+    "  and no switch to one either.\n\n"
+)
+
+CHECK_W2_WHY_NOTHING_REACHES = (
+    "  Nothing reaches it: not a closed switch to a rail or a\n"
+    "  ua[] pin, and not a transistor channel that gets to one\n"
+    "  either (a drain only conducts to a rail if its own source\n"
+    "  is tied to one).\n\n"
+)
+
+CHECK_W2_HINT_UNTIED_TAIL = (
+    "\n\n  Most likely fix here: {bits} is off, so the shared\n"
+    "  diff-pair tail on this net's transistor is floating too. The\n"
+    "  tail has no matrix terminal of its own (SPEC.md Sec 2.12) --\n"
+    "  that bit is the only way to tie it to a rail, and with it set\n"
+    "  the half works as an ordinary common-source FET."
+)
+
+CHECK_W2_BODY = (
+    "{headline}\n\n"
+    "{intro}"
+    "  has no DC path to VAPWR, VGND, or a ua[] pin.\n\n"
+    "{why}"
+    "  In SPICE it floats and settles at an arbitrary voltage; on\n"
+    "  real silicon leakage pulls it somewhere uncontrolled, slowly.\n\n"
+    "  To fix: connect it to something that drives it -- a drain\n"
+    "  whose transistor has its source on a rail, a mirror output,\n"
+    "  or a ua[] pin you can drive from the demoboard.{hint}"
+)
+
+CHECK_W3_PARTLY_WIRED = (
+    "WARNING -- {name} is partly wired\n\n"
+    "  {used} {has_have} a closed\n"
+    "  switch, but {unused} {is_are}\n"
+    "  left with no connection at all.\n\n"
+    "  A transistor with a floating terminal isn't doing the job it\n"
+    "  looks like it's doing -- an unconnected gate floats to an\n"
+    "  arbitrary voltage, an unconnected drain/source leaves the\n"
+    "  device conducting nowhere.\n\n"
+    "  To fix: either wire up {unused}, or remove {name}\n"
+    "  from the design if it isn't meant to be used."
+)
+
+# I1's sentences are picked and joined per finding (a segment can be
+# empty, bond-only, or single-switch, in any combination) -- see
+# _render_i1.
+CHECK_I1_HEADLINE = "{subjects} {do_does} nothing"
+
+CHECK_I1_SENTENCE_EMPTY = (
+    "{names} {verb} nothing connected to {it_them} at all."
+)
+
+CHECK_I1_SENTENCE_BONDED_ONE = (
+    "{seg} is connected only to its package pin ({pins}) -- "
+    "that bond wire is part of the chip rather than something "
+    "the schematic added, so it joins the segment to nothing else."
+)
+
+CHECK_I1_SENTENCE_BONDED_MANY = (
+    "{names} are connected only to their package pins "
+    "({pins}) -- those bond wires are part of the chip rather "
+    "than something the schematic added, so each joins its "
+    "segment to nothing else."
+)
+
+CHECK_I1_SENTENCE_WIRED = "{names} {verb} just one connection{each}."
+
+CHECK_I1_PARAGRAPH2 = (
+    "A bus segment needs at least two connections (to actually join two "
+    "things) to have any effect, so {consequence} wiring anything "
+    "together."
+)
+
+# D1's "subject" line (which/how many devices, one vs several) is built
+# separately from the DANGEROUS/WARNING body that embeds it -- see
+# _check_d1_source_on_wrong_rail.
+CHECK_D1_SUBJECT_ONE = "  {names} is a mosbius_{kind} with its source on {wrong}"
+
+CHECK_D1_SUBJECT_MANY = (
+    "  {n} of your mosbius_{kind} devices have their source on "
+    "{wrong}:\n    {names}"
+)
+
+CHECK_D1_RAILS_SHORTED = (
+    "DANGEROUS -- VAPWR and VGND are joined somewhere in your schematic\n\n"
+    "{subject}\n\n"
+    "  Meanwhile {home} does not appear on a single device terminal\n"
+    "  anywhere in this netlist.\n\n"
+    "  Why that combination means the rails are shorted: a "
+    "mosbius_{kind}'s\n"
+    "  body is hard-wired to {home} on silicon, and its source belongs on\n"
+    "  that same rail. The body still reads {home} here because it is not a\n"
+    "  wire you drew -- it comes from the symbol's own template\n"
+    "  (mosbius_{kind}.sym, template=\"... b={home}\" with extra=\"b\"), so it\n"
+    "  is the one connection xschem cannot merge with anything else.\n"
+    "  Everything you did draw as {home} came back as {wrong} instead.\n\n"
+    "  That is what happens when the two rails are wired together: xschem\n"
+    "  merges them into a single net, keeps one of the two names, and the\n"
+    "  short itself vanishes from the netlist before this tool ever sees\n"
+    "  it. Nothing here can find it by looking at connectivity, because\n"
+    "  by then there is only one rail left to look at.\n\n"
+    "  On real silicon this ties the 3.3V supply straight to ground and\n"
+    "  draws unlimited current, so nothing is routed or uploaded from\n"
+    "  here.\n\n"
+    "  To fix: find the wire joining {wrong} and {home} in your schematic,\n"
+    "  delete it, and press Netlist again. Both rail names should then be\n"
+    "  back on the terminals you drew them on."
+)
+
+# The paragraph that connects D1's WARN branch to the "DOESN'T FIT -- not
+# enough NMOS/PMOS with independent sources" the user actually sees --
+# _why_it_costs_the_pair's return value.
+CHECK_D1_WHY_COSTS_PAIR = (
+    "  It also costs you the two differential-pair halves. Their shared\n"
+    "  tail has no terminal on the switch matrix (SPEC.md Sec 2.12), so the\n"
+    "  only way to give it a voltage is {tail_bit}, and that bit\n"
+    "  ties it to {other_rail}. A half therefore cannot take a device whose\n"
+    "  source is on {wrong_rail}, which leaves only {independent_slots}. "
+    "That is\n"
+    "  why this first shows up as \"DOESN'T FIT -- not enough "
+    "{router_label} with\n  independent sources\".\n\n"
+)
+
+CHECK_D1_SOURCE_ON_WRONG_RAIL = (
+    "WARNING -- source on {wrong} where {home} is expected\n\n"
+    "{subject}.\n"
+    "  A mosbius_{kind}'s body is hard-wired to {home} on silicon "
+    "(that is what\n"
+    "  mosbius_{kind}.sym's template=\"... b={home}\" records), and its source\n"
+    "  belongs on the same rail.\n\n"
+    "{why_costs_pair}"
+    "  The usual cause is a symbol flipped vertically: mosbius_nmos has its\n"
+    "  source at the bottom and its drain at the top, and mosbius_pmos is\n"
+    "  the other way up.\n\n"
+    "  This is a warning rather than a hard stop because the router can\n"
+    "  still reach {wrong} from a source terminal, through a bus row and a\n"
+    "  cfg_bus_pwr tap -- so the circuit may well route. It just probably\n"
+    "  is not the circuit you meant to draw.\n\n"
+    "  To fix: wire the source of {names} to {home}."
+)
+
+# D2's "subject" line, same shape as D1's.
+CHECK_D2_SUBJECT_ONE = (
+    "  {names} is a mosbius_{kind} with its drain on {rail} and its\n"
+    "  source on {nets}, an ordinary net inside your circuit."
+)
+
+CHECK_D2_SUBJECT_MANY = (
+    "  {n} of your mosbius_{kind} devices have their drain on {rail} "
+    "and their\n  source on an ordinary net inside your circuit "
+    "({nets}):\n    {names}"
+)
+
+CHECK_D2_DRAIN_SOURCE_SWAPPED = (
+    "WARNING -- drain and source look swapped on {names}\n\n"
+    "{subject}\n\n"
+    "  That is back to front for a common-source transistor. A "
+    "mosbius_{kind}'s\n  source belongs on {rail} -- the rail its body is "
+    "hard-wired to on\n  silicon -- and its drain is the end that drives "
+    "the rest of the\n  circuit. As drawn, these two are the other way "
+    "round.\n\n"
+    "  Why it is worth saying: nothing downstream can tell a reversed\n"
+    "  transistor from a deliberate one, so the request is taken at face\n"
+    "  value and costs you something either way.\n\n"
+    "  It costs a bus row even when it routes. Only the *source* terminal\n"
+    "  has a free tie to its rail:\n"
+    "    {source_tie}\n"
+    "  With the source on an internal net that tie is unusable, so "
+    "reaching\n  {rail} from the drain instead has to spend a bus row and "
+    "a cfg_bus_pwr\n  tap.\n\n"
+    "  And it can cost you the circuit. The chip has only two "
+    "{kind_upper} whose\n  source can be routed anywhere at all, so once "
+    "there are more than two\n  such requests the allocator gives up:\n"
+    "    \"DOESN'T FIT -- not enough {kind_upper} with independent "
+    "sources\"\n"
+    "  which points at the size of your circuit rather than at the "
+    "wiring.\n\n"
+    "  The usual cause is a symbol flipped vertically: mosbius_{kind} has "
+    "its\n  {top} at the top and its {bottom} at the bottom, the opposite "
+    "way up\n  from mosbius_{other_kind}. A "
+    "schematic drawn before 2026-08-21 used the\n  older pin geometry, so "
+    "a symbol copied from one comes out reversed.\n\n"
+    "  This is a hint, not a hard stop: a source on an internal net is\n"
+    "  exactly right in a cascode or a source follower. It is flagged only\n"
+    "  because the drain is on {rail} as well, and that combination has no\n"
+    "  sensible reading.\n\n"
+    "  To fix: swap the two connections on {names}, so the source goes to\n"
+    "  {rail} and the drain carries the signal."
+)
+
+# D3's "found" clause: what, if anything, shares the tail's drain net.
+CHECK_D3_FOUND_NONE = "nothing else in the design has its source on '{node}'"
+
+CHECK_D3_FOUND_SOME = (
+    "{n} {fet_symbol} devices have their source there: {names}"
+)
+
+CHECK_D3_TAIL_WRONG_ARITY = (
+    "ERROR -- {tail_name}'s drain doesn't declare a pair\n\n"
+    "  {tail_name} is a {symbol}, and its drain is wired to "
+    "'{node}'.\n  Drawing a {symbol} declares that net's two "
+    "{fet_symbol} devices as a\n  differential pair -- but {found}.\n\n"
+    "  A {symbol} needs exactly two {fet_symbol} devices sharing its\n"
+    "  drain net as their source: those become the pair, and "
+    "{tail_name}'s\n  tail= reaches their shared tail current "
+    "({tail_bit}).\n\n"
+    "  To fix: wire {tail_name}'s drain to the shared source of "
+    "exactly two\n  {fet_symbol} devices, or remove {tail_name} if "
+    "you didn't mean to\n  draw a pair here."
+)
+
+CHECK_D4_TAIL_ON_RAIL = (
+    "ERROR -- {tail_name}'s drain is wired straight to {rail}\n\n"
+    "  {tail_name} is a {symbol}, and its drain -- the node its "
+    "tail bank\n  feeds -- is wired directly to {rail} instead of "
+    "to a genuine internal\n  net.\n\n"
+    "  That node is never the rail itself: it is the diff pair's "
+    "shared\n  source, which has no matrix terminal of its own "
+    "(SPEC.md Sec 2.12).\n  {tail_bit} (what {tail_name}'s "
+    "tail= sets) and the rail-tie bit\n  are two different ways to "
+    "bias that one node, and they are\n  alternatives, never both "
+    "at once.\n\n"
+    "  To fix: wire {tail_name}'s drain to the pair halves' actual\n"
+    "  shared source net, not to {rail}. If you meant the halves "
+    "tied\n  straight to {rail} instead (CLAUDE.md Traps #3), "
+    "remove {tail_name}\n  and wire their sources to {rail} "
+    "directly."
+)
+
+# R1's headline/intro (one device vs several) and the four body
+# paragraphs, assembled by _render_r1 and passed through _wrap.
+CHECK_R1_HEADLINE_ONE = (
+    "{name}'s {prop}={requested} was ignored: {role} has a fixed width"
+)
+CHECK_R1_HEADLINE_MANY = (
+    "{names} had their {prop}={requested} ignored: "
+    "{role_list} have a fixed width"
+)
+
+CHECK_R1_INTRO_ONE = (
+    "The router put {name} on {role}, one of the two halves of the"
+)
+CHECK_R1_INTRO_MANY = (
+    "The router put {names} on {role_list}, the two halves of the"
+)
+
+CHECK_R1_PARAGRAPH_DROPPED = (
+    "{intro} {kind} differential pair. Those halves have no width bits "
+    "on the chip -- their geometry is built in silicon -- so there is "
+    "nothing in the bitstream that could carry {prop}={requested}, and "
+    "it was dropped."
+)
+
+CHECK_R1_PARAGRAPH_INSTEAD = (
+    "What you get instead is {prop}={effective}. A half is {geometry}, "
+    "which is exactly the geometry of a programmable FET at its maximum "
+    "{prop}={effective} ({prog}'s 1x always-on slice plus its switchable "
+    "1x and 2x slices)."
+)
+
+CHECK_R1_PARAGRAPH_WHY = (
+    "Why this matters: it is built at {prop}={effective} where your "
+    "schematic says {prop}={requested}. In a circuit that looks "
+    "symmetric -- the three stages of a ring oscillator, say -- the "
+    "stages that land on the programmable FETs come out at the width "
+    "you asked for and this one does not, and the mismatch exists only "
+    "on silicon, not in the drawing."
+)
+
+CHECK_R1_PARAGRAPH_FIX = (
+    "To fix: set the other devices of the same kind to {prop}="
+    "{effective} as well, so every stage matches deliberately -- "
+    "examples/ringosc/ring.sch does exactly that. They match in W/L, "
+    "though not in parasitics: the programmable FET's 1x and 2x slices "
+    "sit behind drain switches and the diff-pair half does not."
+)
+
+# R2's headline/intro/body, same shape as R1's.
+CHECK_R2_HEADLINE_ONE = (
+    "{name}'s tail={requested} was ignored: {role} has no tail current"
+)
+CHECK_R2_HEADLINE_MANY = (
+    "{names} had their tail={requested} ignored: "
+    "{role_list} have no tail current"
+)
+
+CHECK_R2_INTRO_ONE = (
+    "The router put {name} on {role}, which has no tail-current "
+    "bit of its own"
+)
+CHECK_R2_INTRO_MANY = (
+    "The router put {names} on {role_list}, which have no "
+    "tail-current bit of their own"
+)
+
+CHECK_R2_PARAGRAPH_DROPPED = (
+    "{intro}, so there is nothing here for tail= to set and it was "
+    "dropped."
+)
+
+CHECK_R2_PARAGRAPH_ALTERNATIVES = (
+    "Only mosbius_ota, mosbius_ntail and mosbius_ptail carry a tail you "
+    "can write in the schematic. If you meant to change how hard this "
+    "device drives, that is w= (1, 2, 3 or 4) on a "
+    "mosbius_nmos/mosbius_pmos, or ratio= on a "
+    "mosbius_nsink/mosbius_psource. If you meant a differential pair's "
+    "tail current, that belongs on a mosbius_ntail/mosbius_ptail wired "
+    "to the pair's shared source, not on either half."
+)
+
+# R3's headline and three body paragraphs.
+CHECK_R3_HEADLINE = (
+    "the differential pair on {nets} will draw "
+    "{amps:.0f} uA you did not ask for"
+)
+
+CHECK_R3_PARAGRAPH_SINKS = (
+    "{devices} became differential-pair halves, and a pair's tail "
+    "current bank has no off state. Its smallest setting is one "
+    "always-on transistor (diff_n.sch M8, W=20 against the bias "
+    "reference's W=10), so the chip sinks 2 x ibias -- {amps:.0f} uA at "
+    "the {ibias_uA:.0f} uA this configuration uses -- out of "
+    "{nets}, whatever the schematic says. `mosbius decode` shows it as "
+    "tail=2."
+)
+
+CHECK_R3_PARAGRAPH_DISAGREE = (
+    "Your as-drawn simulation has no such current in it, so the drawn "
+    "and routed halves of a testbench will disagree, and disagree more "
+    "the higher you set ibias."
+)
+
+CHECK_R3_PARAGRAPH_FIX = (
+    "Two ways to make them agree. Draw a {tail_symbol} on that "
+    "node and say which tail current you want (2, 4, 6 or 8 multiples "
+    "of ibias -- see examples/diffamp/), which puts the same current in "
+    "both. Or name that net {rail}, which closes the pair's free "
+    "source tie and shorts the tail bank out, leaving two ordinary "
+    "common-source FETs."
+)
+
+# B1's headline and body paragraphs, one set per branch (no generator
+# drawn at all, or more than one drawn).
+CHECK_B1_NO_GENERATOR_HEADLINE = "this design has no bias generator on the sheet"
+
+CHECK_B1_NO_GENERATOR_DREW = (
+    "You drew {drew}, and every one of those copies the chip's bias "
+    "reference: they are mirror legs and tail banks, and what sets "
+    "their current is the voltage that reference makes out of the "
+    "ibias pin."
+)
+
+CHECK_B1_NO_GENERATOR_GAP = (
+    "Nothing on this sheet makes it, so in simulation their gates sit "
+    "wherever the DC solver leaves them and the currents mean nothing. "
+    "On silicon the reference is always there, so this is a gap in the "
+    "drawing rather than something the chip could do."
+)
+
+CHECK_B1_NO_GENERATOR_FIX = (
+    "To fix: place one mosbius_bias from xschem/mosbius_lib and wire it "
+    "to the ibias pin. examples/currentsource/ has it done. Copying a "
+    "fresh mini_mosbius.sch also gets you one."
+)
+
+CHECK_B1_TOO_MANY_HEADLINE = (
+    "this design has {count} bias generators, and needs exactly one"
+)
+
+CHECK_B1_TOO_MANY_SHARE = (
+    "They sit in parallel on the ibias pin, so they share the current "
+    "the demoboard sends: two references make half the reference "
+    "current each, and every mirror, tail bank and OTA tail on the "
+    "sheet comes out at half of what its ratio= or tail= asks for."
+)
+
+CHECK_B1_TOO_MANY_FIX = (
+    "The chip has one, feeding everything. To fix: delete all but one "
+    "mosbius_bias (or, on an older sheet, all but one drawn "
+    "reference diode -- the NMOS with its gate and drain both on "
+    "ibias)."
+)
