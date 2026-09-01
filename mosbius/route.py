@@ -524,19 +524,12 @@ def format_pad_note(routed) -> list[str]:
     if not pinned:
         return []
     which = ", ".join(pinned)
-    plural = "s" if len(pinned) > 1 else ""
+    are = "are" if len(pinned) > 1 else "is"
+    they = "they" if len(pinned) > 1 else "it"
+    add = "add" if len(pinned) > 1 else "adds"
     return [
         "",
-        f"  {which} sit{'' if len(pinned) > 1 else 's'} on package pin{plural}, so "
-        f"{'each' if len(pinned) > 1 else 'it'} carries the chip's bond",
-        "  pad and its analog mux switch as well as the bus row itself: roughly",
-        "  5 pF plus series resistance, against about 0.9 pF for a bare row. That",
-        "  is the price of being able to reach the net from outside the chip.",
-        "",
-        "  A net you do not need to probe can be named anything that is not",
-        "  ua1..ua5 -- the router keeps such nets off the bonded rows entirely,",
-        "  and says so rather than silently moving one there if it runs out of",
-        "  room.",
+        f"  {which} {are} connected to the chip's pads, so {they} {add} extra capacitance.",
     ]
 
 

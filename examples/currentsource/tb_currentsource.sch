@@ -1,4 +1,4 @@
-v {xschem version=3.4.8RC file_version=1.2}
+v {xschem version=3.4.8RC file_version=1.3}
 G {}
 K {}
 V {}
@@ -89,8 +89,8 @@ C {devices/lab_pin.sym} -290 -440 3 0 {name=pa3b sig_type=std_logic lab=vsweep}
 C {devices/vsource.sym} -150 -470 0 0 {name=Vam_sink_routed value=0}
 C {devices/lab_pin.sym} -150 -500 1 0 {name=pa4 sig_type=std_logic lab=isink_routed}
 C {devices/lab_pin.sym} -150 -440 3 0 {name=pa4b sig_type=std_logic lab=vsweep}
-C {sky130_fd_pr/corner.sym} 730 -520 0 0 {name=CORNER only_toplevel=true corner=tt}
-C {devices/code_shown.sym} 270 -970 0 0 {name=NGSPICE only_toplevel=true value="
+C {sky130_fd_pr/corner.sym} 680 -410 0 0 {name=CORNER only_toplevel=true corner=tt}
+C {devices/code_shown.sym} 220 -860 0 0 {name=NGSPICE only_toplevel=true value="
 Vgnd VGND 0 0
 
 .param ibias_amps=100u
@@ -112,11 +112,11 @@ Vgnd VGND 0 0
 
 .endc
 "}
-C {devices/launcher.sym} 350 -460 0 0 {name=h5
+C {devices/launcher.sym} 300 -350 0 0 {name=h5
 descr="load waves"
 tclcommand="xschem raw_read $netlist_dir/tb_currentsource.raw dc"
 }
-C {devices/launcher.sym} 350 -420 0 0 {name=h6
+C {devices/launcher.sym} 300 -310 0 0 {name=h6
 descr="generate routed spice"
 tclcommand="execute 1 sh tools/regenerate_routed.sh examples/currentsource/currentsource.sch"
 }

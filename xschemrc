@@ -74,15 +74,9 @@ proc mosbius_routed_include {path} {
         return [mosbius_routed_staleness $path $abs]
     }
     set lines [list \
-        "$path has not been generated yet, so this testbench has no netlist" \
-        "behind its routed block and ngspice will stop on the .include below." \
+        "$path has not been generated yet" \
         "" \
-        "It is not in a fresh clone because build/ is generated, not committed." \
-        "Press the -generate routed spice- button on the testbench sheet, or" \
-        "run this from a shell at the top of the repo:" \
-        "" \
-        "    python3 -m mosbius.cli route build/<design>.spice --out build/<design>.mosbius.json" \
-        "    python3 -m mosbius.cli simulate build/<design>.mosbius.json"]
+        "control click the 'generate routed spice button'" ]
     set msg [join $lines "\n"]
     puts stderr "\n*** $msg\n"
     # xschem evaluates this property TWICE per netlist run -- measured, by

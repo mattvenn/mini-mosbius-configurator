@@ -1,4 +1,4 @@
-v {xschem version=3.4.8RC file_version=1.2}
+v {xschem version=3.4.8RC file_version=1.3}
 G {}
 K {}
 V {}
@@ -97,9 +97,6 @@ Vgnd VGND 0 0
 .control
   save all
 
-* DC transfer curve, for comparison against the same circuit measured on
-* silicon (examples/inverter/README.md). The probe resistor is what makes
-* VOH land below the rail here, exactly as it does on the bench.
   dc Vin 0 3.3 0.005
   meas dc voh_drawn  FIND v(out_drawn)  AT=0
   meas dc voh_routed FIND v(out_routed) AT=0
