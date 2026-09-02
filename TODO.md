@@ -17,8 +17,6 @@ ideally the same bitstreams will produce similiar results, but at least the rout
 
 3 check all the schematic texts
 
-4 all user facing text will ultimately be in a separate file, for internationalisation and for easy re-writing of all messages
+4 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
 
-5 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
-
-6 overview of how the router works
+5 overview of how the router works
