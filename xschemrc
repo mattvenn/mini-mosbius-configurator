@@ -149,16 +149,7 @@ proc mosbius_routed_staleness {path abs} {
     set lines [list \
         "$sch was edited after $path was generated." \
         "" \
-        "This testbench draws its as-drawn half straight from the schematic, so" \
-        "that half is current -- but the as-routed half is this generated file," \
-        "which is not. The two are now different circuits, and comparing them" \
-        "measures nothing. The simulation will still run." \
-        "" \
-        "Press the -generate routed spice- button on this sheet, or run" \
-        "" \
-        "    sh tools/regenerate_routed.sh $sch" \
-        "" \
-        "and then press Netlist again."]
+        "control click the 'generate routed spice' button to update it." ]
     set msg [join $lines "\n"]
     puts stderr "\n*** $msg\n"
     if {[info exists ::has_x] && ![info exists ::mosbius_stale_warned($path)]} {
