@@ -307,7 +307,7 @@ def test_program_accepts_a_routed_design_json(tmp_path, capsys):
         mock_program.return_value = {"ok": True, "verify_ok": True}
         rc = main(["program", str(routed), "--verify"])
     assert rc == 0
-    assert "OK" in capsys.readouterr().out
+    assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in capsys.readouterr().out
     config, = mock_program.call_args[0]
     assert config.to_bitstream() == INVERTER_BITSTREAM
 
