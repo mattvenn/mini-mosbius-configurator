@@ -15,6 +15,8 @@ for the transmission order.
 
 from __future__ import annotations
 
+from mosbius import messages
+
 NUM_BITS = 192
 HEX_CHARS = NUM_BITS // 4  # 48
 
@@ -33,9 +35,9 @@ def pack(bits) -> str:
     for bit in bits:
         if not (0 <= bit < NUM_BITS):
             raise BitstreamError(
-                f"bit {bit} is out of range 0..{NUM_BITS - 1}\n"
-                f"  The mini-MOSbius config chain is exactly {NUM_BITS} bits "
-                f"(SPEC.md Sec 2.1) -- there is no bit {bit} to set."
+                messages.BITSTREAM_BIT_OUT_OF_RANGE.format(
+                    bit=bit, max_bit=NUM_BITS - 1, num_bits=NUM_BITS
+                )
             )
         mask |= 1 << bit
     return format(mask, f"0{HEX_CHARS}x")
@@ -53,18 +55,17 @@ def unpack(hexstr: str) -> frozenset[int]:
         s = s[2:]
     if len(s) != HEX_CHARS:
         raise BitstreamError(
-            f"bitstream is {len(s)} hex characters, expected exactly {HEX_CHARS}\n"
-            f"  A mini-MOSbius config is {NUM_BITS} bits, written as "
-            f"{HEX_CHARS} hex characters (SPEC.md Sec 2.5). This string is "
-            f"{'shorter' if len(s) < HEX_CHARS else 'longer'} than that -- "
-            f"check for a truncated copy-paste or a mismatched leading '0x'."
+            messages.BITSTREAM_WRONG_LENGTH.format(
+                got=len(s),
+                expected=HEX_CHARS,
+                num_bits=NUM_BITS,
+                longer_or_shorter="shorter" if len(s) < HEX_CHARS else "longer",
+            )
         )
     try:
         mask = int(s, 16)
     except ValueError as e:
         raise BitstreamError(
-            f"{hexstr!r} contains a non-hex-digit character\n"
-            f"  A mini-MOSbius bitstream is {HEX_CHARS} hex characters "
-            f"(0-9, a-f) and nothing else."
+            messages.BITSTREAM_NON_HEX_CHARACTER.format(hexstr=hexstr, expected=HEX_CHARS)
         ) from e
     return frozenset(i for i in range(NUM_BITS) if (mask >> i) & 1)

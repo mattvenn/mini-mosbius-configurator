@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from mosbius import bitstream
+from mosbius import bitstream, messages
 
 
 def test_pack_empty_is_48_zero_chars():
@@ -54,22 +54,38 @@ def test_bit_n_sets_expected_nibble():
 
 
 def test_pack_rejects_out_of_range_bit():
-    with pytest.raises(bitstream.BitstreamError, match="out of range"):
+    with pytest.raises(bitstream.BitstreamError) as excinfo:
         bitstream.pack([192])
-    with pytest.raises(bitstream.BitstreamError, match="out of range"):
+    assert str(excinfo.value) == messages.BITSTREAM_BIT_OUT_OF_RANGE.format(
+        bit=192, max_bit=191, num_bits=192
+    )
+    with pytest.raises(bitstream.BitstreamError) as excinfo:
         bitstream.pack([-1])
+    assert str(excinfo.value) == messages.BITSTREAM_BIT_OUT_OF_RANGE.format(
+        bit=-1, max_bit=191, num_bits=192
+    )
 
 
 def test_unpack_rejects_wrong_length():
-    with pytest.raises(bitstream.BitstreamError, match="48"):
+    with pytest.raises(bitstream.BitstreamError) as excinfo:
         bitstream.unpack("00")
-    with pytest.raises(bitstream.BitstreamError, match="48"):
+    assert str(excinfo.value) == messages.BITSTREAM_WRONG_LENGTH.format(
+        got=2, expected=48, num_bits=192, longer_or_shorter="shorter"
+    )
+    with pytest.raises(bitstream.BitstreamError) as excinfo:
         bitstream.unpack("0" * 49)
+    assert str(excinfo.value) == messages.BITSTREAM_WRONG_LENGTH.format(
+        got=49, expected=48, num_bits=192, longer_or_shorter="longer"
+    )
 
 
 def test_unpack_rejects_non_hex_characters():
-    with pytest.raises(bitstream.BitstreamError, match="non-hex"):
-        bitstream.unpack("g" * 48)
+    hexstr = "g" * 48
+    with pytest.raises(bitstream.BitstreamError) as excinfo:
+        bitstream.unpack(hexstr)
+    assert str(excinfo.value) == messages.BITSTREAM_NON_HEX_CHARACTER.format(
+        hexstr=hexstr, expected=48
+    )
 
 
 def test_unpack_accepts_0x_prefix():

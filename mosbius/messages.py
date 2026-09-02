@@ -1051,3 +1051,26 @@ NETLIST_NO_DEVICES_FOUND = (
     "(SPEC.md Sec 3.4), not raw sky130 transistors -- the router only "
     "understands those seven."
 )
+
+
+# --- bitstream.py --------------------------------------------------------
+
+BITSTREAM_BIT_OUT_OF_RANGE = (
+    "bit {bit} is out of range 0..{max_bit}\n"
+    "  The mini-MOSbius config chain is exactly {num_bits} bits "
+    "(SPEC.md Sec 2.1) -- there is no bit {bit} to set."
+)
+
+BITSTREAM_WRONG_LENGTH = (
+    "bitstream is {got} hex characters, expected exactly {expected}\n"
+    "  A mini-MOSbius config is {num_bits} bits, written as "
+    "{expected} hex characters (SPEC.md Sec 2.5). This string is "
+    "{longer_or_shorter} than that -- "
+    "check for a truncated copy-paste or a mismatched leading '0x'."
+)
+
+BITSTREAM_NON_HEX_CHARACTER = (
+    "{hexstr!r} contains a non-hex-digit character\n"
+    "  A mini-MOSbius bitstream is {expected} hex characters "
+    "(0-9, a-f) and nothing else."
+)

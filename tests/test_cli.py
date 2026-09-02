@@ -287,9 +287,14 @@ def test_decode_explains_json_without_a_bitstream(tmp_path, capsys):
 
 
 def test_decode_reports_a_bad_bitstream_without_a_traceback(capsys):
+    from mosbius import messages
+
     assert main(["decode", "deadbeef"]) == 1
     err = capsys.readouterr().err
-    assert "expected exactly 48" in err
+    detail = messages.BITSTREAM_WRONG_LENGTH.format(
+        got=8, expected=48, num_bits=192, longer_or_shorter="shorter"
+    )
+    assert detail in err
     assert "Traceback" not in err
 
 

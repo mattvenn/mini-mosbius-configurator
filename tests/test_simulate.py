@@ -207,11 +207,16 @@ def test_unreadable_bitstream_keeps_the_underlying_explanation(tmp_path):
     with pytest.raises(SimulateError) as excinfo:
         simulate_from_routed_json(path)
 
-    message = str(excinfo.value)
-    assert "isn't a usable configuration" in message
-    # bitstream.py's own count-the-characters explanation survives -- not
-    # yet migrated (Task 8), so still checked as a literal fragment here.
-    assert "8 hex characters" in message
+    inner = messages.BITSTREAM_WRONG_LENGTH.format(
+        got=8, expected=48, num_bits=192, longer_or_shorter="shorter"
+    )
+    # bitstream.py's own explanation is itself multi-line -- simulate.py
+    # indents every line of it to sit under SIMULATE_BAD_BITSTREAM's own
+    # headline (see simulate_from_routed_json's `detail` construction).
+    detail = "\n".join(
+        line if line.startswith("  ") else f"  {line}" for line in inner.splitlines()
+    )
+    assert str(excinfo.value) == messages.SIMULATE_BAD_BITSTREAM.format(path=path, detail=detail)
 
 
 # ---------------------------------------------------------------------------
