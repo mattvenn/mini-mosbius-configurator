@@ -131,7 +131,7 @@ def test_too_many_independent_source_nmos_reports_doesnt_fit():
     # Fragment, not the full messages.ROUTE_NOT_ENOUGH_FETS text: which
     # instance lands on which slot ("placed") is an internal allocation
     # detail, not part of what this test is pinning down.
-    with pytest.raises(RouteError, match="not enough NMOS"):
+    with pytest.raises(RouteError, match=re.escape(messages.ROUTE_NOT_ENOUGH_FETS_HEADLINE.format(label="NMOS"))):
         route(design)
 
 

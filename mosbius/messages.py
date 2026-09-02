@@ -95,8 +95,13 @@ ROUTE_SETTING_NOT_VALID = (
     "schematic,\n  and press Netlist again."
 )
 
+# Named separately so check.py's CHECK_D1_WHY_COSTS_PAIR (which forwards this
+# same headline to explain a DOESN'T FIT it did not itself raise) and the
+# test suite can reference it instead of hand-duplicating or slicing it out.
+ROUTE_NOT_ENOUGH_FETS_HEADLINE = "DOESN'T FIT - not enough {label} with independent sources"
+
 ROUTE_NOT_ENOUGH_FETS = (
-    "DOESN'T FIT - not enough {label} with independent sources\n\n"
+    ROUTE_NOT_ENOUGH_FETS_HEADLINE + "\n\n"
     "  Your circuit needs {count} {label} transistors:\n"
     "    {names}\n\n"
     "  The chip has only {indep_count} of those whose source you can\n"
@@ -490,8 +495,10 @@ CHECK_D1_SUBJECT_MANY = (
     "{wrong}:\n    {names}"
 )
 
+CHECK_D1_RAILS_SHORTED_HEADLINE = "DANGEROUS - VAPWR and VGND are joined somewhere in your schematic"
+
 CHECK_D1_RAILS_SHORTED = (
-    "DANGEROUS - VAPWR and VGND are joined somewhere in your schematic\n\n"
+    CHECK_D1_RAILS_SHORTED_HEADLINE + "\n\n"
     "{subject}\n\n"
     "  Meanwhile {home} does not appear on a single device terminal\n"
     "  anywhere in this netlist.\n\n"
@@ -518,9 +525,9 @@ CHECK_D1_RAILS_SHORTED = (
 
 # The paragraph that connects D1's WARN branch to the "DOESN'T FIT -- not
 # enough NMOS/PMOS with independent sources" the user actually sees --
-# _why_it_costs_the_pair's return value.
-# Must describe the same situation as ROUTE_NOT_ENOUGH_FETS's headline --
-# see check.py's own comment near _why_it_costs_the_pair.
+# _why_it_costs_the_pair's return value. Quotes ROUTE_NOT_ENOUGH_FETS_HEADLINE
+# itself (with its {label} placeholder renamed to this call's {router_label})
+# rather than a hand-typed copy, so a reword of one can't drift from the other.
 CHECK_D1_WHY_COSTS_PAIR = (
     "  It also costs you the two differential-pair halves. Their shared\n"
     "  tail has no terminal on the switch matrix, so the\n"
@@ -528,12 +535,15 @@ CHECK_D1_WHY_COSTS_PAIR = (
     "  ties it to {other_rail}. A half therefore cannot take a device whose\n"
     "  source is on {wrong_rail}, which leaves only {independent_slots}. "
     "That is\n"
-    "  why this first shows up as \"DOESN'T FIT - not enough "
-    "{router_label} with\n  independent sources\".\n\n"
+    "  why this first shows up as \""
+    + ROUTE_NOT_ENOUGH_FETS_HEADLINE.replace("{label}", "{router_label}") +
+    "\".\n\n"
 )
 
+CHECK_D1_SOURCE_ON_WRONG_RAIL_HEADLINE = "WARNING - source on {wrong} where {home} is expected"
+
 CHECK_D1_SOURCE_ON_WRONG_RAIL = (
-    "WARNING - source on {wrong} where {home} is expected\n\n"
+    CHECK_D1_SOURCE_ON_WRONG_RAIL_HEADLINE + "\n\n"
     "{subject}.\n"
     "  A mosbius_{kind}'s body is hard-wired to {home} on silicon "
     "(that is what\n"
@@ -564,8 +574,10 @@ CHECK_D2_SUBJECT_MANY = (
 
 # Must describe the same situation as ROUTE_NOT_ENOUGH_FETS's headline --
 # see check.py's own comment near _why_it_costs_the_pair.
+CHECK_D2_DRAIN_SOURCE_SWAPPED_HEADLINE = "WARNING - drain and source look swapped on {names}"
+
 CHECK_D2_DRAIN_SOURCE_SWAPPED = (
-    "WARNING - drain and source look swapped on {names}\n\n"
+    CHECK_D2_DRAIN_SOURCE_SWAPPED_HEADLINE + "\n\n"
     "{subject}\n\n"
     "  That is back to front for a common-source transistor. A "
     "mosbius_{kind}'s\n  source belongs on {rail} - the rail its body is "
@@ -862,15 +874,19 @@ PADS_HEADER_TITLE = "  The ANALOG header, along the top edge of the board:"
 PADS_HEADER_LABEL_ONE = "The pad in brackets is"
 PADS_HEADER_LABEL_MANY = "The pads in brackets are"
 
+PADS_HEADER_CAPTION_GROUND_NOTE = "  ground to any square marked gnd; they are all the same net."
+
 PADS_HEADER_CAPTION = (
     "  {label} the one{plural} above"
     " - {pad_list}. Clip the instrument's\n"
-    "  ground to any square marked gnd; they are all the same net."
+    + PADS_HEADER_CAPTION_GROUND_NOTE
 )
 
 # format_pad_table's prose; its aligned column rule ("  -------   ...") is
 # layout, not a message, and stays in pads.py.
-PADS_TABLE_TITLE = "Pads in use - {macro} on {shuttle}"
+PADS_TABLE_TITLE_PREFIX = "Pads in use"
+
+PADS_TABLE_TITLE = PADS_TABLE_TITLE_PREFIX + " - {macro} on {shuttle}"
 
 PADS_TABLE_HEADER = "  PCB pad   design pin   what this configuration puts on it"
 
@@ -878,13 +894,17 @@ PADS_TABLE_ROW = "  {pad:<9s} {pin:<12s} {what}"
 
 PADS_TABLE_NO_TERMINAL = "connected, but no device terminal on it"
 
-PADS_TABLE_IBIAS_ROW = "bias current in, {amps:.1f} uA - drawn by {drawn_by}"
+PADS_TABLE_IBIAS_ROW_PREFIX = "bias current in"
+
+PADS_TABLE_IBIAS_ROW = PADS_TABLE_IBIAS_ROW_PREFIX + ", {amps:.1f} uA - drawn by {drawn_by}"
 
 PADS_TABLE_IBIAS_FALLBACK = "the bias reference"
 
 PADS_TABLE_EMPTY = "  (none - this configuration connects nothing to a package pin)"
 
-PADS_TABLE_IDLE = "  Nothing is on the other analog pads: {which}."
+PADS_TABLE_IDLE_PREFIX = "  Nothing is on the other analog pads:"
+
+PADS_TABLE_IDLE = PADS_TABLE_IDLE_PREFIX + " {which}."
 
 PADS_TABLE_FOOTER = (
     "  These letters are for {macro} as placed on {shuttle}. Its ua ->\n"
@@ -946,8 +966,10 @@ PROGRAM_IBIAS_NOT_SET = (
     "  If needed, feed it externally instead."
 )
 
+PROGRAM_UPLOAD_BLOCKED_HEADLINE = "UPLOAD BLOCKED - {n} safety error{plural} found"
+
 PROGRAM_UPLOAD_BLOCKED = (
-    "UPLOAD BLOCKED - {n} safety error{plural} found\n\n"
+    PROGRAM_UPLOAD_BLOCKED_HEADLINE + "\n\n"
     "{paths}\n\n"
     "  Fix the design above, or re-run with force=True if you're certain\n"
     "  this is safe."
@@ -1093,9 +1115,13 @@ CLI_JSON_NO_BITSTREAM_KEY = (
     "    python3 -m mosbius.cli route build/<design>.spice --out {path}\n"
 )
 
-CLI_REPORT_OK = "OK - no errors or warnings{note}."
+CLI_REPORT_OK_PREFIX = "OK - no errors or warnings"
 
-CLI_REPORT_INFO_NOTE = " ({skipped} info note{plural} hidden, use --verbose)"
+CLI_REPORT_OK = CLI_REPORT_OK_PREFIX + "{note}."
+
+CLI_REPORT_INFO_NOTE_SUFFIX = " hidden, use --verbose)"
+
+CLI_REPORT_INFO_NOTE = " ({skipped} info note{plural}" + CLI_REPORT_INFO_NOTE_SUFFIX
 
 CLI_CANT_READ_THAT = "CAN'T READ THAT\n\n  {e}"
 
@@ -1115,11 +1141,17 @@ CLI_PROJECT_NOT_ON_SHUTTLE = (
     "  --project (it defaults to {default_project}, this repo's own macro)."
 )
 
-CLI_CANT_WORK_OUT_PADS = "CAN'T WORK OUT THE PADS\n\n  {e}"
+CLI_CANT_WORK_OUT_PADS_HEADLINE = "CAN'T WORK OUT THE PADS"
+
+CLI_CANT_WORK_OUT_PADS = CLI_CANT_WORK_OUT_PADS_HEADLINE + "\n\n  {e}"
 
 CLI_OUT_OF_DATE = "OUT OF DATE\n\n  {e}"
 
-CLI_IMPOSSIBLE = "IMPOSSIBLE\n\n  {e}"
+# Shared with watch.py's report -- an "IMPOSSIBLE" netlist reads the same
+# whether it came from `mosbius check`/`route` or the live watcher.
+CLI_IMPOSSIBLE_HEADLINE = "IMPOSSIBLE"
+
+CLI_IMPOSSIBLE = CLI_IMPOSSIBLE_HEADLINE + "\n\n  {e}"
 
 CLI_DEVICE_ROLES_HEADER = "Device roles:"
 
@@ -1127,7 +1159,9 @@ CLI_BUS_ROWS_HEADER = "Bus rows:"
 
 CLI_BITSTREAM_LINE = "Bitstream: {bitstream}"
 
-CLI_CANT_SIMULATE = "CAN'T SIMULATE\n\n  {e}"
+CLI_CANT_SIMULATE_HEADLINE = "CAN'T SIMULATE"
+
+CLI_CANT_SIMULATE = CLI_CANT_SIMULATE_HEADLINE + "\n\n  {e}"
 
 CLI_SIMULATE_OK = (
     "OK - wrote {out} ({name}_routed, real switch matrix + pads + coupling/wire caps)"
@@ -1156,9 +1190,11 @@ CLI_PROGRAM_NO_SHUTTLE_NOTE = (
     "     mosbius pads {bitstream} --shuttle {default_shuttle})"
 )
 
-CLI_PROGRAM_PAD_TABLE_UNAVAILABLE = (
-    "  (uploaded fine, but the pad table needs the shuttle index)\n\n  {e}"
+CLI_PROGRAM_PAD_TABLE_UNAVAILABLE_PREFIX = (
+    "  (uploaded fine, but the pad table needs the shuttle index)"
 )
+
+CLI_PROGRAM_PAD_TABLE_UNAVAILABLE = CLI_PROGRAM_PAD_TABLE_UNAVAILABLE_PREFIX + "\n\n  {e}"
 
 # build_parser()'s argparse help= text -- shown by `mosbius --help` and
 # `mosbius <command> --help`, plausibly the first text a beginner reads.
@@ -1225,7 +1261,9 @@ CLI_HELP_PROGRAM_VERIFY = "shift the bits back out and compare"
 # mean in cli.py's own, differently-formatted usage.
 WATCH_HEADER = "mosbius watch - {name}          {time}"
 
-WATCH_CANT_READ = "CAN'T READ\n\n  {e}"
+WATCH_CANT_READ_HEADLINE = "CAN'T READ"
+
+WATCH_CANT_READ = WATCH_CANT_READ_HEADLINE + "\n\n  {e}"
 
 WATCH_STATUS_DANGEROUS = "DANGEROUS"
 

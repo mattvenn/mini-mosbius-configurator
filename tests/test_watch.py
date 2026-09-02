@@ -33,14 +33,14 @@ def test_ok_report_lists_device_roles(tmp_path: Path):
 
 def test_missing_file_reports_cant_read(tmp_path: Path):
     report = _report(tmp_path / "does_not_exist.spice")
-    assert messages.WATCH_CANT_READ.split("\n")[0] in report.splitlines()[0]
+    assert messages.WATCH_CANT_READ_HEADLINE in report.splitlines()[0]
 
 
 def test_netlist_with_no_devices_reports_impossible(tmp_path: Path):
     netlist = tmp_path / "empty.spice"
     netlist.write_text("* nothing here\n")
     report = _report(netlist)
-    assert messages.CLI_IMPOSSIBLE.split("\n")[0] in report.splitlines()[0]
+    assert messages.CLI_IMPOSSIBLE_HEADLINE in report.splitlines()[0]
     assert "no mosbius_" in report
 
 
@@ -53,7 +53,7 @@ def test_over_capacity_design_reports_impossible_with_explanation(tmp_path: Path
     """)
     report = _report(netlist)
     assert messages.WATCH_STATUS_IMPOSSIBLE in report.splitlines()[0]
-    assert "DOESN'T FIT" in report
+    assert messages.ROUTE_SEVERITY_DOESNT_FIT.rstrip() in report
     assert "m3" in report  # names the specific device that didn't fit
 
 
@@ -81,4 +81,4 @@ def test_watch_once_true_reports_and_returns(tmp_path: Path):
 def test_watch_once_true_on_missing_file_still_returns(tmp_path: Path):
     out = io.StringIO()
     watch(tmp_path / "nope.spice", once=True, out=out)
-    assert messages.WATCH_CANT_READ.split("\n")[0] in out.getvalue()
+    assert messages.WATCH_CANT_READ_HEADLINE in out.getvalue()

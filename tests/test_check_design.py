@@ -65,7 +65,7 @@ def test_merged_rails_are_an_error_not_a_warning():
 
 def test_merged_rails_message_names_the_cause_and_the_fix():
     message = check_design(design(*SHORTED_RING)).errors[0].message
-    assert "VAPWR and VGND are joined" in message
+    assert messages.CHECK_D1_RAILS_SHORTED_HEADLINE in message
     assert "M1, M3, M5" in message                  # every offender named
     assert 'b=VGND' in message                      # why the body still disagrees
     assert "extra=" in message
@@ -101,7 +101,7 @@ def test_warning_explains_the_doesnt_fit_the_user_will_see():
     message = report.warnings[0].message
     assert "ctrl_dpn_source" in message
     assert "nmos_a and nmos_b" in message
-    assert "not enough NMOS" in message
+    assert messages.ROUTE_NOT_ENOUGH_FETS_HEADLINE.format(label="NMOS") in message
 
 
 def test_pmos_source_on_vgnd_is_caught_with_pmos_vocabulary():
@@ -137,9 +137,9 @@ def test_route_refuses_a_merged_rail_design(tmp_path, capsys):
     rc = main(["route", str(_write(tmp_path, SHORTED_RING))])
     captured = capsys.readouterr()
     assert rc == 1
-    assert "VAPWR and VGND are joined" in captured.err
+    assert messages.CHECK_D1_RAILS_SHORTED_HEADLINE in captured.err
     # The old behaviour: a misleading DOESN'T FIT about running out of NMOS.
-    assert "DOESN'T FIT" not in captured.err
+    assert messages.ROUTE_SEVERITY_DOESNT_FIT.rstrip() not in captured.err
     assert "Bitstream" not in captured.out
 
 
@@ -152,8 +152,8 @@ def test_route_still_reports_the_warning_when_routing_then_fails(tmp_path, capsy
     rc = main(["route", str(_write(tmp_path, lines))])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "source on VAPWR where VGND is expected" in err
-    assert "DOESN'T FIT" in err
+    assert messages.CHECK_D1_SOURCE_ON_WRONG_RAIL_HEADLINE.format(wrong="VAPWR", home="VGND") in err
+    assert messages.ROUTE_SEVERITY_DOESNT_FIT.rstrip() in err
 
 
 def test_route_passes_a_healthy_design_through_unchanged(tmp_path, capsys):
@@ -170,8 +170,8 @@ def test_watch_reports_the_merged_rails_too(tmp_path, capsys):
     rc = main(["watch", "--once", str(_write(tmp_path, SHORTED_RING))])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "DANGEROUS" in out
-    assert "VAPWR and VGND are joined" in out
+    assert messages.WATCH_STATUS_DANGEROUS in out
+    assert messages.CHECK_D1_RAILS_SHORTED_HEADLINE in out
 
 
 # ---------------------------------------------------------------------------
@@ -197,17 +197,16 @@ def test_reversed_pmos_is_a_warning_naming_every_offender():
     assert [f.code for f in report.warnings] == ["D2"]
     assert report.errors == []
     message = report.warnings[0].message
-    headline = messages.CHECK_D2_DRAIN_SOURCE_SWAPPED.split("\n\n")[0].format(names="M2, M4, M6")
+    headline = messages.CHECK_D2_DRAIN_SOURCE_SWAPPED_HEADLINE.format(names="M2, M4, M6")
     assert message.startswith(headline)
 
 
 def test_reversed_pmos_message_connects_to_the_failure_the_user_sees():
     message = check_design(design(*REVERSED_PMOS_RING)).warnings[0].message
-    # The point of the check: explain the "DOESN'T FIT" that follows -- derived
-    # from ROUTE_NOT_ENOUGH_FETS's own headline so a reword there fails this
-    # loudly instead of leaving a stale hand-typed fragment passing silently.
-    not_enough_tail = messages.ROUTE_NOT_ENOUGH_FETS.split("\n")[0].split("- ")[1]
-    assert not_enough_tail.format(label="PMOS") in message
+    # The point of the check: explain the "DOESN'T FIT" that follows -- both
+    # check.py and route.py interpolate ROUTE_NOT_ENOUGH_FETS_HEADLINE itself,
+    # so a reword there is caught here automatically, with no hand-typed copy.
+    assert messages.ROUTE_NOT_ENOUGH_FETS_HEADLINE.format(label="PMOS") in message
     assert "flipped vertically" in message
     assert "source at the top" in message      # mosbius_pmos's real geometry
     assert "cascode" in message                # why it stays a hint
@@ -241,8 +240,7 @@ def test_reversed_nmos_reports_the_nmos_rail_and_geometry():
     assert "drain on VGND" in message
     assert "drain at the top" in message        # mosbius_nmos is the other way up
     # Same derivation as test_reversed_pmos_message_connects_to_the_failure_the_user_sees.
-    not_enough_tail = messages.ROUTE_NOT_ENOUGH_FETS.split("\n")[0].split("- ")[1]
-    assert not_enough_tail.format(label="NMOS") in message
+    assert messages.ROUTE_NOT_ENOUGH_FETS_HEADLINE.format(label="NMOS") in message
 
 
 def test_route_prints_the_hint_before_the_doesnt_fit(tmp_path, capsys):
@@ -251,7 +249,8 @@ def test_route_prints_the_hint_before_the_doesnt_fit(tmp_path, capsys):
     rc = main(["route", str(path)])
     err = capsys.readouterr().err
     assert rc == 1
-    assert err.index("drain and source look swapped") < err.index("DOESN'T FIT")
+    d2_headline = messages.CHECK_D2_DRAIN_SOURCE_SWAPPED_HEADLINE.format(names="M2, M4, M6")
+    assert err.index(d2_headline) < err.index(messages.ROUTE_SEVERITY_DOESNT_FIT.rstrip())
 
 
 # ---------------------------------------------------------------------------

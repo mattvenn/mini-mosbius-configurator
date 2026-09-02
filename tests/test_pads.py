@@ -191,7 +191,7 @@ def test_pad_table_names_the_pad_the_pin_and_what_is_on_it(cached_entry):
     assert "nmos_a gate" in table and "pmos_a drain" in table
     # the pads this configuration does not use are worth saying too, so
     # nobody probes a pin that is connected to nothing
-    assert messages.PADS_TABLE_IDLE.split("{which}")[0] in table
+    assert messages.PADS_TABLE_IDLE_PREFIX in table
     assert "G (ua4)" in table
 
 
@@ -202,14 +202,14 @@ def test_pad_table_shows_the_bias_pad_only_when_something_draws_on_it(cached_ent
     table = pads.format_pad_table(
         SwitchConfig(bits=unpack(INVERTER)), "ttsky25a", "tt_um_tnt_mosbius"
     )
-    assert "bias current in" not in table
+    assert messages.PADS_TABLE_IBIAS_ROW_PREFIX not in table
 
     # examples/diffamp: a pair floating off the rail draws its tail current
     biased = pads.format_pad_table(
         SwitchConfig.from_bitstream("00100000c020004820000000004821000000000000000030"),
         "ttsky25a", "tt_um_tnt_mosbius",
     )
-    assert "K         ibias" in biased
+    assert messages.PADS_TABLE_ROW.format(pad="K", pin="ibias", what="").rstrip() in biased
     assert messages.PADS_TABLE_IBIAS_ROW.format(amps=100.0, drawn_by="ndiffpair") in biased
     # one pair, named once -- not both halves of it
     assert "ndiffpair+, ndiffpair-" not in biased
@@ -278,7 +278,7 @@ def test_pad_table_draws_the_header(cached_entry):
     out = pads.format_pad_table(config, "ttsky25a", "tt_um_tnt_mosbius")
     assert messages.PADS_HEADER_TITLE in out
     assert "[C]" in out and "[J]" in out
-    assert messages.PADS_HEADER_CAPTION.splitlines()[-1] in out
+    assert messages.PADS_HEADER_CAPTION_GROUND_NOTE in out
 
 
 def test_an_unreachable_index_says_how_to_work_offline(cached_entry):

@@ -82,8 +82,8 @@ def test_check_reports_ok_and_hides_info_by_default(capsys):
     rc = main(["check", INVERTER_BITSTREAM])
     out = capsys.readouterr().out
     assert rc == 0
-    assert messages.CLI_REPORT_OK.split("{note}")[0] in out
-    assert messages.CLI_REPORT_INFO_NOTE.split("{plural}")[1] in out
+    assert messages.CLI_REPORT_OK_PREFIX in out
+    assert messages.CLI_REPORT_INFO_NOTE_SUFFIX in out
     assert "does nothing" not in out
 
 
@@ -139,7 +139,7 @@ def test_route_reports_impossible_on_bad_netlist(tmp_path: Path, capsys):
     rc = main(["route", str(netlist)])
     err = capsys.readouterr().err
     assert rc == 1
-    assert messages.CLI_IMPOSSIBLE.split("\n")[0] in err
+    assert messages.CLI_IMPOSSIBLE_HEADLINE in err
 
 
 def test_simulate_reports_cant_simulate_on_a_netlist(tmp_path: Path, capsys):
@@ -150,7 +150,7 @@ def test_simulate_reports_cant_simulate_on_a_netlist(tmp_path: Path, capsys):
     rc = main(["simulate", str(netlist)])
     err = capsys.readouterr().err
     assert rc == 1
-    assert messages.CLI_CANT_SIMULATE.split("\n")[0] in err
+    assert messages.CLI_CANT_SIMULATE_HEADLINE in err
     assert "xschem netlist" in err
     assert "Traceback" not in err
 
@@ -167,13 +167,14 @@ def test_watch_once_delegates_to_watch_module(tmp_path: Path, capsys):
 def test_program_refuses_unsafe_bitstream_without_reaching_hardware(capsys):
     from mosbius.bitstream import pack
     bitstream = pack(frozenset({170, 174, 5}))
+    headline = messages.PROGRAM_UPLOAD_BLOCKED_HEADLINE.format(n=1, plural="")
     with patch("mosbius.cli.program") as mock_program:
         from mosbius.program import ProgramError
-        mock_program.side_effect = ProgramError("UPLOAD BLOCKED -- 1 safety error found")
+        mock_program.side_effect = ProgramError(headline)
         rc = main(["program", bitstream])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "UPLOAD BLOCKED" in err
+    assert headline in err
     mock_program.assert_called_once()
 
 
@@ -220,7 +221,7 @@ def test_pads_explains_an_unknown_project_rather_than_tracebacking(capsys):
     rc = main(["pads", INVERTER_BITSTREAM, "--project", "tt_um_not_here"])
     err = capsys.readouterr().err
     assert rc == 1
-    assert messages.CLI_CANT_WORK_OUT_PADS.split("\n")[0] in err
+    assert messages.CLI_CANT_WORK_OUT_PADS_HEADLINE in err
     assert "https://index.tinytapeout.com/ttsky25a/tt_um_not_here.json" in err
     assert "pads_ttsky25a_tt_um_not_here.json" in err
 
@@ -235,7 +236,7 @@ def test_program_prints_the_pad_table_after_uploading(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in out
-    assert "Pads in use" in out and "ua1" in out
+    assert messages.PADS_TABLE_TITLE_PREFIX in out and "ua1" in out
 
 
 def test_program_still_succeeds_when_the_pad_table_cannot_be_built(capsys):
@@ -248,7 +249,7 @@ def test_program_still_succeeds_when_the_pad_table_cannot_be_built(capsys):
     captured = capsys.readouterr()
     assert rc == 0
     assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in captured.out
-    assert messages.CLI_PROGRAM_PAD_TABLE_UNAVAILABLE.split("{e}")[0] in captured.err
+    assert messages.CLI_PROGRAM_PAD_TABLE_UNAVAILABLE_PREFIX in captured.err
 
 
 def test_no_subcommand_is_an_argparse_error():
@@ -267,7 +268,7 @@ def test_decode_accepts_a_routed_design_json(tmp_path, capsys):
     routed = tmp_path / "ring.mosbius.json"
     routed.write_text(json.dumps({"bitstream": "0" * 46 + "10"}))
     assert main(["decode", str(routed)]) == 0
-    assert "Devices in use" in capsys.readouterr().out
+    assert messages.DECODE_SUMMARY_DEVICES_HEADING in capsys.readouterr().out
 
 
 def test_decode_explains_a_file_that_is_not_routed_json(tmp_path, capsys):
