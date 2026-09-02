@@ -10,6 +10,7 @@ self-consistency technique M1/M2 used before real hardware exists.
 from __future__ import annotations
 
 import itertools
+import re
 
 import pytest
 
@@ -733,7 +734,8 @@ def test_third_device_on_the_shared_source_is_refused():
     # got which diff-pair role, an internal allocation detail this test
     # isn't pinning down.
     with pytest.raises(
-        RouteError, match=messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net="tailnet")
+        RouteError,
+        match=re.escape(messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net="tailnet")),
     ) as e:
         route(parse_netlist(netlist))
     assert "XM3's drain" in str(e.value)
@@ -744,7 +746,8 @@ def test_shared_source_on_a_package_pin_is_refused():
     # The plausible version of the mistake: bring the tail out to measure it.
     netlist = PAIR_ON_INTERNAL_NET.replace("tailnet", "ua4")
     with pytest.raises(
-        RouteError, match=messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net="ua4")
+        RouteError,
+        match=re.escape(messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net="ua4")),
     ) as e:
         route(parse_netlist(netlist))
     assert "package pin" in str(e.value)

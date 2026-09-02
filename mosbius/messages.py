@@ -524,6 +524,8 @@ CHECK_D1_RAILS_SHORTED = (
 # The paragraph that connects D1's WARN branch to the "DOESN'T FIT -- not
 # enough NMOS/PMOS with independent sources" the user actually sees --
 # _why_it_costs_the_pair's return value.
+# Must describe the same situation as ROUTE_NOT_ENOUGH_FETS's headline --
+# see check.py's own comment near _why_it_costs_the_pair.
 CHECK_D1_WHY_COSTS_PAIR = (
     "  It also costs you the two differential-pair halves. Their shared\n"
     "  tail has no terminal on the switch matrix (SPEC.md Sec 2.12), so the\n"
@@ -565,6 +567,8 @@ CHECK_D2_SUBJECT_MANY = (
     "({nets}):\n    {names}"
 )
 
+# Must describe the same situation as ROUTE_NOT_ENOUGH_FETS's headline --
+# see check.py's own comment near _why_it_costs_the_pair.
 CHECK_D2_DRAIN_SOURCE_SWAPPED = (
     "WARNING -- drain and source look swapped on {names}\n\n"
     "{subject}\n\n"
