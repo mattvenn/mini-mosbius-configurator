@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from mosbius import bitstream
+from mosbius import bitstream, messages
 from mosbius.bitmap import DEVICE_SETTING_BITS, MATRIX_BITS
 
 # Default bias current: upstream's testbenches drive `ibias` with 100 uA
@@ -329,9 +329,9 @@ class SwitchConfig:
         bad = [b for b in self.bits if not (0 <= b < bitstream.NUM_BITS)]
         if bad:
             raise ValueError(
-                f"bit(s) {sorted(bad)} are out of range 0..{bitstream.NUM_BITS - 1}\n"
-                f"  The mini-MOSbius config chain is exactly {bitstream.NUM_BITS} "
-                f"bits (SPEC.md Sec 2.1)."
+                messages.MODEL_BIT_OUT_OF_RANGE.format(
+                    bad=sorted(bad), max_bit=bitstream.NUM_BITS - 1, num_bits=bitstream.NUM_BITS,
+                )
             )
 
     # -- construction / serialisation ------------------------------------

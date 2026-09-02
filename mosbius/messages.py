@@ -1074,3 +1074,12 @@ BITSTREAM_NON_HEX_CHARACTER = (
     "  A mini-MOSbius bitstream is {expected} hex characters "
     "(0-9, a-f) and nothing else."
 )
+
+
+# --- model.py ---------------------------------------------------------------
+
+MODEL_BIT_OUT_OF_RANGE = (
+    "bit(s) {bad} are out of range 0..{max_bit}\n"
+    "  The mini-MOSbius config chain is exactly {num_bits} "
+    "bits (SPEC.md Sec 2.1)."
+)
