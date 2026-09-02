@@ -1191,3 +1191,24 @@ CLI_PROGRAM_NO_SHUTTLE_NOTE = (
 CLI_PROGRAM_PAD_TABLE_UNAVAILABLE = (
     "  (uploaded fine, but the pad table needs the shuttle index)\n\n  {e}"
 )
+
+
+# --- watch.py ---------------------------------------------------------
+
+# header + "   " + one of the status words/messages below -- the "   "
+# separator is watch.py's own literal, kept out of these constants so
+# reusing CLI_OUT_OF_DATE/CLI_IMPOSSIBLE below doesn't change what they
+# mean in cli.py's own, differently-formatted usage.
+WATCH_HEADER = "mosbius watch -- {name}          {time}"
+
+WATCH_CANT_READ = "CAN'T READ\n\n  {e}"
+
+WATCH_STATUS_DANGEROUS = "DANGEROUS"
+
+WATCH_STATUS_IMPOSSIBLE = "IMPOSSIBLE"
+
+WATCH_STATUS_OK = "OK"
+
+WATCH_STATUS_OK_WITH_WARNINGS = "OK, with warnings"
+
+WATCH_MORE_WARNINGS = "  {n} warning(s) -- see 'mosbius check' for detail"

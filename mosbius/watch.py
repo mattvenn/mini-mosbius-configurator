@@ -17,6 +17,7 @@ import sys
 import time
 from pathlib import Path
 
+from mosbius import messages
 from mosbius.check import check, check_design, check_routing, merge_findings
 from mosbius.netlist import NetlistError, StaleNetlistError, check_netlist_fresh, parse_netlist
 from mosbius.route import (
@@ -39,9 +40,10 @@ def _report(netlist_path: Path) -> str:
     try:
         text = netlist_path.read_text()
     except OSError as e:
-        return f"mosbius watch -- {netlist_path.name}          {_now()}   CAN'T READ\n\n  {e}"
+        header = messages.WATCH_HEADER.format(name=netlist_path.name, time=_now())
+        return f"{header}   " + messages.WATCH_CANT_READ.format(e=e)
 
-    header = f"mosbius watch -- {netlist_path.name}          {_now()}"
+    header = messages.WATCH_HEADER.format(name=netlist_path.name, time=_now())
 
     try:
         # Watch follows the netlist, not the schematic, so an edit that was
@@ -50,16 +52,16 @@ def _report(netlist_path: Path) -> str:
         check_netlist_fresh(netlist_path)
         design = parse_netlist(text)
     except StaleNetlistError as e:
-        return f"{header}   OUT OF DATE\n\n  {e}"
+        return f"{header}   " + messages.CLI_OUT_OF_DATE.format(e=e)
     except NetlistError as e:
-        return f"{header}   IMPOSSIBLE\n\n  {e}"
+        return f"{header}   " + messages.CLI_IMPOSSIBLE.format(e=e)
 
     # Netlist-level checks (check.py's check_design) run before routing:
     # an error here makes routing pointless, and a warning here is usually
     # the explanation for whatever the router says next.
     design_report = check_design(design)
     if design_report.has_errors:
-        lines = [f"{header}   DANGEROUS"]
+        lines = [f"{header}   " + messages.WATCH_STATUS_DANGEROUS]
         for f in merge_findings(design_report.errors):
             lines.append("")
             lines.append("\n".join(f"  {line}" for line in f.message.splitlines()))
@@ -76,7 +78,7 @@ def _report(netlist_path: Path) -> str:
     try:
         routed = route(design)
     except RouteError as e:
-        lines = [f"{header}   IMPOSSIBLE"]
+        lines = [f"{header}   " + messages.WATCH_STATUS_IMPOSSIBLE]
         for note in design_notes:
             lines += ["", note]
         lines += ["", f"  {e}"]
@@ -91,20 +93,22 @@ def _report(netlist_path: Path) -> str:
 
     result = check(routed.config)
     if result.has_errors:
-        lines = [f"{header}   DANGEROUS"]
+        lines = [f"{header}   " + messages.WATCH_STATUS_DANGEROUS]
         for f in merge_findings(result.errors):
             lines.append("")
             lines.append("\n".join(f"  {line}" for line in f.message.splitlines()))
         return "\n".join(lines)
 
-    lines = [f"{header}   OK"] if not design_notes else [f"{header}   OK, with warnings"]
+    ok_line = f"{header}   " + messages.WATCH_STATUS_OK
+    ok_warn_line = f"{header}   " + messages.WATCH_STATUS_OK_WITH_WARNINGS
+    lines = [ok_line] if not design_notes else [ok_warn_line]
     for note in design_notes:
         lines += ["", note, ""]
     lines += format_device_roles(routed)
-    lines += ["", "Bus rows:"] + format_net_rows(routed) + format_pad_note(routed)
+    lines += ["", messages.CLI_BUS_ROWS_HEADER] + format_net_rows(routed) + format_pad_note(routed)
     if result.warnings:
         lines.append("")
-        lines.append(f"  {len(result.warnings)} warning(s) -- see 'mosbius check' for detail")
+        lines.append(messages.WATCH_MORE_WARNINGS.format(n=len(result.warnings)))
     return "\n".join(lines)
 
 
