@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+from mosbius import messages
 from mosbius.bitstream import BitstreamError
 from mosbius.check import SafetyReport, check, check_design, check_routing, merge_findings
 from mosbius.decode import decode, format_summary
@@ -70,40 +71,17 @@ def _bitstream_arg(value: str) -> str:
         # had written the file, i.e. exactly the person least able to
         # decode that answer.
         if "/" in value or path.suffix:
-            raise ArgumentError(
-                f"there is no file at {path}\n\n"
-                f"  This looks like a path rather than a bitstream, and nothing is\n"
-                f"  there. If you have not routed the design yet, that is the step\n"
-                f"  that writes it:\n\n"
-                f"    python3 -m mosbius.cli route build/<design>.spice --out {path}\n\n"
-                f"  The netlist it reads comes from xschem's Netlist button, with\n"
-                f"  xschem launched from the top of this repo so it picks up\n"
-                f"  xschemrc and writes into build/.\n"
-            )
+            raise ArgumentError(messages.CLI_NO_FILE_AT_PATH.format(path=path))
         return value
 
     try:
         data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
-        raise ArgumentError(
-            f"{path} isn't something this command can read\n\n"
-            f"  It expects either the 48 hex characters of a bitstream, or the\n"
-            f"  path to a routed design -- the JSON file `mosbius route --out`\n"
-            f"  writes, usually build/<design>.mosbius.json. This file is\n"
-            f"  neither: it does not parse as JSON.\n\n"
-            f"  If you meant the netlist (build/<design>.spice), route it first:\n\n"
-            f"    python3 -m mosbius.cli route {path} --out build/<design>.mosbius.json\n"
-        )
+        raise ArgumentError(messages.CLI_UNRECOGNIZED_ARG.format(path=path))
 
     stream = data.get("bitstream") if isinstance(data, dict) else None
     if not isinstance(stream, str):
-        raise ArgumentError(
-            f"{path} is JSON, but has no \"bitstream\" in it\n\n"
-            f"  A routed design records its bitstream under that key. This file\n"
-            f"  may be from an older version of the router, or hand-edited.\n"
-            f"  Re-route the design to rewrite it:\n\n"
-            f"    python3 -m mosbius.cli route build/<design>.spice --out {path}\n"
-        )
+        raise ArgumentError(messages.CLI_JSON_NO_BITSTREAM_KEY.format(path=path))
     return stream
 
 
@@ -118,8 +96,9 @@ def _format_report(report, *, verbose: bool = False) -> str:
     shown = merge_findings(shown)
     if not shown:
         skipped = len(merge_findings(report.findings))  # all INFO here; merged count, not raw
-        note = f" ({skipped} info note{'s' if skipped != 1 else ''} hidden, use --verbose)" if skipped else ""
-        return f"OK -- no errors or warnings{note}."
+        plural = "s" if skipped != 1 else ""
+        note = messages.CLI_REPORT_INFO_NOTE.format(skipped=skipped, plural=plural) if skipped else ""
+        return messages.CLI_REPORT_OK.format(note=note)
     lines = []
     for f in shown:
         lines.append(f.message)
@@ -131,7 +110,7 @@ def cmd_decode(args: argparse.Namespace) -> int:
     try:
         config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
     except (ArgumentError, BitstreamError) as e:
-        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     print(format_summary(decode(config)))
     return 0
@@ -164,24 +143,17 @@ def _shuttle_for(args: argparse.Namespace) -> str:
         identity = read_board_identity(project=args.project, port=getattr(args, "port", None))
     except ProgramError as e:
         raise PadLookupError(
-            f"can't ask the board which chip is in the socket, and which PCB pad\n"
-            f"  each ua[k] comes out on depends on that -- Tiny Tapeout muxes the\n"
-            f"  analog pins, so the same design on another shuttle lands on other\n"
-            f"  pads. Guessing would print a table that looks measured and sends\n"
-            f"  you to the wrong pad, so here is the underlying problem instead:\n\n"
-            f"  {e}\n\n"
-            f"  If you are away from the bench and just want to read the table,\n"
-            f"  name the chip yourself:\n\n"
-            f"    mosbius pads {args.bitstream} --shuttle {DEFAULT_SHUTTLE}"
+            messages.CLI_CANT_ASK_BOARD.format(
+                e=e, bitstream=args.bitstream, default_shuttle=DEFAULT_SHUTTLE
+            )
         ) from e
     if identity.get("has_project") is False:
         raise PadLookupError(
-            f"the chip in the socket is from shuttle {identity['shuttle']}, and\n"
-            f"  {args.project} is not on it. There are no pads to name, because\n"
-            f"  this bitstream cannot be programmed to that chip at all --\n"
-            f"  `mosbius program` would stop with the same thing.\n\n"
-            f"  Either put the right chip in, or say which project you mean with\n"
-            f"  --project (it defaults to {DEFAULT_PROJECT}, this repo's own macro)."
+            messages.CLI_PROJECT_NOT_ON_SHUTTLE.format(
+                shuttle=identity["shuttle"],
+                project=args.project,
+                default_project=DEFAULT_PROJECT,
+            )
         )
     return identity["shuttle"]
 
@@ -190,12 +162,12 @@ def cmd_pads(args: argparse.Namespace) -> int:
     try:
         config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
     except (ArgumentError, BitstreamError) as e:
-        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     try:
         print(format_pad_table(config, _shuttle_for(args), args.project))
     except PadLookupError as e:
-        print(f"CAN'T WORK OUT THE PADS\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_CANT_WORK_OUT_PADS.format(e=e), file=sys.stderr)
         return 1
     return 0
 
@@ -204,7 +176,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     try:
         config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
     except (ArgumentError, BitstreamError) as e:
-        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     report = check(config)
     print(_format_report(report, verbose=args.verbose))
@@ -216,10 +188,10 @@ def cmd_route(args: argparse.Namespace) -> int:
         check_netlist_fresh(args.netlist)
         design = parse_netlist(args.netlist.read_text())
     except StaleNetlistError as e:
-        print(f"OUT OF DATE\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_OUT_OF_DATE.format(e=e), file=sys.stderr)
         return 1
     except NetlistError as e:
-        print(f"IMPOSSIBLE\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_IMPOSSIBLE.format(e=e), file=sys.stderr)
         return 1
 
     # Netlist-level checks first: a design fault can make the router fail
@@ -241,7 +213,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         if design_report.warnings:
             print(_format_report(design_report, verbose=args.verbose), file=sys.stderr)
             print(file=sys.stderr)
-        print(f"IMPOSSIBLE\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_IMPOSSIBLE.format(e=e), file=sys.stderr)
         return 1
 
     report = SafetyReport(
@@ -251,15 +223,15 @@ def cmd_route(args: argparse.Namespace) -> int:
     )
     print(_format_report(report, verbose=args.verbose))
     print()
-    print("Device roles:")
+    print(messages.CLI_DEVICE_ROLES_HEADER)
     for line in format_device_roles(routed):
         print(line)
     print()
-    print("Bus rows:")
+    print(messages.CLI_BUS_ROWS_HEADER)
     for line in format_net_rows(routed) + format_pad_note(routed):
         print(line)
     print()
-    print(f"Bitstream: {routed.config.to_bitstream()}")
+    print(messages.CLI_BITSTREAM_LINE.format(bitstream=routed.config.to_bitstream()))
     return 1 if report.has_errors else 0
 
 
@@ -268,11 +240,11 @@ def cmd_simulate(args: argparse.Namespace) -> int:
         check_routed_fresh(args.routed)
         name, spice_text = simulate_from_routed_json(args.routed)
     except SimulateError as e:
-        print(f"CAN'T SIMULATE\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_CANT_SIMULATE.format(e=e), file=sys.stderr)
         return 1
     out = args.out or args.routed.with_name(f"{name}_routed.spice")
     out.write_text(spice_text)
-    print(f"OK -- wrote {out} ({name}_routed, real switch matrix + pads + coupling/wire caps)")
+    print(messages.CLI_SIMULATE_OK.format(out=out, name=name))
     return 0
 
 
@@ -283,7 +255,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
         # Ctrl-C is how anyone stops a watch -- it is the documented exit,
         # so it should not look like a crash. mosbius/watch.py's own
         # __main__ already did this; going through the cli did not.
-        print("\nstopped watching.", file=sys.stderr)
+        print(messages.CLI_STOPPED_WATCHING, file=sys.stderr)
     return 0
 
 
@@ -291,7 +263,7 @@ def cmd_program(args: argparse.Namespace) -> int:
     try:
         config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
     except (ArgumentError, BitstreamError) as e:
-        print(f"CAN'T READ THAT\n\n  {e}", file=sys.stderr)
+        print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     try:
         result = program(
@@ -305,7 +277,8 @@ def cmd_program(args: argparse.Namespace) -> int:
     except ProgramError as e:
         print(str(e), file=sys.stderr)
         return 1
-    print(f"OK -- uploaded to {args.project}" + (" (verified)" if result.get("verify_ok") else ""))
+    verified = messages.CLI_PROGRAM_VERIFIED_SUFFIX if result.get("verify_ok") else ""
+    print(messages.CLI_PROGRAM_UPLOADED.format(project=args.project) + verified)
     # The upload is only half of what someone at the bench needs: the
     # other half is where to put the probe, and the schematic cannot say
     # it (nothing on the board is labelled "ua2"). Which pad each ua[k] is
@@ -313,23 +286,25 @@ def cmd_program(args: argparse.Namespace) -> int:
     # own ROM on the way past.
     shuttle = args.shuttle or result.get("shuttle")
     if args.shuttle:
-        print(f"   shuttle {shuttle} (from --shuttle, not from the chip)")
+        print(messages.CLI_PROGRAM_SHUTTLE_FROM_FLAG.format(shuttle=shuttle))
     elif shuttle:
         repo, commit = result.get("repo"), result.get("commit")
-        provenance = f"read from the chip in the socket ({result.get('identity_source', 'chip ROM')})"
-        print(f"   shuttle {shuttle} -- {provenance}")
+        provenance = messages.CLI_PROGRAM_PROVENANCE.format(
+            identity_source=result.get("identity_source", "chip ROM")
+        )
+        print(messages.CLI_PROGRAM_SHUTTLE_FROM_CHIP.format(shuttle=shuttle, provenance=provenance))
         if repo:
-            print(f"   chip {repo}" + (f" @ {commit}" if commit else ""))
+            commit_suffix = messages.CLI_PROGRAM_CHIP_COMMIT_SUFFIX.format(commit=commit) if commit else ""
+            print(messages.CLI_PROGRAM_CHIP_LINE.format(repo=repo) + commit_suffix)
     if not shuttle:
         # The bits are on the chip, so this is not a failed upload -- but a
         # pad table for a guessed shuttle would look exactly like a real one
         # and send someone probing a pad with nothing on it, so say nothing
         # rather than guess.
         print(
-            "\n  (uploaded fine, but the board reported no shuttle, so which PCB\n"
-            "   pad each ua[k] comes out on can't be worked out -- that mapping\n"
-            "   is per shuttle. Re-run with --shuttle to get the table:\n\n"
-            f"     mosbius pads {args.bitstream} --shuttle {DEFAULT_SHUTTLE})",
+            messages.CLI_PROGRAM_NO_SHUTTLE_NOTE.format(
+                bitstream=args.bitstream, default_shuttle=DEFAULT_SHUTTLE
+            ),
             file=sys.stderr,
         )
         warning = ibias_warning(result, config)
@@ -346,7 +321,7 @@ def cmd_program(args: argparse.Namespace) -> int:
         # The bits are on the chip either way -- this must not read as a
         # failed upload, so it is a note rather than an error.
         print(
-            f"  (uploaded fine, but the pad table needs the shuttle index)\n\n  {e}",
+            messages.CLI_PROGRAM_PAD_TABLE_UNAVAILABLE.format(e=e),
             file=sys.stderr,
         )
     return 0

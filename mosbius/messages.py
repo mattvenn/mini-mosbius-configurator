@@ -1083,3 +1083,107 @@ MODEL_BIT_OUT_OF_RANGE = (
     "  The mini-MOSbius config chain is exactly {num_bits} "
     "bits (SPEC.md Sec 2.1)."
 )
+
+
+# --- cli.py ------------------------------------------------------------
+
+CLI_NO_FILE_AT_PATH = (
+    "there is no file at {path}\n\n"
+    "  This looks like a path rather than a bitstream, and nothing is\n"
+    "  there. If you have not routed the design yet, that is the step\n"
+    "  that writes it:\n\n"
+    "    python3 -m mosbius.cli route build/<design>.spice --out {path}\n\n"
+    "  The netlist it reads comes from xschem's Netlist button, with\n"
+    "  xschem launched from the top of this repo so it picks up\n"
+    "  xschemrc and writes into build/.\n"
+)
+
+CLI_UNRECOGNIZED_ARG = (
+    "{path} isn't something this command can read\n\n"
+    "  It expects either the 48 hex characters of a bitstream, or the\n"
+    "  path to a routed design -- the JSON file `mosbius route --out`\n"
+    "  writes, usually build/<design>.mosbius.json. This file is\n"
+    "  neither: it does not parse as JSON.\n\n"
+    "  If you meant the netlist (build/<design>.spice), route it first:\n\n"
+    "    python3 -m mosbius.cli route {path} --out build/<design>.mosbius.json\n"
+)
+
+CLI_JSON_NO_BITSTREAM_KEY = (
+    "{path} is JSON, but has no \"bitstream\" in it\n\n"
+    "  A routed design records its bitstream under that key. This file\n"
+    "  may be from an older version of the router, or hand-edited.\n"
+    "  Re-route the design to rewrite it:\n\n"
+    "    python3 -m mosbius.cli route build/<design>.spice --out {path}\n"
+)
+
+CLI_REPORT_OK = "OK -- no errors or warnings{note}."
+
+CLI_REPORT_INFO_NOTE = " ({skipped} info note{plural} hidden, use --verbose)"
+
+CLI_CANT_READ_THAT = "CAN'T READ THAT\n\n  {e}"
+
+CLI_CANT_ASK_BOARD = (
+    "can't ask the board which chip is in the socket, and which PCB pad\n"
+    "  each ua[k] comes out on depends on that -- Tiny Tapeout muxes the\n"
+    "  analog pins, so the same design on another shuttle lands on other\n"
+    "  pads. Guessing would print a table that looks measured and sends\n"
+    "  you to the wrong pad, so here is the underlying problem instead:\n\n"
+    "  {e}\n\n"
+    "  If you are away from the bench and just want to read the table,\n"
+    "  name the chip yourself:\n\n"
+    "    mosbius pads {bitstream} --shuttle {default_shuttle}"
+)
+
+CLI_PROJECT_NOT_ON_SHUTTLE = (
+    "the chip in the socket is from shuttle {shuttle}, and\n"
+    "  {project} is not on it. There are no pads to name, because\n"
+    "  this bitstream cannot be programmed to that chip at all --\n"
+    "  `mosbius program` would stop with the same thing.\n\n"
+    "  Either put the right chip in, or say which project you mean with\n"
+    "  --project (it defaults to {default_project}, this repo's own macro)."
+)
+
+CLI_CANT_WORK_OUT_PADS = "CAN'T WORK OUT THE PADS\n\n  {e}"
+
+CLI_OUT_OF_DATE = "OUT OF DATE\n\n  {e}"
+
+CLI_IMPOSSIBLE = "IMPOSSIBLE\n\n  {e}"
+
+CLI_DEVICE_ROLES_HEADER = "Device roles:"
+
+CLI_BUS_ROWS_HEADER = "Bus rows:"
+
+CLI_BITSTREAM_LINE = "Bitstream: {bitstream}"
+
+CLI_CANT_SIMULATE = "CAN'T SIMULATE\n\n  {e}"
+
+CLI_SIMULATE_OK = (
+    "OK -- wrote {out} ({name}_routed, real switch matrix + pads + coupling/wire caps)"
+)
+
+CLI_STOPPED_WATCHING = "\nstopped watching."
+
+CLI_PROGRAM_UPLOADED = "OK -- uploaded to {project}"
+
+CLI_PROGRAM_VERIFIED_SUFFIX = " (verified)"
+
+CLI_PROGRAM_SHUTTLE_FROM_FLAG = "   shuttle {shuttle} (from --shuttle, not from the chip)"
+
+CLI_PROGRAM_PROVENANCE = "read from the chip in the socket ({identity_source})"
+
+CLI_PROGRAM_SHUTTLE_FROM_CHIP = "   shuttle {shuttle} -- {provenance}"
+
+CLI_PROGRAM_CHIP_LINE = "   chip {repo}"
+
+CLI_PROGRAM_CHIP_COMMIT_SUFFIX = " @ {commit}"
+
+CLI_PROGRAM_NO_SHUTTLE_NOTE = (
+    "\n  (uploaded fine, but the board reported no shuttle, so which PCB\n"
+    "   pad each ua[k] comes out on can't be worked out -- that mapping\n"
+    "   is per shuttle. Re-run with --shuttle to get the table:\n\n"
+    "     mosbius pads {bitstream} --shuttle {default_shuttle})"
+)
+
+CLI_PROGRAM_PAD_TABLE_UNAVAILABLE = (
+    "  (uploaded fine, but the pad table needs the shuttle index)\n\n  {e}"
+)

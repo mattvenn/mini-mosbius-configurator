@@ -14,7 +14,7 @@ import urllib.error
 
 import pytest
 
-from mosbius import pads
+from mosbius import messages, pads
 from tests.test_pads import REAL_ENTRY as ANALOG_PINS_ENTRY
 from mosbius.cli import main
 from mosbius.program import ProgramError
@@ -82,8 +82,8 @@ def test_check_reports_ok_and_hides_info_by_default(capsys):
     rc = main(["check", INVERTER_BITSTREAM])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "OK" in out
-    assert "hidden" in out
+    assert messages.CLI_REPORT_OK.split("{note}")[0] in out
+    assert messages.CLI_REPORT_INFO_NOTE.split("{plural}")[1] in out
     assert "does nothing" not in out
 
 
@@ -139,7 +139,7 @@ def test_route_reports_impossible_on_bad_netlist(tmp_path: Path, capsys):
     rc = main(["route", str(netlist)])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "IMPOSSIBLE" in err
+    assert messages.CLI_IMPOSSIBLE.split("\n")[0] in err
 
 
 def test_simulate_reports_cant_simulate_on_a_netlist(tmp_path: Path, capsys):
@@ -150,7 +150,7 @@ def test_simulate_reports_cant_simulate_on_a_netlist(tmp_path: Path, capsys):
     rc = main(["simulate", str(netlist)])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "CAN'T SIMULATE" in err
+    assert messages.CLI_CANT_SIMULATE.split("\n")[0] in err
     assert "xschem netlist" in err
     assert "Traceback" not in err
 
@@ -183,7 +183,7 @@ def test_program_success_prints_ok(capsys):
         rc = main(["program", INVERTER_BITSTREAM, "--project", "tt_um_tnt_mosbius"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "OK" in out
+    assert messages.CLI_PROGRAM_UPLOADED.format(project="tt_um_tnt_mosbius") in out
     _, kwargs = mock_program.call_args
     assert kwargs["project"] == "tt_um_tnt_mosbius"
     assert kwargs["reset"] is True
@@ -220,7 +220,7 @@ def test_pads_explains_an_unknown_project_rather_than_tracebacking(capsys):
     rc = main(["pads", INVERTER_BITSTREAM, "--project", "tt_um_not_here"])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "CAN'T WORK OUT THE PADS" in err
+    assert messages.CLI_CANT_WORK_OUT_PADS.split("\n")[0] in err
     assert "https://index.tinytapeout.com/ttsky25a/tt_um_not_here.json" in err
     assert "pads_ttsky25a_tt_um_not_here.json" in err
 
@@ -234,7 +234,7 @@ def test_program_prints_the_pad_table_after_uploading(capsys):
         rc = main(["program", INVERTER_BITSTREAM])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "OK -- uploaded" in out
+    assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in out
     assert "Pads in use" in out and "ua1" in out
 
 
@@ -247,8 +247,8 @@ def test_program_still_succeeds_when_the_pad_table_cannot_be_built(capsys):
         rc = main(["program", INVERTER_BITSTREAM])
     captured = capsys.readouterr()
     assert rc == 0
-    assert "OK -- uploaded" in captured.out
-    assert "uploaded fine" in captured.err
+    assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in captured.out
+    assert messages.CLI_PROGRAM_PAD_TABLE_UNAVAILABLE.split("{e}")[0] in captured.err
 
 
 def test_no_subcommand_is_an_argparse_error():
@@ -275,20 +275,18 @@ def test_decode_explains_a_file_that_is_not_routed_json(tmp_path, capsys):
     netlist.write_text("XM1 a b VGND VGND mosbius_nmos w=1\n")
     assert main(["decode", str(netlist)]) == 1
     err = capsys.readouterr().err
-    assert "does not parse as JSON" in err
-    assert "mosbius.cli route" in err  # names the command that fixes it
+    assert messages.CLI_UNRECOGNIZED_ARG.format(path=netlist) in err
 
 
 def test_decode_explains_json_without_a_bitstream(tmp_path, capsys):
     stray = tmp_path / "other.json"
     stray.write_text(json.dumps({"device_roles": {}}))
     assert main(["decode", str(stray)]) == 1
-    assert 'no "bitstream" in it' in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert messages.CLI_JSON_NO_BITSTREAM_KEY.format(path=stray) in err
 
 
 def test_decode_reports_a_bad_bitstream_without_a_traceback(capsys):
-    from mosbius import messages
-
     assert main(["decode", "deadbeef"]) == 1
     err = capsys.readouterr().err
     detail = messages.BITSTREAM_WRONG_LENGTH.format(
@@ -325,8 +323,7 @@ def test_program_explains_a_missing_routed_design_without_reaching_hardware(tmp_
     assert rc == 1
     mock_program.assert_not_called()
     err = capsys.readouterr().err
-    assert "there is no file at" in err
-    assert "mosbius.cli route" in err  # names the step that writes it
+    assert messages.CLI_NO_FILE_AT_PATH.format(path=missing) in err
     assert "hex" not in err
 
 
@@ -369,7 +366,12 @@ def test_pads_fails_rather_than_guessing_when_no_board_answers(capsys, monkeypat
     captured = capsys.readouterr()
     assert rc == 1
     assert "ttsky25a" not in captured.out  # no guessed table at all
-    assert "--shuttle" in captured.err and "CAN'T READ THE BOARD" in captured.err
+    inner = messages.CLI_CANT_ASK_BOARD.format(
+        e="CAN'T READ THE BOARD -- no result from the board",
+        bitstream=INVERTER_BITSTREAM,
+        default_shuttle=pads.DEFAULT_SHUTTLE,
+    )
+    assert messages.CLI_CANT_WORK_OUT_PADS.format(e=inner) in captured.err
 
 
 def test_pads_fails_when_the_project_is_not_on_the_chip_present(capsys, monkeypatch):
@@ -383,7 +385,10 @@ def test_pads_fails_when_the_project_is_not_on_the_chip_present(capsys, monkeypa
     rc = main(["pads", INVERTER_BITSTREAM])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "is not on it" in err and "cannot be programmed" in err
+    inner = messages.CLI_PROJECT_NOT_ON_SHUTTLE.format(
+        shuttle="ttsky25a", project=pads.DEFAULT_PROJECT, default_project=pads.DEFAULT_PROJECT
+    )
+    assert messages.CLI_CANT_WORK_OUT_PADS.format(e=inner) in err
 
 
 def test_program_says_where_the_shuttle_came_from(capsys):
@@ -396,8 +401,10 @@ def test_program_says_where_the_shuttle_came_from(capsys):
         rc = main(["program", INVERTER_BITSTREAM])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "read from the chip in the socket" in out
-    assert "TinyTapeout/tinytapeout-sky-25a" in out and "85e372cf" in out
+    provenance = messages.CLI_PROGRAM_PROVENANCE.format(identity_source="chip ROM")
+    assert messages.CLI_PROGRAM_SHUTTLE_FROM_CHIP.format(shuttle="ttsky25a", provenance=provenance) in out
+    assert messages.CLI_PROGRAM_CHIP_LINE.format(repo="TinyTapeout/tinytapeout-sky-25a") in out
+    assert messages.CLI_PROGRAM_CHIP_COMMIT_SUFFIX.format(commit="85e372cf") in out
 
 
 def test_program_prints_no_pad_table_when_the_board_reported_no_shuttle(capsys):
@@ -410,9 +417,12 @@ def test_program_prints_no_pad_table_when_the_board_reported_no_shuttle(capsys):
         rc = main(["program", INVERTER_BITSTREAM])
     captured = capsys.readouterr()
     assert rc == 0
-    assert "OK -- uploaded" in captured.out
+    assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in captured.out
     assert "PCB pad" not in captured.out
-    assert "--shuttle" in captured.err
+    expected = messages.CLI_PROGRAM_NO_SHUTTLE_NOTE.format(
+        bitstream=INVERTER_BITSTREAM, default_shuttle=pads.DEFAULT_SHUTTLE
+    )
+    assert expected in captured.err
 
 
 class TestIbiasWarning:
@@ -430,7 +440,6 @@ class TestIbiasWarning:
         return SwitchConfig(bits=unpack("0" * 48), ibias=ibias)
 
     def test_names_the_current_and_what_it_affects(self):
-        from mosbius import messages
         from mosbius.program import ibias_warning
         text = ibias_warning({"ibias_set": False}, self._config(100e-6))
         assert text == messages.PROGRAM_IBIAS_NOT_SET.format(ibias_ua=100.0)
