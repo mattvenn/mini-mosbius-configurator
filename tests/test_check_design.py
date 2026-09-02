@@ -206,7 +206,7 @@ def test_reversed_pmos_message_connects_to_the_failure_the_user_sees():
     # The point of the check: explain the "DOESN'T FIT" that follows -- derived
     # from ROUTE_NOT_ENOUGH_FETS's own headline so a reword there fails this
     # loudly instead of leaving a stale hand-typed fragment passing silently.
-    not_enough_tail = messages.ROUTE_NOT_ENOUGH_FETS.split("\n")[0].split("-- ")[1]
+    not_enough_tail = messages.ROUTE_NOT_ENOUGH_FETS.split("\n")[0].split("- ")[1]
     assert not_enough_tail.format(label="PMOS") in message
     assert "flipped vertically" in message
     assert "source at the top" in message      # mosbius_pmos's real geometry
@@ -241,7 +241,7 @@ def test_reversed_nmos_reports_the_nmos_rail_and_geometry():
     assert "drain on VGND" in message
     assert "drain at the top" in message        # mosbius_nmos is the other way up
     # Same derivation as test_reversed_pmos_message_connects_to_the_failure_the_user_sees.
-    not_enough_tail = messages.ROUTE_NOT_ENOUGH_FETS.split("\n")[0].split("-- ")[1]
+    not_enough_tail = messages.ROUTE_NOT_ENOUGH_FETS.split("\n")[0].split("- ")[1]
     assert not_enough_tail.format(label="NMOS") in message
 
 

@@ -537,7 +537,6 @@ def test_a_genuinely_unroutable_design_still_explains_itself():
     message = str(excinfo.value)
     assert "'shared_gate' spans both bus sides" in message
     assert "row 6" in message
-    assert "SPEC.md Sec 2.12" in message
 
 
 def test_the_row_free_on_both_sides_is_derived_not_assumed():

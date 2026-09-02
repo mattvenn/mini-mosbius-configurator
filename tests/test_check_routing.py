@@ -57,8 +57,8 @@ def test_dropped_width_is_flagged_on_the_diff_pair_halves_only():
     # M1/M2", which is sky130 instance names inside the submodule, not the
     # user's M1.
     headlines = sorted(f.message.splitlines()[0] for f in report.warnings)
-    assert headlines[0].startswith("WARNING -- M5's w=1 was ignored")
-    assert headlines[1].startswith("WARNING -- M6's w=1 was ignored")
+    assert headlines[0].startswith("WARNING - M5's w=1 was ignored")
+    assert headlines[1].startswith("WARNING - M6's w=1 was ignored")
 
 
 def test_message_names_the_geometry_and_the_matching_fix():
@@ -105,9 +105,9 @@ def test_ring_r1_warnings_do_not_merge_across_kind():
     merged = merge_findings(report.warnings)
     assert len(merged) == 2
     assert {f.message.splitlines()[0] for f in merged} == {
-        "WARNING -- " + messages.CHECK_R1_HEADLINE_ONE.format(
+        "WARNING - " + messages.CHECK_R1_HEADLINE_ONE.format(
             name="M5", prop="w", requested=1, role="ndiffpair+"),
-        "WARNING -- " + messages.CHECK_R1_HEADLINE_ONE.format(
+        "WARNING - " + messages.CHECK_R1_HEADLINE_ONE.format(
             name="M6", prop="w", requested=1, role="pdiffpair+"),
     }
 
@@ -122,7 +122,7 @@ def test_same_kind_same_width_r1_warnings_merge_into_one():
     # device and role names happen to be.
     flat = " ".join(merged[0].message.split())
     headline = " ".join(merged[0].message.split("\n\n")[0].split())
-    assert headline == "WARNING -- " + messages.CHECK_R1_HEADLINE_MANY.format(
+    assert headline == "WARNING - " + messages.CHECK_R1_HEADLINE_MANY.format(
         names="M3 and M4", prop="w", requested=1, role_list="ndiffpair+ and ndiffpair-")
     # The shared explanation appears exactly once.
     assert flat.count("Those halves have no width bits") == 1
@@ -232,7 +232,7 @@ def test_a_tail_on_a_diff_pair_half_is_reported_not_dropped():
     codes = [f.code for f in report.warnings]
     assert "R2" in codes
     r2 = [f for f in report.warnings if f.code == "R2"][0]
-    assert r2.message.startswith("WARNING -- " + messages.CHECK_R2_HEADLINE_ONE.format(
+    assert r2.message.startswith("WARNING - " + messages.CHECK_R2_HEADLINE_ONE.format(
         name="XM5", requested=6, role="ndiffpair+"))
 
 
@@ -282,7 +282,7 @@ def test_a_tail_on_a_device_that_has_none_says_so_differently():
     # diff-pair explanation would send the reader looking in the wrong place.
     report = check_routing(routed("XM1 ua1 ua2 VGND VGND mosbius_nmos w=1 tail=4\n"))
     r2 = [f for f in report.warnings if f.code == "R2"][0].message
-    assert r2.startswith("WARNING -- " + messages.CHECK_R2_HEADLINE_ONE.format(
+    assert r2.startswith("WARNING - " + messages.CHECK_R2_HEADLINE_ONE.format(
         name="XM1", requested=4, role="nmos_a"))
     assert "ctrl_dpn_tail" not in r2          # not this device's problem
     assert "w= (1, 2, 3 or 4)" in r2          # what they probably meant

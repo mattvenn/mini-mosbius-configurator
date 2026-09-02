@@ -6,7 +6,7 @@ file, for internationalisation and for easy re-writing of all messages."
 See docs/superpowers/specs/2026-09-01-user-facing-messages-design.md.
 
 Only the text lives here. Which message applies, which word to use, and
-what values to interpolate all stay exactly where they were -- a call
+what values to interpolate all stay exactly where they were - a call
 site does `messages.KEY.format(...)`, nothing more. Grouped by the
 module each message came from, in that module's own definition order.
 """
@@ -26,9 +26,6 @@ SIMULATE_STALE_ROUTED = (
     "  These were changed after it was written:\n\n"
     "{what}\n\n"
     "  So this file still describes the circuit as it used to be routed.\n"
-    "  Simulating it would build a routed netlist for that old circuit,\n"
-    "  and a drawn-vs-routed testbench would then compare two different\n"
-    "  designs -- which runs, and produces numbers, and means nothing.\n\n"
     "  To fix:\n\n"
     "{fix}"
 )
@@ -55,11 +52,8 @@ SIMULATE_XSCHEM_NETLIST_GIVEN = (
     "{path} is an xschem netlist, not a routed design\n"
     "  `mosbius simulate` starts from the JSON file that\n"
     "  `mosbius route --out <file>` writes, not from the netlist itself.\n"
-    "  The netlist says what you drew; routing is the step that decides\n"
-    "  which of the chip's hardware devices each drawn device becomes and\n"
-    "  which bus row each net becomes, and the simulation is built out of\n"
-    "  exactly those decisions -- it can't make them for you.\n"
-    "  Route this netlist first, then simulate what routing wrote:\n\n"
+    "  The netlist describes what you drew; routing is the step that decides\n"
+    "  how to map your design to the available resources.\n\n"
     "{route_hint}"
 )
 
@@ -67,7 +61,7 @@ SIMULATE_NOT_JSON = (
     "{path} is not a routed design: it isn't JSON at all\n"
     "  `mosbius simulate` reads the JSON file that\n"
     "  `mosbius route --out <file>` writes. Check you passed the path you\n"
-    "  meant to -- a routed design is named <name>.mosbius.json and starts\n"
+    "  meant to - a routed design is named <name>.mosbius.json and starts\n"
     "  with a '{{' character."
 )
 
@@ -75,7 +69,7 @@ SIMULATE_NO_BITSTREAM_KEY = (
     "{path} is JSON, but not a routed design\n"
     "  A routed design is what `mosbius route --out <file>` writes, and it\n"
     "  always carries a \"bitstream\" entry (the 48 hex characters that\n"
-    "  configure the chip) -- this file has no such entry, so there is no\n"
+    "  configure the chip) - this file has no such entry, so there is no\n"
     "  configuration here to build a simulation from. Re-run `mosbius route`\n"
     "  with --out pointing at this path to write a real one."
 )
@@ -92,21 +86,17 @@ SIMULATE_BAD_BITSTREAM = (
 # --- route.py ------------------------------------------------------------
 
 ROUTE_SETTING_NOT_VALID = (
-    "DOESN'T FIT -- {device}'s {prop}={value} is not a setting this "
+    "DOESN'T FIT - {device}'s {prop}={value} is not a setting this "
     "chip has\n\n"
     "  {prop}= is stored as a 2-bit cycler: n = {step} * (1 + b_lsb + "
-    "2*b_msb)\n  (SPEC.md Sec 2.11). That gives exactly four settings, "
-    "{options},\n  and nothing in between.\n\n"
-    "  Nothing is rounded to the nearest one on your behalf: the chip "
-    "would\n  then be built to a different {prop} than your schematic "
-    "shows, which is\n  the kind of silent difference this tool exists "
-    "to prevent.\n\n"
+    "2*b_msb). That gives exactly four settings, "
+    "{options}.\n\n"
     "  To fix: set {prop}= to one of {options} on {device} in the "
     "schematic,\n  and press Netlist again."
 )
 
 ROUTE_NOT_ENOUGH_FETS = (
-    "DOESN'T FIT -- not enough {label} with independent sources\n\n"
+    "DOESN'T FIT - not enough {label} with independent sources\n\n"
     "  Your circuit needs {count} {label} transistors:\n"
     "    {names}\n\n"
     "  The chip has only {indep_count} of those whose source you can\n"
@@ -126,31 +116,31 @@ ROUTE_NOT_ENOUGH_FETS = (
 )
 
 ROUTE_TOO_MANY_NTAIL = (
-    "DOESN'T FIT -- only one NMOS differential-pair tail on this chip\n\n"
+    "DOESN'T FIT - only one NMOS differential-pair tail on this chip\n\n"
     "  {count} mosbius_ntail devices requested, but there's exactly "
     "one NMOS\n  tail bank (role ntail, ctrl_dpn_tail)."
 )
 
 ROUTE_TOO_MANY_PTAIL = (
-    "DOESN'T FIT -- only one PMOS differential-pair tail on this chip\n\n"
+    "DOESN'T FIT - only one PMOS differential-pair tail on this chip\n\n"
     "  {count} mosbius_ptail devices requested, but there's exactly "
     "one PMOS\n  tail bank (role ptail, ctrl_dpp_tail)."
 )
 
 ROUTE_TOO_MANY_NSINK = (
-    "DOESN'T FIT -- too many current sinks\n\n"
+    "DOESN'T FIT - too many current sinks\n\n"
     "  {count} mosbius_nsink devices requested, but the chip has only "
     "{max}\n  (nsink_a, nsink_b)."
 )
 
 ROUTE_TOO_MANY_PSOURCE = (
-    "DOESN'T FIT -- too many current sources\n\n"
+    "DOESN'T FIT - too many current sources\n\n"
     "  {count} mosbius_psource devices requested, but the chip has "
     "only {max}\n  (psource_a, psource_b)."
 )
 
 ROUTE_TOO_MANY_OTA = (
-    "DOESN'T FIT -- only one OTA on this chip\n\n"
+    "DOESN'T FIT - only one OTA on this chip\n\n"
     "  {count} mosbius_ota devices requested, but there's exactly one "
     "(ota)."
 )
@@ -161,14 +151,14 @@ ROUTE_TOO_MANY_OTA = (
 ROUTE_WHY_LIMITED_REACH = (
     "  Why some terminals reach fewer rows than others: the differential\n"
     "  pair's and the OTA's *input* crosspoints have a switch to three bus\n"
-    "  rows only, not to all six (SPEC.md Sec 2.12). Every other terminal on\n"
+    "  rows only, not to all six. Every other terminal on\n"
     "  the chip reaches all six.\n"
 )
 
 ROUTE_PORT_NET_UNREACHABLE_ROW = (
     "  '{net}' is a package pin, and its bus row is a permanent bond "
     "wire\n  rather than something the router picks: {net} is always "
-    "bus_{side}[{row}]\n  (SPEC.md Sec 2.10).\n\n"
+    "bus_{side}[{row}]\n\n"
     "{why_limited_reach}\n"
     "  To fix: move this signal to a pin bonded to a row this "
     "terminal can\n  reach ({options}), or arrange for the restricted "
@@ -181,7 +171,7 @@ ROUTE_INTERNAL_NET_UNREACHABLE_ROW = (
 )
 
 ROUTE_CANNOT_REACH_ROW = (
-    "DOESN'T FIT -- {touch_desc} cannot reach "
+    "DOESN'T FIT - {touch_desc} cannot reach "
     "bus_{side}[{row}]\n\n"
     "  {role}.{terminal} reaches {rows_reach}, "
     "and nothing else.\n\n"
@@ -195,7 +185,7 @@ ROUTE_CANNOT_REACH_ROW = (
 # kept separate here too, matching every other DOESN'T FIT constant's own
 # wording above -- this is the one call site in route.py that still built
 # it as a bare literal instead of routing it through messages.py.
-ROUTE_SEVERITY_DOESNT_FIT = "DOESN'T FIT -- "
+ROUTE_SEVERITY_DOESNT_FIT = "DOESN'T FIT - "
 
 ROUTE_SHARED_SOURCE_HEADLINE = "nothing else can connect to '{net}'"
 
@@ -204,9 +194,8 @@ ROUTE_SHARED_SOURCE_EXPLAIN = (
     "them the two halves of a differential pair "
     "({pair_roles}): the chip wires those "
     "two sources together in silicon. That shared node has no switch "
-    "of its own onto the bus (SPEC.md Sec 2.12), so nothing outside "
-    "the pair can be joined to it -- not another device, and not a "
-    "package pin."
+    "of its own onto the bus, so nothing outside "
+    "the pair can be joined to it."
 )
 
 ROUTE_SHARED_SOURCE_PROBLEM_PIN = (
@@ -219,11 +208,11 @@ ROUTE_SHARED_SOURCE_PROBLEM_OTHER = "'{net}' also carries {others}."
 
 ROUTE_SHARED_SOURCE_WHAT_CAN_GO_THERE = (
     "What can go on that node: nothing at all, with the source named "
-    "{rail} -- the pair then uses its free tie to that rail, which is "
+    "{rail} - the pair then uses its free tie to that rail, which is "
     "what a pair of ordinary common-source FETs wants. Or a "
     "{tail_symbol}, whose one drawn pin declares the pair's tail "
     "current (tail=2, 4, 6 or 8 multiples of ibias); "
-    "examples/diffamp/ has that end to end."
+    "see examples/diffamp/."
 )
 
 ROUTE_SHARED_SOURCE_HOW_TO_MEASURE = (
@@ -234,7 +223,7 @@ ROUTE_SHARED_SOURCE_HOW_TO_MEASURE = (
 
 ROUTE_DEVICE_ROLE_LINE = "  {name:<12} -> {role:<12}{note}"
 
-ROUTE_NET_ROW_PAD_NOTE = "   package pin {net} -- bond pad + analog mux"
+ROUTE_NET_ROW_PAD_NOTE = "   package pin {net} - bond pad + analog mux"
 
 ROUTE_NET_ROW_LINE = "  {net:<8} {where}{note}"
 
@@ -243,23 +232,26 @@ ROUTE_PAD_NOTE = (
 )
 
 ROUTE_ROW_CONFLICT = (
-    "DOESN'T FIT -- bus_{side}[{row}] is needed by both "
+    "DOESN'T FIT - bus_{side}[{row}] is needed by both "
     "'{net}' and '{owner}'\n\n"
-    "  Only one net can occupy a bus row at a time. Try moving one "
-    "of these\n  nets' devices to the other side of the chip, if the "
-    "device allocation allows it."
+    "  Which row a net lands on is the router's decision, not something "
+    "you\n  choose directly. This usually happens when reaching a rail "
+    "(VAPWR/VGND)\n  tap from one bus side needs a bridge to the same "
+    "row number on the\n  other side, and that row is already claimed "
+    "by a different net.\n\n"
+    "  If the device has a source terminal, tying it directly to its "
+    "rail\n  instead of routing through an internal net costs no bus "
+    "row at all\n  and avoids the bridge entirely."
 )
 
 ROUTE_NO_FREE_ROW = (
-    "DOESN'T FIT -- no free bus_{side}[] row left for '{net}'\n\n"
+    "DOESN'T FIT - no free bus_{side}[] row left for '{net}'\n\n"
     "  All 6 rows on side {side} are already claimed by other nets, "
-    "ports\n  or rail taps. Try routing this net through the other "
-    "side, or freeing\n  up a row by sharing it with a net that's "
-    "already there."
+    "ports\n  or rail taps."
 )
 
 ROUTE_NO_REACHABLE_FREE_ROW = (
-    "DOESN'T FIT -- no bus_{side}[] row that every device on "
+    "DOESN'T FIT - no bus_{side}[] row that every device on "
     "'{net}' can reach\n\n"
     "  '{net}' connects:\n{reach_lines}\n\n"
     "  Free on side {side} right now: bus {free_rows}. The "
@@ -267,13 +259,16 @@ ROUTE_NO_REACHABLE_FREE_ROW = (
     "and none of that is free.\n\n"
     "{why_limited_reach}\n"
     "  Ideas:\n"
-    "    - Free up one of bus {reachable_rows} on side {side}, by "
-    "moving another\n      net elsewhere.\n"
+    "    - Use fewer devices/nets on this side of the chip. Which side "
+    "a\n      device lands on follows from the hardware slot it was "
+    "given, not\n      something you choose directly, so this means "
+    "simplifying the\n      circuit rather than relocating a specific "
+    "net.\n"
     "    - Give this net a package pin (name it ua1..ua5) if you can\n"
     "      spare one: that pins it to the row the pin is bonded to,\n"
     "      which may be a row the restricted terminal can reach.\n"
     "    - Rearrange the circuit so the restricted device is not on\n"
-    "      this net at all -- only differential-pair and OTA inputs\n"
+    "      this net at all - only differential-pair and OTA inputs\n"
     "      are limited."
 )
 
@@ -285,27 +280,27 @@ ROUTE_RAIL_TAP_UNREACHABLE_NOTE = (
 )
 
 ROUTE_NO_USABLE_RAIL_TAP = (
-    "DOESN'T FIT -- no usable {rail} tap for '{net}'\n\n"
+    "DOESN'T FIT - no usable {rail} tap for '{net}'\n\n"
     "{unreachable_note}"
     "  {rail} can only be reached from specific bus rows "
-    "(SPEC.md Sec 2.7),\n  and none of the ones this net could use is "
+    "and none of the ones this net could use is "
     "available. If the device\n  has a source terminal, tying it "
     "directly to {rail} costs no bus row\n  at all."
 )
 
 ROUTE_NO_JOINING_ROW = (
-    "DOESN'T FIT -- '{net}' spans both bus sides and no row can "
+    "DOESN'T FIT - '{net}' spans both bus sides and no row can "
     "join them\n\n"
     "  '{net}' connects:\n{reach_lines}\n\n"
     "  A net that touches both sides has to sit on the *same* row\n"
-    "  number on side A and on side B, bridged by cfg_bus_short. Free\n"
+    "  number on side A and on side B. Free\n"
     "  on both sides here: bus {both_free_rows}. The terminals "
     "above can share\n  only bus {reachable_rows}.\n\n"
     "{why_limited_reach}\n"
     "  And bus {rows_free_both} is the only row "
     "ever free on both sides at once:\n  the others are permanently "
-    "bonded to a ua[] pin on one side or the\n  other (SPEC.md Sec "
-    "2.10). So this is a rule rather than a near miss:\n  a "
+    "bonded to a ua[] pin on one side or the\n  other."
+    " So this is a rule rather than a near miss:\n  a "
     "differential-pair or OTA input can never sit on an internal net\n"
     "  that spans both bus sides, whichever package pins you use.\n\n"
     "  Ideas:\n"
@@ -319,20 +314,17 @@ ROUTE_NO_JOINING_ROW = (
 )
 
 ROUTE_NO_FREE_ROW_BOTH_SIDES = (
-    "DOESN'T FIT -- '{net}' needs a free row on both sides, joined\n\n"
+    "DOESN'T FIT - '{net}' needs a free row on both sides, joined\n\n"
     "  This net connects devices on both side A and side B, which needs "
-    "a\n  matching free row on each side plus a cfg_bus_short. No such "
-    "pair is\n  available -- every free row on at least one side is "
+    "a\n  matching free row on each side. No such "
+    "pair is\n  available - every free row on at least one side is "
     "already claimed."
 )
 
 ROUTE_VDPWR_UNREACHABLE = (
-    "DOESN'T FIT -- VDPWR isn't reachable through the switch matrix\n\n"
+    "DOESN'T FIT - VDPWR isn't reachable through the switch matrix\n\n"
     "  VDPWR (1.8V) only powers the switches' own level-shifters "
-    "internally\n  -- no cfg_bus_pwr tap or source tie reaches it "
-    "(SPEC.md Sec 2.7 only\n  lists VAPWR/VGND taps). Route this "
-    "signal through VAPWR or VGND\n  instead, or reconsider whether "
-    "this net needs an explicit connection."
+    "internally"
 )
 
 
@@ -343,71 +335,60 @@ ROUTE_VDPWR_UNREACHABLE = (
 # tag is baked into its own opening line) -- keeping these in messages.py
 # too closes the one place this project's most-repeated words ("WARNING",
 # "IMPOSSIBLE", ...) were still living only in check.py's own source.
-CHECK_SEVERITY_INFO = "INFO -- "
+CHECK_SEVERITY_INFO = "INFO - "
 
-CHECK_SEVERITY_WARNING = "WARNING -- "
+CHECK_SEVERITY_WARNING = "WARNING - "
 
-CHECK_SEVERITY_IMPOSSIBLE = "IMPOSSIBLE -- "
+CHECK_SEVERITY_IMPOSSIBLE = "IMPOSSIBLE - "
 
 CHECK_E1_SUPPLY_SHORT = (
-    "DANGEROUS -- supply short\n\n"
+    "DANGEROUS - supply short\n\n"
     "  VAPWR is joined to VGND through {n} closed switch{plural}:\n\n"
     "{path}\n\n"
     "  This draws unlimited current from the 3.3V supply straight to ground.\n"
-    "  On real silicon that can damage the chip, so the upload is blocked.\n\n"
-    "  Why it happened: closing every switch on that path ties VAPWR and\n"
-    "  VGND together somewhere in the matrix -- often a bus_short switch\n"
-    "  joining a VAPWR-tapped row to a VGND-tapped one, or two rail taps\n"
-    "  landing on the same bus segment via different switches.\n\n"
-    "  To fix: open one of the switches on the path above -- moving the\n"
-    "  net to another row is usually enough."
+    "  On silicon that can damage the chip, so the upload is blocked."
 )
 
 CHECK_E2_IBIAS_SHORT = (
-    "DANGEROUS -- ibias shorted to {rail}\n\n"
+    "DANGEROUS - ibias shorted to {rail}\n\n"
     "  ibias (ua[0]) is joined to {rail} through {n} closed switch"
     "{plural}:\n\n"
     "{path}\n\n"
-    "  ibias is a current *input* (SPEC.md Sec 3.4b) that biases every\n"
+    "  ibias is a current *input* that biases every\n"
     "  mirror and tail on the chip. Tying it to a rail forces whatever\n"
     "  current source drives it directly into {rail}, and every device\n"
-    "  that depends on ibias loses its bias point.\n\n"
-    "  To fix: open one of the switches on the path above."
+    "  that depends on ibias loses its bias point."
 )
 
 CHECK_E3_PIN_INTO_RAIL = (
-    "DANGEROUS -- {pin} shorted to {rail}\n\n"
+    "DANGEROUS - {pin} shorted to {rail}\n\n"
     "  {pin} is joined to {rail} through {n} closed switch"
     "{plural}:\n\n"
     "{path}\n\n"
     "  {pin} is a package pin the demoboard can drive as a stimulus.\n"
     "  If it ever is, this path sends that drive straight into\n"
-    "  {rail} -- a hard short the demoboard's output stage may not\n"
-    "  survive.\n\n"
-    "  To fix: open one of the switches on the path above, or route\n"
-    "  this net through a different bus segment."
+    "  {rail} - a hard short the demoboard's output stage may not\n"
+    "  survive."
 )
 
 CHECK_E4_PIN_CONTENTION = (
-    "DANGEROUS -- {a} and {b} are tied together\n\n"
+    "DANGEROUS - {a} and {b} are tied together\n\n"
     "  They're joined through {n} closed switch"
     "{plural}:\n\n"
     "{path}\n\n"
     "  Both are package pins the demoboard can drive independently.\n"
     "  If it ever drives them to different voltages, this path\n"
-    "  shorts them together.\n\n"
-    "  To fix: open one of the switches on the path above, or route\n"
-    "  these nets through different bus segments."
+    "  shorts them together"
 )
 
 CHECK_W1_SAME_NET = "    ({name}.d and {name}.s are the same net)"
 
 CHECK_W1_SHORTED_CHANNEL = (
-    "WARNING -- {name}'s drain and source are tied together\n\n"
+    "WARNING - {name}'s drain and source are tied together\n\n"
     "  They're joined through {n} closed switch"
     "{plural}:\n\n"
     "{path}\n\n"
-    "  This shorts out {name}'s channel -- current flows straight\n"
+    "  This shorts out {name}'s channel - current flows straight\n"
     "  through instead of being modulated by the gate, so the\n"
     "  transistor does nothing useful.\n\n"
     "  To fix: route {name}'s drain and source to different nets."
@@ -417,8 +398,8 @@ CHECK_W1_SHORTED_CHANNEL = (
 # headline/intro, all-gates-vs-nothing-reaches "why", an optional
 # untied-tail hint) plugged into one body template -- see
 # _check_w2_floating_crosspoint.
-CHECK_W2_HEADLINE_ONE = "WARNING -- nothing biases {names}"
-CHECK_W2_HEADLINE_MANY = "WARNING -- nothing biases the net joining {names}"
+CHECK_W2_HEADLINE_ONE = "WARNING - nothing biases {names}"
+CHECK_W2_HEADLINE_MANY = "WARNING - nothing biases the net joining {names}"
 
 CHECK_W2_INTRO_ONE = "  It has a closed switch on it, but the net it sits on\n"
 CHECK_W2_INTRO_MANY = (
@@ -427,7 +408,7 @@ CHECK_W2_INTRO_MANY = (
 
 CHECK_W2_WHY_ALL_GATES = (
     "  Every terminal on it is a gate, so nothing can set its\n"
-    "  voltage -- there is no transistor channel to a rail here,\n"
+    "  voltage - there is no transistor channel to a rail here,\n"
     "  and no switch to one either.\n\n"
 )
 
@@ -441,9 +422,7 @@ CHECK_W2_WHY_NOTHING_REACHES = (
 CHECK_W2_HINT_UNTIED_TAIL = (
     "\n\n  Most likely fix here: {bits} is off, so the shared\n"
     "  diff-pair tail on this net's transistor is floating too. The\n"
-    "  tail has no matrix terminal of its own (SPEC.md Sec 2.12) --\n"
-    "  that bit is the only way to tie it to a rail, and with it set\n"
-    "  the half works as an ordinary common-source FET."
+    "  tail has no matrix terminal of its own."
 )
 
 CHECK_W2_BODY = (
@@ -452,19 +431,19 @@ CHECK_W2_BODY = (
     "  has no DC path to VAPWR, VGND, or a ua[] pin.\n\n"
     "{why}"
     "  In SPICE it floats and settles at an arbitrary voltage; on\n"
-    "  real silicon leakage pulls it somewhere uncontrolled, slowly.\n\n"
-    "  To fix: connect it to something that drives it -- a drain\n"
+    "  silicon leakage pulls it somewhere uncontrolled, slowly.\n\n"
+    "  To fix: connect it to something that drives it - a drain\n"
     "  whose transistor has its source on a rail, a mirror output,\n"
     "  or a ua[] pin you can drive from the demoboard.{hint}"
 )
 
 CHECK_W3_PARTLY_WIRED = (
-    "WARNING -- {name} is partly wired\n\n"
+    "WARNING - {name} is partly wired\n\n"
     "  {used} {has_have} a closed\n"
     "  switch, but {unused} {is_are}\n"
     "  left with no connection at all.\n\n"
     "  A transistor with a floating terminal isn't doing the job it\n"
-    "  looks like it's doing -- an unconnected gate floats to an\n"
+    "  looks like it's doing - an unconnected gate floats to an\n"
     "  arbitrary voltage, an unconnected drain/source leaves the\n"
     "  device conducting nowhere.\n\n"
     "  To fix: either wire up {unused}, or remove {name}\n"
@@ -481,14 +460,14 @@ CHECK_I1_SENTENCE_EMPTY = (
 )
 
 CHECK_I1_SENTENCE_BONDED_ONE = (
-    "{seg} is connected only to its package pin ({pins}) -- "
+    "{seg} is connected only to its package pin ({pins}) - "
     "that bond wire is part of the chip rather than something "
     "the schematic added, so it joins the segment to nothing else."
 )
 
 CHECK_I1_SENTENCE_BONDED_MANY = (
     "{names} are connected only to their package pins "
-    "({pins}) -- those bond wires are part of the chip rather "
+    "({pins}) - those bond wires are part of the chip rather "
     "than something the schematic added, so each joins its "
     "segment to nothing else."
 )
@@ -512,7 +491,7 @@ CHECK_D1_SUBJECT_MANY = (
 )
 
 CHECK_D1_RAILS_SHORTED = (
-    "DANGEROUS -- VAPWR and VGND are joined somewhere in your schematic\n\n"
+    "DANGEROUS - VAPWR and VGND are joined somewhere in your schematic\n\n"
     "{subject}\n\n"
     "  Meanwhile {home} does not appear on a single device terminal\n"
     "  anywhere in this netlist.\n\n"
@@ -520,7 +499,7 @@ CHECK_D1_RAILS_SHORTED = (
     "mosbius_{kind}'s\n"
     "  body is hard-wired to {home} on silicon, and its source belongs on\n"
     "  that same rail. The body still reads {home} here because it is not a\n"
-    "  wire you drew -- it comes from the symbol's own template\n"
+    "  wire you drew - it comes from the symbol's own template\n"
     "  (mosbius_{kind}.sym, template=\"... b={home}\" with extra=\"b\"), so it\n"
     "  is the one connection xschem cannot merge with anything else.\n"
     "  Everything you did draw as {home} came back as {wrong} instead.\n\n"
@@ -529,7 +508,7 @@ CHECK_D1_RAILS_SHORTED = (
     "  short itself vanishes from the netlist before this tool ever sees\n"
     "  it. Nothing here can find it by looking at connectivity, because\n"
     "  by then there is only one rail left to look at.\n\n"
-    "  On real silicon this ties the 3.3V supply straight to ground and\n"
+    "  On silicon this ties the 3.3V supply straight to ground and\n"
     "  draws unlimited current, so nothing is routed or uploaded from\n"
     "  here.\n\n"
     "  To fix: find the wire joining {wrong} and {home} in your schematic,\n"
@@ -544,17 +523,17 @@ CHECK_D1_RAILS_SHORTED = (
 # see check.py's own comment near _why_it_costs_the_pair.
 CHECK_D1_WHY_COSTS_PAIR = (
     "  It also costs you the two differential-pair halves. Their shared\n"
-    "  tail has no terminal on the switch matrix (SPEC.md Sec 2.12), so the\n"
+    "  tail has no terminal on the switch matrix, so the\n"
     "  only way to give it a voltage is {tail_bit}, and that bit\n"
     "  ties it to {other_rail}. A half therefore cannot take a device whose\n"
     "  source is on {wrong_rail}, which leaves only {independent_slots}. "
     "That is\n"
-    "  why this first shows up as \"DOESN'T FIT -- not enough "
+    "  why this first shows up as \"DOESN'T FIT - not enough "
     "{router_label} with\n  independent sources\".\n\n"
 )
 
 CHECK_D1_SOURCE_ON_WRONG_RAIL = (
-    "WARNING -- source on {wrong} where {home} is expected\n\n"
+    "WARNING - source on {wrong} where {home} is expected\n\n"
     "{subject}.\n"
     "  A mosbius_{kind}'s body is hard-wired to {home} on silicon "
     "(that is what\n"
@@ -566,7 +545,7 @@ CHECK_D1_SOURCE_ON_WRONG_RAIL = (
     "  the other way up.\n\n"
     "  This is a warning rather than a hard stop because the router can\n"
     "  still reach {wrong} from a source terminal, through a bus row and a\n"
-    "  cfg_bus_pwr tap -- so the circuit may well route. It just probably\n"
+    "  cfg_bus_pwr tap - so the circuit may well route. It just probably\n"
     "  is not the circuit you meant to draw.\n\n"
     "  To fix: wire the source of {names} to {home}."
 )
@@ -586,11 +565,11 @@ CHECK_D2_SUBJECT_MANY = (
 # Must describe the same situation as ROUTE_NOT_ENOUGH_FETS's headline --
 # see check.py's own comment near _why_it_costs_the_pair.
 CHECK_D2_DRAIN_SOURCE_SWAPPED = (
-    "WARNING -- drain and source look swapped on {names}\n\n"
+    "WARNING - drain and source look swapped on {names}\n\n"
     "{subject}\n\n"
     "  That is back to front for a common-source transistor. A "
-    "mosbius_{kind}'s\n  source belongs on {rail} -- the rail its body is "
-    "hard-wired to on\n  silicon -- and its drain is the end that drives "
+    "mosbius_{kind}'s\n  source belongs on {rail} - the rail its body is "
+    "hard-wired to on\n  silicon - and its drain is the end that drives "
     "the rest of the\n  circuit. As drawn, these two are the other way "
     "round.\n\n"
     "  Why it is worth saying: nothing downstream can tell a reversed\n"
@@ -605,7 +584,7 @@ CHECK_D2_DRAIN_SOURCE_SWAPPED = (
     "  And it can cost you the circuit. The chip has only two "
     "{kind_upper} whose\n  source can be routed anywhere at all, so once "
     "there are more than two\n  such requests the allocator gives up:\n"
-    "    \"DOESN'T FIT -- not enough {kind_upper} with independent "
+    "    \"DOESN'T FIT - not enough {kind_upper} with independent "
     "sources\"\n"
     "  which points at the size of your circuit rather than at the "
     "wiring.\n\n"
@@ -630,10 +609,10 @@ CHECK_D3_FOUND_SOME = (
 )
 
 CHECK_D3_TAIL_WRONG_ARITY = (
-    "ERROR -- {tail_name}'s drain doesn't declare a pair\n\n"
+    "ERROR - {tail_name}'s drain doesn't declare a pair\n\n"
     "  {tail_name} is a {symbol}, and its drain is wired to "
     "'{node}'.\n  Drawing a {symbol} declares that net's two "
-    "{fet_symbol} devices as a\n  differential pair -- but {found}.\n\n"
+    "{fet_symbol} devices as a\n  differential pair - but {found}.\n\n"
     "  A {symbol} needs exactly two {fet_symbol} devices sharing its\n"
     "  drain net as their source: those become the pair, and "
     "{tail_name}'s\n  tail= reaches their shared tail current "
@@ -644,19 +623,19 @@ CHECK_D3_TAIL_WRONG_ARITY = (
 )
 
 CHECK_D4_TAIL_ON_RAIL = (
-    "ERROR -- {tail_name}'s drain is wired straight to {rail}\n\n"
-    "  {tail_name} is a {symbol}, and its drain -- the node its "
-    "tail bank\n  feeds -- is wired directly to {rail} instead of "
-    "to a genuine internal\n  net.\n\n"
+    "ERROR - {tail_name}'s drain is wired straight to {rail}\n\n"
+    "  {tail_name} is a {symbol}, and its drain - the node its "
+    "tail bank\n  feeds - is wired directly to {rail} instead of "
+    "to a genuine internal net.\n\n"
     "  That node is never the rail itself: it is the diff pair's "
-    "shared\n  source, which has no matrix terminal of its own "
-    "(SPEC.md Sec 2.12).\n  {tail_bit} (what {tail_name}'s "
+    "shared\n  source, which has no matrix terminal of its own"
+    ".\n  {tail_bit} (what {tail_name}'s "
     "tail= sets) and the rail-tie bit\n  are two different ways to "
     "bias that one node, and they are\n  alternatives, never both "
     "at once.\n\n"
     "  To fix: wire {tail_name}'s drain to the pair halves' actual\n"
     "  shared source net, not to {rail}. If you meant the halves "
-    "tied\n  straight to {rail} instead (CLAUDE.md Traps #3), "
+    "tied\n  straight to {rail} instead, "
     "remove {tail_name}\n  and wire their sources to {rail} "
     "directly."
 )
@@ -680,7 +659,7 @@ CHECK_R1_INTRO_MANY = (
 
 CHECK_R1_PARAGRAPH_DROPPED = (
     "{intro} {kind} differential pair. Those halves have no width bits "
-    "on the chip -- their geometry is built in silicon -- so there is "
+    "on the chip - their geometry is built in silicon - so there is "
     "nothing in the bitstream that could carry {prop}={requested}, and "
     "it was dropped."
 )
@@ -695,7 +674,7 @@ CHECK_R1_PARAGRAPH_INSTEAD = (
 CHECK_R1_PARAGRAPH_WHY = (
     "Why this matters: it is built at {prop}={effective} where your "
     "schematic says {prop}={requested}. In a circuit that looks "
-    "symmetric -- the three stages of a ring oscillator, say -- the "
+    "symmetric - the three stages of a ring oscillator, say - the "
     "stages that land on the programmable FETs come out at the width "
     "you asked for and this one does not, and the mismatch exists only "
     "on silicon, not in the drawing."
@@ -703,7 +682,7 @@ CHECK_R1_PARAGRAPH_WHY = (
 
 CHECK_R1_PARAGRAPH_FIX = (
     "To fix: set the other devices of the same kind to {prop}="
-    "{effective} as well, so every stage matches deliberately -- "
+    "{effective} as well, so every stage matches deliberately - "
     "examples/ringosc/ring.sch does exactly that. They match in W/L, "
     "though not in parasitics: the programmable FET's 1x and 2x slices "
     "sit behind drain switches and the diff-pair half does not."
@@ -752,8 +731,8 @@ CHECK_R3_PARAGRAPH_SINKS = (
     "{devices} became differential-pair halves, and a pair's tail "
     "current bank has no off state. Its smallest setting is one "
     "always-on transistor (diff_n.sch M8, W=20 against the bias "
-    "reference's W=10), so the chip sinks 2 x ibias -- {amps:.0f} uA at "
-    "the {ibias_uA:.0f} uA this configuration uses -- out of "
+    "reference's W=10), so the chip sinks 2 x ibias - {amps:.0f} uA at "
+    "the {ibias_uA:.0f} uA this configuration uses - out of "
     "{nets}, whatever the schematic says. `mosbius decode` shows it as "
     "tail=2."
 )
@@ -767,7 +746,7 @@ CHECK_R3_PARAGRAPH_DISAGREE = (
 CHECK_R3_PARAGRAPH_FIX = (
     "Two ways to make them agree. Draw a {tail_symbol} on that "
     "node and say which tail current you want (2, 4, 6 or 8 multiples "
-    "of ibias -- see examples/diffamp/), which puts the same current in "
+    "of ibias - see examples/diffamp/), which puts the same current in "
     "both. Or name that net {rail}, which closes the pair's free "
     "source tie and shorts the tail bank out, leaving two ordinary "
     "common-source FETs."
@@ -811,7 +790,7 @@ CHECK_B1_TOO_MANY_SHARE = (
 CHECK_B1_TOO_MANY_FIX = (
     "The chip has one, feeding everything. To fix: delete all but one "
     "mosbius_bias (or, on an older sheet, all but one drawn "
-    "reference diode -- the NMOS with its gate and drain both on "
+    "reference diode - the NMOS with its gate and drain both on "
     "ibias)."
 )
 
@@ -839,7 +818,7 @@ PADS_CANT_FETCH_ENTRY_ANALOG = (
 PADS_CANT_FETCH_ENTRY_PCB = (
     "can't fetch {macro}'s entry in the {shuttle} index ({exc}).\n\n"
     "  Which PCB pad a design's ua[k] comes out on depends on where the\n"
-    "  project sits on that shuttle, so it cannot be assumed -- the same\n"
+    "  project sits on that shuttle, so it cannot be assumed - the same\n"
     "  design on the next shuttle can come out on different pads. Two\n"
     "  ways forward:\n"
     "    - save {url}\n"
@@ -852,7 +831,7 @@ PADS_CANT_FETCH_ENTRY_PCB = (
 PADS_UNREADABLE_ENTRY = (
     "{source} is not a project entry this can\n"
     "  read ({exc}). It should be one project's JSON from the shuttle\n"
-    "  index, with an `analog_pins` list in it -- ua -> internal analog\n"
+    "  index, with an `analog_pins` list in it - ua -> internal analog\n"
     "  pin number. If you saved it by hand, check you saved\n"
     "      {url}\n"
     "  and not the whole-shuttle index or the project's web page."
@@ -870,12 +849,10 @@ PADS_INTERNAL_PIN_NOT_ON_CARRIER = (
     "{macro} on {shuttle} says its ua{ua} is analog pin {internal},\n"
     "  and the chip carrier this shuttle ships with only brings out\n"
     "  {n_pads} of them ({pads}). Either the carrier is a\n"
-    "  newer one than mosbius/pads.py knows about -- in which case its\n"
+    "  newer one than mosbius/pads.py knows about - in which case its\n"
     "  wiring needs adding to mosbius/pads.py's carrier_pads(), from\n"
-    "  that carrier's own KiCad layout -- or the index entry is not\n"
-    "  the project you meant.\n"
-    "  Nothing here will guess a pad letter, because a wrong one reads\n"
-    "  exactly like a right one at the bench."
+    "  that carrier's own KiCad layout - or the index entry is not\n"
+    "  the project you meant."
 )
 
 # format_analog_header's English labels around the ASCII-art picture itself
@@ -887,13 +864,13 @@ PADS_HEADER_LABEL_MANY = "The pads in brackets are"
 
 PADS_HEADER_CAPTION = (
     "  {label} the one{plural} above"
-    " -- {pad_list}. Clip the instrument's\n"
+    " - {pad_list}. Clip the instrument's\n"
     "  ground to any square marked gnd; they are all the same net."
 )
 
 # format_pad_table's prose; its aligned column rule ("  -------   ...") is
 # layout, not a message, and stays in pads.py.
-PADS_TABLE_TITLE = "Pads in use -- {macro} on {shuttle}"
+PADS_TABLE_TITLE = "Pads in use - {macro} on {shuttle}"
 
 PADS_TABLE_HEADER = "  PCB pad   design pin   what this configuration puts on it"
 
@@ -901,27 +878,24 @@ PADS_TABLE_ROW = "  {pad:<9s} {pin:<12s} {what}"
 
 PADS_TABLE_NO_TERMINAL = "connected, but no device terminal on it"
 
-PADS_TABLE_IBIAS_ROW = "bias current in, {amps:.1f} uA -- drawn by {drawn_by}"
+PADS_TABLE_IBIAS_ROW = "bias current in, {amps:.1f} uA - drawn by {drawn_by}"
 
 PADS_TABLE_IBIAS_FALLBACK = "the bias reference"
 
-PADS_TABLE_EMPTY = "  (none -- this configuration connects nothing to a package pin)"
+PADS_TABLE_EMPTY = "  (none - this configuration connects nothing to a package pin)"
 
 PADS_TABLE_IDLE = "  Nothing is on the other analog pads: {which}."
 
 PADS_TABLE_FOOTER = (
     "  These letters are for {macro} as placed on {shuttle}. Its ua ->\n"
-    "  analog pin numbering is looked up in the Tiny Tapeout shuttle index\n"
-    "  rather than remembered, and the analog pin -> pad letters are that\n"
-    "  chip carrier's own wiring. The same design on another shuttle can\n"
-    "  come out on entirely different pads: both halves are free to change."
+    "  analog pin numbering is looked up in the Tiny Tapeout shuttle index."
 )
 
 
 # --- program.py ------------------------------------------------------------
 
 PROGRAM_MPREMOTE_NOT_INSTALLED = (
-    "{what} -- mpremote isn't installed\n\n"
+    "{what} - mpremote isn't installed\n\n"
     "  program.py drives the demoboard through mpremote, the official\n"
     "  MicroPython tool. Install it with 'pip install mpremote' and try\n"
     "  again."
@@ -938,12 +912,12 @@ PROGRAM_PORT_HINT_AUTODETECT = (
 
 PROGRAM_PORT_HINT_EXPLICIT = (
     "  --port {port} was given explicitly, so this isn't mpremote picking\n"
-    "  the wrong device -- check the board is powered, plugged in, and\n"
+    "  the wrong device - check the board is powered, plugged in, and\n"
     "  actually enumerating at that path.\n\n"
 )
 
 PROGRAM_NO_RESULT_LINE = (
-    "{what} -- no result from the board\n\n"
+    "{what} - no result from the board\n\n"
     "  mpremote exited with code {returncode} and didn't print a result line.\n"
     "  This usually means the board isn't connected, is running the wrong\n"
     "  firmware, or crashed before finishing.\n\n"
@@ -957,10 +931,10 @@ PROGRAM_NO_RESULT_LINE = (
 # result["error"] -- not in the plan's site table, added on a full read of
 # program.py since each is a complete standalone raise-site message like
 # every other one here, not a fragment embedded in a larger template.
-PROGRAM_READ_BOARD_ERROR = "CAN'T READ THE BOARD -- {error}"
+PROGRAM_READ_BOARD_ERROR = "CAN'T READ THE BOARD - {error}"
 
 PROGRAM_NO_SHUTTLE_REPORTED = (
-    "CAN'T READ THE BOARD -- it answered, but reported no shuttle\n\n"
+    "CAN'T READ THE BOARD - it answered, but reported no shuttle\n\n"
     "  The demoboard reads the shuttle from the chip carrier's own ROM\n"
     "  at boot. Getting nothing back usually means no carrier is seated,\n"
     "  or the firmware is older than chip ROM support. Pass --shuttle\n"
@@ -968,48 +942,34 @@ PROGRAM_NO_SHUTTLE_REPORTED = (
 )
 
 PROGRAM_IBIAS_NOT_SET = (
-    "\n  BIAS CURRENT NOT SET -- this demoboard has no current source.\n\n"
-    "  The bitstream is on the chip and correct. But {ibias_ua:.1f} uA was\n"
-    "  asked for, and this board revision has no `analog_current_source`:\n"
-    "  the RP2350-controlled bias circuit arrived on later ETR demoboards.\n"
-    "  So the chip's bias pin is floating, and anything in this design that\n"
-    "  mirrors it -- mosbius_nsink, mosbius_psource, mosbius_ntail,\n"
-    "  mosbius_ptail, mosbius_ota -- has no operating point.\n\n"
-    "  Feed it externally instead (SPEC.md Sec 3.4b): a bench supply through a\n"
-    "  series resistor into the bias pad, sized so most of the supply is\n"
-    "  dropped across the resistor. To confirm the pad and set the current:\n\n"
-    "    python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000\n\n"
-    "  A design of plain mosbius_nmos/mosbius_pmos FETs needs none of this."
+    "\n  BIAS CURRENT NOT SET - this demoboard has no current source.\n\n"
+    "  If needed, feed it externally instead."
 )
 
 PROGRAM_UPLOAD_BLOCKED = (
-    "UPLOAD BLOCKED -- {n} safety error{plural} found\n\n"
+    "UPLOAD BLOCKED - {n} safety error{plural} found\n\n"
     "{paths}\n\n"
     "  Fix the design above, or re-run with force=True if you're certain\n"
-    "  this is safe (SPEC.md Sec 3.1) -- there is no other way past this gate."
+    "  this is safe."
 )
 
-PROGRAM_UPLOAD_ERROR = "CAN'T PROGRAM -- {error}"
+PROGRAM_UPLOAD_ERROR = "CAN'T PROGRAM - {error}"
 
 PROGRAM_UPLOAD_DIDNT_STICK = (
-    "UPLOAD DIDN'T STICK -- the board says '{enabled}' is selected, "
+    "UPLOAD DIDN'T STICK - the board says '{enabled}' is selected, "
     "not {project!r}.\n\n"
     "  tt.shuttle.get(...).enable() ran with no error, but the chip's mux\n"
-    "  selection did not end up on this project. Every board boots into\n"
-    "  tt_um_factory_test, auto-clocked at 10 Hz -- an LED counting on the\n"
-    "  board is that test running, not this design -- and enable() is what\n"
-    "  is supposed to stop it and switch over; this time it did not. The\n"
-    "  192 bits went somewhere, but not to a chip that is actually addressed\n"
-    "  as this project. Re-run; if it keeps happening, check the board is\n"
-    "  fully seated and try a fresh USB connection."
+    "  selection did not end up on mini MOSbius.\n"
+    "  Re-run; if it keeps happening, check the board is\n"
+    "  fully seated or try a fresh USB connection."
 )
 
 PROGRAM_VERIFY_FAILED = (
-    "VERIFY FAILED -- readback doesn't match what was sent\n\n"
+    "VERIFY FAILED - readback doesn't match what was sent\n\n"
     "  sent:      {sent}\n"
     "  captured:  {captured}\n\n"
     "  The chain may have lost sync mid-shift (a bad connection, clock too\n"
-    "  fast, or a level issue). Try a slower clock or re-seating the board."
+    "  fast, or a level issue). Try re-seating the board."
 )
 
 
@@ -1018,7 +978,7 @@ PROGRAM_VERIFY_FAILED = (
 DECODE_SUMMARY_DEVICES_HEADING = "Devices in use"
 
 DECODE_SUMMARY_DEVICES_EMPTY = (
-    "Devices in use\n  (none -- this config wires nothing to a live device)"
+    "Devices in use\n  (none - this config wires nothing to a live device)"
 )
 
 DECODE_SUMMARY_DEVICE_LINE = "  {name:<11} {terms}  {settings}"
@@ -1038,13 +998,10 @@ DECODE_SUMMARY_IBIAS = "ibias = {amps:.1f} uA"
 NETLIST_STALE = (
     "{netlist_path} is older than the schematic it came from\n\n"
     "  {sch}\n  was edited after {netlist_path} was written, so routing this\n"
-    "  file would route the circuit as it used to be -- and it would\n"
-    "  most likely succeed, print a bitstream, and tell you nothing was\n"
-    "  wrong.\n\n"
+    "  file would route the circuit as it used to be.\n"
     "  To fix: press Netlist in xschem with {sch_name} open (with xschem\n"
     "  launched from the top of the repo, so it writes to build/), then\n"
-    "  run this command again. Or do the whole chain in one step:\n\n"
-    "    sh tools/regenerate_routed.sh {sch}\n"
+    "  run this command again.\n"
 )
 
 NETLIST_ROUTED_JSON_GIVEN = (
@@ -1061,14 +1018,14 @@ NETLIST_PIN_COUNT_MISMATCH = (
     "{name}: mosbius_{kind} takes {n_pins} connections "
     "({pin_names}) but the netlist gives {n_nets}\n"
     "  This usually means the .sym and this parser's DEVICE_PINS table "
-    "have drifted apart -- check xschem/mosbius_lib/mosbius_{kind}.sym."
+    "have drifted apart - check xschem/mosbius_lib/mosbius_{kind}.sym."
 )
 
 NETLIST_NO_DEVICES_FOUND = (
     "no mosbius_nmos/mosbius_pmos/mosbius_nsink/mosbius_psource/mosbius_ota/"
     "mosbius_ntail/mosbius_ptail instances found in this netlist\n"
-    "  Draw your circuit using the generic devices from xschem/mosbius_lib "
-    "(SPEC.md Sec 3.4), not raw sky130 transistors -- the router only "
+    "  Draw your circuit using the generic devices from xschem/mosbius_lib, "
+    "not raw sky130 transistors - the router only "
     "understands those seven."
 )
 
@@ -1078,14 +1035,14 @@ NETLIST_NO_DEVICES_FOUND = (
 BITSTREAM_BIT_OUT_OF_RANGE = (
     "bit {bit} is out of range 0..{max_bit}\n"
     "  The mini-MOSbius config chain is exactly {num_bits} bits "
-    "(SPEC.md Sec 2.1) -- there is no bit {bit} to set."
+    "- there is no bit {bit} to set."
 )
 
 BITSTREAM_WRONG_LENGTH = (
     "bitstream is {got} hex characters, expected exactly {expected}\n"
     "  A mini-MOSbius config is {num_bits} bits, written as "
-    "{expected} hex characters (SPEC.md Sec 2.5). This string is "
-    "{longer_or_shorter} than that -- "
+    "{expected} hex characters. This string is "
+    "{longer_or_shorter} than that - "
     "check for a truncated copy-paste or a mismatched leading '0x'."
 )
 
@@ -1101,7 +1058,7 @@ BITSTREAM_NON_HEX_CHARACTER = (
 MODEL_BIT_OUT_OF_RANGE = (
     "bit(s) {bad} are out of range 0..{max_bit}\n"
     "  The mini-MOSbius config chain is exactly {num_bits} "
-    "bits (SPEC.md Sec 2.1)."
+    "bits."
 )
 
 
@@ -1121,7 +1078,7 @@ CLI_NO_FILE_AT_PATH = (
 CLI_UNRECOGNIZED_ARG = (
     "{path} isn't something this command can read\n\n"
     "  It expects either the 48 hex characters of a bitstream, or the\n"
-    "  path to a routed design -- the JSON file `mosbius route --out`\n"
+    "  path to a routed design - the JSON file `mosbius route --out`\n"
     "  writes, usually build/<design>.mosbius.json. This file is\n"
     "  neither: it does not parse as JSON.\n\n"
     "  If you meant the netlist (build/<design>.spice), route it first:\n\n"
@@ -1136,7 +1093,7 @@ CLI_JSON_NO_BITSTREAM_KEY = (
     "    python3 -m mosbius.cli route build/<design>.spice --out {path}\n"
 )
 
-CLI_REPORT_OK = "OK -- no errors or warnings{note}."
+CLI_REPORT_OK = "OK - no errors or warnings{note}."
 
 CLI_REPORT_INFO_NOTE = " ({skipped} info note{plural} hidden, use --verbose)"
 
@@ -1144,20 +1101,15 @@ CLI_CANT_READ_THAT = "CAN'T READ THAT\n\n  {e}"
 
 CLI_CANT_ASK_BOARD = (
     "can't ask the board which chip is in the socket, and which PCB pad\n"
-    "  each ua[k] comes out on depends on that -- Tiny Tapeout muxes the\n"
+    "  each ua[k] comes out on depends on that - Tiny Tapeout muxes the\n"
     "  analog pins, so the same design on another shuttle lands on other\n"
-    "  pads. Guessing would print a table that looks measured and sends\n"
-    "  you to the wrong pad, so here is the underlying problem instead:\n\n"
-    "  {e}\n\n"
-    "  If you are away from the bench and just want to read the table,\n"
-    "  name the chip yourself:\n\n"
-    "    mosbius pads {bitstream} --shuttle {default_shuttle}"
+    "  pads.\n"
 )
 
 CLI_PROJECT_NOT_ON_SHUTTLE = (
     "the chip in the socket is from shuttle {shuttle}, and\n"
     "  {project} is not on it. There are no pads to name, because\n"
-    "  this bitstream cannot be programmed to that chip at all --\n"
+    "  this bitstream cannot be programmed to that chip at all -\n"
     "  `mosbius program` would stop with the same thing.\n\n"
     "  Either put the right chip in, or say which project you mean with\n"
     "  --project (it defaults to {default_project}, this repo's own macro)."
@@ -1178,12 +1130,12 @@ CLI_BITSTREAM_LINE = "Bitstream: {bitstream}"
 CLI_CANT_SIMULATE = "CAN'T SIMULATE\n\n  {e}"
 
 CLI_SIMULATE_OK = (
-    "OK -- wrote {out} ({name}_routed, real switch matrix + pads + coupling/wire caps)"
+    "OK - wrote {out} ({name}_routed, real switch matrix + pads + coupling/wire caps)"
 )
 
 CLI_STOPPED_WATCHING = "\nstopped watching."
 
-CLI_PROGRAM_UPLOADED = "OK -- uploaded to {project}"
+CLI_PROGRAM_UPLOADED = "OK - uploaded to {project}"
 
 CLI_PROGRAM_VERIFIED_SUFFIX = " (verified)"
 
@@ -1191,7 +1143,7 @@ CLI_PROGRAM_SHUTTLE_FROM_FLAG = "   shuttle {shuttle} (from --shuttle, not from 
 
 CLI_PROGRAM_PROVENANCE = "read from the chip in the socket ({identity_source})"
 
-CLI_PROGRAM_SHUTTLE_FROM_CHIP = "   shuttle {shuttle} -- {provenance}"
+CLI_PROGRAM_SHUTTLE_FROM_CHIP = "   shuttle {shuttle} - {provenance}"
 
 CLI_PROGRAM_CHIP_LINE = "   chip {repo}"
 
@@ -1199,7 +1151,7 @@ CLI_PROGRAM_CHIP_COMMIT_SUFFIX = " @ {commit}"
 
 CLI_PROGRAM_NO_SHUTTLE_NOTE = (
     "\n  (uploaded fine, but the board reported no shuttle, so which PCB\n"
-    "   pad each ua[k] comes out on can't be worked out -- that mapping\n"
+    "   pad each ua[k] comes out on can't be worked out - that mapping\n"
     "   is per shuttle. Re-run with --shuttle to get the table:\n\n"
     "     mosbius pads {bitstream} --shuttle {default_shuttle})"
 )
@@ -1218,22 +1170,22 @@ CLI_HELP_DECODE = "show the circuit a 48-hex-char bitstream configures"
 
 CLI_HELP_PADS = "which PCB pad each connected pin comes out on, for a loaded bitstream"
 
-CLI_HELP_CHECK = "run the safety checker (SPEC.md Sec 3.1) against a bitstream"
+CLI_HELP_CHECK = "run the safety checker against a bitstream"
 
 CLI_HELP_ROUTE = "netlist -> bitstream (parses, allocates, checks)"
 
-CLI_HELP_SIMULATE = "routed design -> a real, silicon-accurate SPICE subcircuit"
+CLI_HELP_SIMULATE = "routed design -> an estimate of the circuit as it would be on silicon"
 
 CLI_HELP_WATCH = "re-run route+check every time the netlist file changes"
 
-CLI_HELP_PROGRAM = "upload a bitstream to real hardware (SPEC.md Sec 3.5, M4)"
+CLI_HELP_PROGRAM = "upload a bitstream to hardware"
 
 CLI_HELP_IBIAS = "bias current in amps (default: 100uA)"
 
 CLI_HELP_PROJECT = "project macro name (default: {default_project})"
 
 CLI_HELP_SHUTTLE = (
-    "shuttle the chip came from -- decides which pad each ua[k] is on "
+    "shuttle the chip came from - decides which pad each ua[k] is on "
     "(default: read off the chip in the socket; without a board, pass "
     "e.g. --shuttle {default_shuttle})"
 )
@@ -1246,12 +1198,12 @@ CLI_HELP_VERBOSE = "also show INFO notes (e.g. unused bus rows)"
 
 CLI_HELP_NETLIST_ARG = "an xschem-netlisted .spice file"
 
-CLI_HELP_ROUTE_OUT = "persist/reuse routing here (SPEC.md Sec 3.2b sticky routing)"
+CLI_HELP_ROUTE_OUT = "persist/reuse routing here"
 
 CLI_HELP_ROUTE_FORCE = "re-route even if --out's stored routing is still valid"
 
 CLI_HELP_SIMULATE_ROUTED_ARG = (
-    "a routed design JSON (<name>.mosbius.json), written by `mosbius route --out` -- not the netlist"
+    "a routed design JSON (<name>.mosbius.json), written by `mosbius route --out` - not the netlist"
 )
 
 CLI_HELP_SIMULATE_OUT = "output .spice path (default: <name>_routed.spice next to the input)"
@@ -1271,7 +1223,7 @@ CLI_HELP_PROGRAM_VERIFY = "shift the bits back out and compare"
 # separator is watch.py's own literal, kept out of these constants so
 # reusing CLI_OUT_OF_DATE/CLI_IMPOSSIBLE below doesn't change what they
 # mean in cli.py's own, differently-formatted usage.
-WATCH_HEADER = "mosbius watch -- {name}          {time}"
+WATCH_HEADER = "mosbius watch - {name}          {time}"
 
 WATCH_CANT_READ = "CAN'T READ\n\n  {e}"
 
@@ -1283,4 +1235,4 @@ WATCH_STATUS_OK = "OK"
 
 WATCH_STATUS_OK_WITH_WARNINGS = "OK, with warnings"
 
-WATCH_MORE_WARNINGS = "  {n} warning(s) -- see 'mosbius check' for detail"
+WATCH_MORE_WARNINGS = "  {n} warning(s) - see 'mosbius check' for detail"
