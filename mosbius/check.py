@@ -461,7 +461,7 @@ def _render_i1(subjects: list[str], detail: dict[str, tuple[str, str | None]]) -
     )
     consequence = ("none of these segments is" if plural else "this segment isn't")
     return _wrap(
-        "INFO -- ", headline,
+        messages.CHECK_SEVERITY_INFO, headline,
         " ".join(sentences),
         messages.CHECK_I1_PARAGRAPH2.format(consequence=consequence),
     )
@@ -771,7 +771,7 @@ def _render_r1(subjects: list[str], device_roles: dict[str, str], prop: str,
         )
         intro = messages.CHECK_R1_INTRO_MANY.format(names=names, role_list=role_list)
     return _wrap(
-        "WARNING -- ", headline,
+        messages.CHECK_SEVERITY_WARNING, headline,
         messages.CHECK_R1_PARAGRAPH_DROPPED.format(
             intro=intro, kind=kind, prop=prop, requested=requested,
         ),
@@ -841,7 +841,7 @@ def _render_r2(subjects: list[str], device_roles: dict[str, str], requested: int
         )
         intro = messages.CHECK_R2_INTRO_MANY.format(names=names, role_list=role_list)
     return _wrap(
-        "WARNING -- ", headline,
+        messages.CHECK_SEVERITY_WARNING, headline,
         messages.CHECK_R2_PARAGRAPH_DROPPED.format(intro=intro),
         messages.CHECK_R2_PARAGRAPH_ALTERNATIVES,
     )
@@ -895,7 +895,7 @@ def _render_r3(subjects: list[str], undeclared, ibias: float) -> str:
     amps = 2 * ibias * 1e6
     ibias_uA = ibias * 1e6
     return _wrap(
-        "WARNING -- ", messages.CHECK_R3_HEADLINE.format(nets=nets, amps=amps),
+        messages.CHECK_SEVERITY_WARNING, messages.CHECK_R3_HEADLINE.format(nets=nets, amps=amps),
         messages.CHECK_R3_PARAGRAPH_SINKS.format(
             devices=devices, amps=amps, ibias_uA=ibias_uA, nets=nets,
         ),
@@ -966,14 +966,14 @@ def _check_b1_bias_generator(design: MosbiusDesign) -> list[Finding]:
     drew = _join_and([f"mosbius_{k}" for k in users])
     if count == 0:
         message = _wrap(
-            "IMPOSSIBLE -- ", messages.CHECK_B1_NO_GENERATOR_HEADLINE,
+            messages.CHECK_SEVERITY_IMPOSSIBLE, messages.CHECK_B1_NO_GENERATOR_HEADLINE,
             messages.CHECK_B1_NO_GENERATOR_DREW.format(drew=drew),
             messages.CHECK_B1_NO_GENERATOR_GAP,
             messages.CHECK_B1_NO_GENERATOR_FIX,
         )
     else:
         message = _wrap(
-            "IMPOSSIBLE -- ", messages.CHECK_B1_TOO_MANY_HEADLINE.format(count=count),
+            messages.CHECK_SEVERITY_IMPOSSIBLE, messages.CHECK_B1_TOO_MANY_HEADLINE.format(count=count),
             messages.CHECK_B1_TOO_MANY_SHARE,
             messages.CHECK_B1_TOO_MANY_FIX,
         )

@@ -1025,7 +1025,7 @@ def _check_shared_source_is_reachable(
             )
 
         raise RouteError(_wrap(
-            "DOESN'T FIT -- ",
+            messages.ROUTE_SEVERITY_DOESNT_FIT,
             messages.ROUTE_SHARED_SOURCE_HEADLINE.format(net=net),
             messages.ROUTE_SHARED_SOURCE_EXPLAIN.format(
                 halves=_join_and(halves), net=net,

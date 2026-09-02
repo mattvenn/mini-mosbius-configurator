@@ -191,7 +191,12 @@ ROUTE_CANNOT_REACH_ROW = (
 # _check_shared_source_is_reachable's message is built from several
 # independently-wrapped paragraphs via check.py's _wrap() helper -- each
 # paragraph is its own constant, migrated separately, and the call site
-# keeps the _wrap(...) call structure (see route.py).
+# keeps the _wrap(...) call structure (see route.py). The severity tag is
+# kept separate here too, matching every other DOESN'T FIT constant's own
+# wording above -- this is the one call site in route.py that still built
+# it as a bare literal instead of routing it through messages.py.
+ROUTE_SEVERITY_DOESNT_FIT = "DOESN'T FIT -- "
+
 ROUTE_SHARED_SOURCE_HEADLINE = "nothing else can connect to '{net}'"
 
 ROUTE_SHARED_SOURCE_EXPLAIN = (
@@ -332,6 +337,17 @@ ROUTE_VDPWR_UNREACHABLE = (
 
 
 # --- check.py --------------------------------------------------------------
+
+# Severity tags for the four findings whose message is built via _wrap()
+# (prefix + headline kept separate, unlike every finding above/below whose
+# tag is baked into its own opening line) -- keeping these in messages.py
+# too closes the one place this project's most-repeated words ("WARNING",
+# "IMPOSSIBLE", ...) were still living only in check.py's own source.
+CHECK_SEVERITY_INFO = "INFO -- "
+
+CHECK_SEVERITY_WARNING = "WARNING -- "
+
+CHECK_SEVERITY_IMPOSSIBLE = "IMPOSSIBLE -- "
 
 CHECK_E1_SUPPLY_SHORT = (
     "DANGEROUS -- supply short\n\n"
