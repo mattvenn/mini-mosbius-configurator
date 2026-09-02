@@ -332,59 +332,60 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True)
 
     def add_ibias(p):
-        p.add_argument("--ibias", type=float, default=DEFAULT_IBIAS, help="bias current in amps (default: 100uA)")
+        p.add_argument("--ibias", type=float, default=DEFAULT_IBIAS, help=messages.CLI_HELP_IBIAS)
 
     def add_board(p):
-        p.add_argument("--project", default=DEFAULT_PROJECT, help=f"project macro name (default: {DEFAULT_PROJECT})")
+        p.add_argument(
+            "--project", default=DEFAULT_PROJECT,
+            help=messages.CLI_HELP_PROJECT.format(default_project=DEFAULT_PROJECT),
+        )
         p.add_argument(
             "--shuttle", default=None,
-            help="shuttle the chip came from -- decides which pad each ua[k] is on "
-                 "(default: read off the chip in the socket; without a board, pass "
-                 f"e.g. --shuttle {DEFAULT_SHUTTLE})",
+            help=messages.CLI_HELP_SHUTTLE.format(default_shuttle=DEFAULT_SHUTTLE),
         )
-        p.add_argument("--port", default=None, help="serial port, e.g. /dev/ttyACM0 (default: mpremote autodetects)")
+        p.add_argument("--port", default=None, help=messages.CLI_HELP_PORT)
 
-    p = sub.add_parser("decode", help="show the circuit a 48-hex-char bitstream configures")
-    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
+    p = sub.add_parser("decode", help=messages.CLI_HELP_DECODE)
+    p.add_argument("bitstream", help=messages.CLI_HELP_BITSTREAM_ARG)
     add_ibias(p)
     p.set_defaults(func=cmd_decode)
 
-    p = sub.add_parser("pads", help="which PCB pad each connected pin comes out on, for a loaded bitstream")
-    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
+    p = sub.add_parser("pads", help=messages.CLI_HELP_PADS)
+    p.add_argument("bitstream", help=messages.CLI_HELP_BITSTREAM_ARG)
     add_ibias(p)
     add_board(p)
     p.set_defaults(func=cmd_pads)
 
-    p = sub.add_parser("check", help="run the safety checker (SPEC.md Sec 3.1) against a bitstream")
-    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
+    p = sub.add_parser("check", help=messages.CLI_HELP_CHECK)
+    p.add_argument("bitstream", help=messages.CLI_HELP_BITSTREAM_ARG)
     add_ibias(p)
-    p.add_argument("--verbose", "-v", action="store_true", help="also show INFO notes (e.g. unused bus rows)")
+    p.add_argument("--verbose", "-v", action="store_true", help=messages.CLI_HELP_VERBOSE)
     p.set_defaults(func=cmd_check)
 
-    p = sub.add_parser("route", help="netlist -> bitstream (parses, allocates, checks)")
-    p.add_argument("netlist", type=Path, help="an xschem-netlisted .spice file")
-    p.add_argument("--out", type=Path, help="persist/reuse routing here (SPEC.md Sec 3.2b sticky routing)")
-    p.add_argument("--force", action="store_true", help="re-route even if --out's stored routing is still valid")
-    p.add_argument("--verbose", "-v", action="store_true", help="also show INFO notes (e.g. unused bus rows)")
+    p = sub.add_parser("route", help=messages.CLI_HELP_ROUTE)
+    p.add_argument("netlist", type=Path, help=messages.CLI_HELP_NETLIST_ARG)
+    p.add_argument("--out", type=Path, help=messages.CLI_HELP_ROUTE_OUT)
+    p.add_argument("--force", action="store_true", help=messages.CLI_HELP_ROUTE_FORCE)
+    p.add_argument("--verbose", "-v", action="store_true", help=messages.CLI_HELP_VERBOSE)
     p.set_defaults(func=cmd_route)
 
-    p = sub.add_parser("simulate", help="routed design -> a real, silicon-accurate SPICE subcircuit")
-    p.add_argument("routed", type=Path, help="a routed design JSON (<name>.mosbius.json), written by `mosbius route --out` -- not the netlist")
-    p.add_argument("--out", type=Path, help="output .spice path (default: <name>_routed.spice next to the input)")
+    p = sub.add_parser("simulate", help=messages.CLI_HELP_SIMULATE)
+    p.add_argument("routed", type=Path, help=messages.CLI_HELP_SIMULATE_ROUTED_ARG)
+    p.add_argument("--out", type=Path, help=messages.CLI_HELP_SIMULATE_OUT)
     p.set_defaults(func=cmd_simulate)
 
-    p = sub.add_parser("watch", help="re-run route+check every time the netlist file changes")
+    p = sub.add_parser("watch", help=messages.CLI_HELP_WATCH)
     p.add_argument("netlist", type=Path)
-    p.add_argument("--once", action="store_true", help="report once and exit, don't poll")
+    p.add_argument("--once", action="store_true", help=messages.CLI_HELP_WATCH_ONCE)
     p.set_defaults(func=cmd_watch)
 
-    p = sub.add_parser("program", help="upload a bitstream to real hardware (SPEC.md Sec 3.5, M4)")
-    p.add_argument("bitstream", help="a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves")
+    p = sub.add_parser("program", help=messages.CLI_HELP_PROGRAM)
+    p.add_argument("bitstream", help=messages.CLI_HELP_BITSTREAM_ARG)
     add_ibias(p)
     add_board(p)
-    p.add_argument("--force", action="store_true", help="upload even if check() finds an error")
-    p.add_argument("--no-reset", action="store_true", help="skip the known-state reset before shifting")
-    p.add_argument("--verify", action="store_true", help="shift the bits back out and compare")
+    p.add_argument("--force", action="store_true", help=messages.CLI_HELP_PROGRAM_FORCE)
+    p.add_argument("--no-reset", action="store_true", help=messages.CLI_HELP_PROGRAM_NO_RESET)
+    p.add_argument("--verify", action="store_true", help=messages.CLI_HELP_PROGRAM_VERIFY)
     p.set_defaults(func=cmd_program)
 
     return ap

@@ -1192,6 +1192,62 @@ CLI_PROGRAM_PAD_TABLE_UNAVAILABLE = (
     "  (uploaded fine, but the pad table needs the shuttle index)\n\n  {e}"
 )
 
+# build_parser()'s argparse help= text -- shown by `mosbius --help` and
+# `mosbius <command> --help`, plausibly the first text a beginner reads.
+# ap's own description=__doc__ is the module docstring, not a message
+# string, and stays a docstring (Python's own introspection convention,
+# same as every other docstring left untouched by this migration).
+
+CLI_HELP_DECODE = "show the circuit a 48-hex-char bitstream configures"
+
+CLI_HELP_PADS = "which PCB pad each connected pin comes out on, for a loaded bitstream"
+
+CLI_HELP_CHECK = "run the safety checker (SPEC.md Sec 3.1) against a bitstream"
+
+CLI_HELP_ROUTE = "netlist -> bitstream (parses, allocates, checks)"
+
+CLI_HELP_SIMULATE = "routed design -> a real, silicon-accurate SPICE subcircuit"
+
+CLI_HELP_WATCH = "re-run route+check every time the netlist file changes"
+
+CLI_HELP_PROGRAM = "upload a bitstream to real hardware (SPEC.md Sec 3.5, M4)"
+
+CLI_HELP_IBIAS = "bias current in amps (default: 100uA)"
+
+CLI_HELP_PROJECT = "project macro name (default: {default_project})"
+
+CLI_HELP_SHUTTLE = (
+    "shuttle the chip came from -- decides which pad each ua[k] is on "
+    "(default: read off the chip in the socket; without a board, pass "
+    "e.g. --shuttle {default_shuttle})"
+)
+
+CLI_HELP_PORT = "serial port, e.g. /dev/ttyACM0 (default: mpremote autodetects)"
+
+CLI_HELP_BITSTREAM_ARG = "a routed design (build/<design>.mosbius.json), or the 48 hex characters themselves"
+
+CLI_HELP_VERBOSE = "also show INFO notes (e.g. unused bus rows)"
+
+CLI_HELP_NETLIST_ARG = "an xschem-netlisted .spice file"
+
+CLI_HELP_ROUTE_OUT = "persist/reuse routing here (SPEC.md Sec 3.2b sticky routing)"
+
+CLI_HELP_ROUTE_FORCE = "re-route even if --out's stored routing is still valid"
+
+CLI_HELP_SIMULATE_ROUTED_ARG = (
+    "a routed design JSON (<name>.mosbius.json), written by `mosbius route --out` -- not the netlist"
+)
+
+CLI_HELP_SIMULATE_OUT = "output .spice path (default: <name>_routed.spice next to the input)"
+
+CLI_HELP_WATCH_ONCE = "report once and exit, don't poll"
+
+CLI_HELP_PROGRAM_FORCE = "upload even if check() finds an error"
+
+CLI_HELP_PROGRAM_NO_RESET = "skip the known-state reset before shifting"
+
+CLI_HELP_PROGRAM_VERIFY = "shift the bits back out and compare"
+
 
 # --- watch.py ---------------------------------------------------------
 
