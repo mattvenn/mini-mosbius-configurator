@@ -24,7 +24,10 @@ measurement error. Unclipping both leads started a 39.5 MHz oscillator.
 Discovery's flywire leads roll off well before that (the specified
 bandwidth is for the BNC adapter), so what reaches the ADC is neither the
 chip's swing nor its waveform. A frequency estimate is indifferent to
-that roll-off; a level or a rise time taken here would be meaningless.
+that roll-off; a level or a rise time taken here would be meaningless --
+confirmed 2026-09-02, when its two channels read ~300 mV and ~750 mV on
+the identical pad. `tools/measure_ring_keysight.py` gets a trustworthy
+amplitude instead.
 
 Pad letters are derived from the bitstream and the shuttle index by
 `mosbius/pads.py`, never written down here: which pad a design's `ua[k]`
@@ -73,8 +76,8 @@ def wiring_table() -> str:
         "\n  Wire the Analog Discovery to the demoboard like this:\n\n"
         "    AD3 lead      pad      signal\n"
         "    -----------   -----    ------------------------------------------\n"
-        f"    2+ (blue)     {probe:<8s} ua3, the buffered output\n"
-        "    2-, GND       GND      scope reference\n"
+        f"    1+ (orange)   {probe:<8s} ua3, the buffered output\n"
+        "    1-, GND       GND      scope reference\n"
         f"    every other   --       KEEP OFF {loop}: those are loop\n"
         "    lead                   nodes, and a lead on one stops the\n"
         "                           oscillator dead\n"
@@ -141,7 +144,7 @@ def main() -> None:
         ad3.scope_setup(handle, rate=RATE, nsamples=NSAMPLES, rng=5.0, offset=1.65)
         ffts, zcs, trace = [], [], None
         for _ in range(CAPTURES):
-            samples = ad3.acquire(handle, nsamples=NSAMPLES, tag="ring: ")[1]
+            samples = ad3.acquire(handle, nsamples=NSAMPLES, tag="ring: ")[0]
             trace = trace or samples
             f, z = frequency(samples)
             ffts.append(f)

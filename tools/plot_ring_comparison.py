@@ -25,10 +25,13 @@ one period at the measured frequency fills that period densely -- the same
 trick a sampling scope uses. What is drawn is 16384 real samples, each at
 its true phase; no interpolation, no averaging.
 
-**Amplitude is not comparable and is not shown as such.** At ~40 MHz the
-flywire leads roll off by an unknown factor, so the measured trace is
-scaled to the routed one's swing purely so both fit the panel, and the
-raw pk-pk is stated on the figure instead.
+**Amplitude is not comparable, and the figure says so on its own axes.**
+At ~40 MHz the flywire leads roll off by an unknown factor, so the
+silicon trace is plotted on its own right-hand y-axis, in its own raw
+measured volts, rather than rescaled to sit on the routed trace's axis --
+sharing an axis previously made the figure show an amplitude that was
+never actually measured. Only the period and shape are meant to compare
+across the two axes.
 
 ngspice writes adaptive time steps, so the simulated traces are
 interpolated onto a uniform grid before transforming.
@@ -155,7 +158,7 @@ def main() -> None:
         keep = t >= (t[-1] - periods / hz)
         return t[keep] - t[keep][0], v[keep]
 
-    fig, (drawn_ax, routed_ax) = plt.subplots(1, 2, figsize=(11.5, 4.2))
+    fig, (drawn_ax, routed_ax) = plt.subplots(1, 2, figsize=(12.5, 4.2))
 
     dtw, dvw = last_periods(dt, dv, f_drawn)
     drawn_ax.plot(dtw * 1e12, dvw, lw=1.4, color="#4C72B0")
@@ -165,35 +168,37 @@ def main() -> None:
     drawn_ax.grid(alpha=0.3)
 
     rtw, rvw = last_periods(rt, rv, f_routed)
-    routed_ax.plot(rtw * 1e9, rvw, lw=1.5, color="#DD8452",
-                   label=f"as routed -- {f_routed / 1e6:.2f} MHz")
+    routed_ax.plot(rtw * 1e9, rvw, lw=1.5, color="#DD8452", label="as routed")
 
-    # fold the bench capture, then scale it into the routed trace's swing:
-    # the leads' roll-off makes the captured amplitude meaningless, the
-    # period is what is being compared
+    # fold the bench capture -- the oscillation is stable across thousands
+    # of periods, so folding fills one period in densely (see fold()) --
+    # and plot it on the SAME voltage axis as the routed trace, unscaled.
+    # It reads low (AD3 leads roll off at 40 MHz); tools/measure_ring_keysight.py
+    # has the trustworthy amplitude.
     # refine on the same window that gets folded, not on the whole capture
     fold_window = bt <= bt[0] + 300 / f_silicon
     f_fold = refine(bt[fold_window], bv[fold_window], f_silicon, span=5e-4)
     print(f"{'':12s} folding at {f_fold / 1e6:.6f} MHz "
           f"({(f_fold / f_silicon - 1) * 1e6:+.0f} ppm from the zero-crossing estimate)")
     ph, pv = fold(bt, bv, f_fold)
-    pv = pv - pv.mean()
-    pv = pv * ((rvw.max() - rvw.min()) / (pv.max() - pv.min())) + rvw.mean()
     for cycle in (0, 1, 2):
         offset = cycle / f_fold
         keep = (ph + offset) <= rtw[-1]
         routed_ax.plot((ph[keep] + offset) * 1e9, pv[keep], ".", ms=1.6, color="#7D5BBE",
-                       label=f"on silicon -- {f_silicon / 1e6:.2f} MHz" if cycle == 0 else None)
+                       label="on silicon (AD3, uncorrected)" if cycle == 0 else None)
     routed_ax.set_xlabel("time (ns)")
     routed_ax.set_ylabel("ua3, buffered output (V)")
-    routed_ax.set_title("as routed against silicon -- 11% apart, and it shows", fontsize=10)
+    routed_ax.set_title("as routed against silicon -- 11% apart in period", fontsize=10)
     routed_ax.grid(alpha=0.3)
     routed_ax.legend(fontsize=9, loc="upper right")
-    routed_ax.text(0.5, -0.28,
-                   f"silicon trace folded from 300 periods at {f_fold / 1e6:.4f} MHz, then scaled "
-                   f"into the routed swing: the captured\n{bv.max() - bv.min():.2f} V pk-pk is the "
-                   "leads' roll-off at 40 MHz, not the chip's output. The band's width is the "
-                   "ring's own frequency wander.",
+    routed_ax.text(0.5, -0.3,
+                   f"silicon trace folded from 300 periods at {f_fold / 1e6:.4f} MHz, plotted unscaled "
+                   "on the same axis as as-routed.\n"
+                   f"Its {bv.max() - bv.min():.2f} V pk-pk reads low -- the AD3's flywire leads roll off "
+                   "badly at 40 MHz.\n"
+                   "A Keysight HD304MSO on the same pad measured 1.589 Vpp instead (see the README), "
+                   "close to the routed swing.\n"
+                   "Only the period and shape are trustworthy here, not the amplitude.",
                    transform=routed_ax.transAxes, fontsize=7.5, color="dimgrey",
                    ha="center", va="top")
 
