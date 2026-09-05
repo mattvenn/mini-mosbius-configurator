@@ -883,3 +883,29 @@ def test_the_same_netlist_routes_to_both_parts_with_different_bitstreams():
     assert len(tnt.config.to_bitstream()) == 48
     assert len(kang.config.to_bitstream()) == 49
     assert tnt.device_roles == kang.device_roles
+
+
+def test_an_ota_output_this_chip_lacks_is_refused_not_dropped():
+    """Andrew's OTA has one output. The symbol library draws two, so a sheet
+    can ask for a connection this part cannot make -- and the router used to
+    skip any terminal with no crosspoint, which would have produced a
+    bitstream and reported success on a design missing a wire.
+    """
+    from mosbius.chips import KANG, TNT
+    from mosbius.netlist import parse_netlist
+    from mosbius.route import RouteError, route
+
+    netlist = """
+.subckt otatest ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND
+X1 ua1 ua2 ua3 ua4 ibias VAPWR VGND mosbius_ota
+.ends
+"""
+    design = parse_netlist(netlist)
+    route(design, TNT)  # both outputs exist here, so this is fine
+
+    with pytest.raises(RouteError) as excinfo:
+        route(design, KANG)
+    message = str(excinfo.value)
+    assert "+ output" in message
+    assert "one output, not two" in message
+    assert "--project" in message

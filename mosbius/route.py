@@ -884,7 +884,23 @@ def _collect_touches(
         role = roles[d.name]
         for terminal, net in d.terminals.items():
             if terminal not in chip.device_terminals[role]:
-                continue  # e.g. a diff-pair half's generic "s" pin: no matrix terminal exists
+                # Two very different reasons a terminal has no crosspoint.
+                # Usually it is by design and shared by every part -- a
+                # diff-pair half's generic "s" pin, whose node the matrix
+                # never reaches -- and skipping it is right. But a terminal
+                # the symbol library draws and *this* part does not bring
+                # out is a design that cannot be built, and dropping it
+                # silently would emit a bitstream and report success.
+                why = chip.absent_terminals.get((role, terminal))
+                if why is not None:
+                    raise RouteError(
+                        messages.ROUTE_TERMINAL_NOT_ON_THIS_CHIP.format(
+                            device=d.name, role=role,
+                            terminal=TERMINAL_WORD.get(terminal, terminal),
+                            net=net, chip=chip.title, why=why,
+                        )
+                    )
+                continue
             if (d.name, terminal) in handled:
                 continue  # already tied to its rail for free -- see _apply_free_source_ties
             by_net.setdefault(net, []).append(

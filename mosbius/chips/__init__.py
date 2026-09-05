@@ -98,6 +98,11 @@ class Chip:
     # the label a reader sees follows the part rather than being one wording
     # bent to cover both.
     ota_setting_fields: dict[str, str]
+    # Terminals the symbol library draws that this part does not bring out to
+    # the switch matrix, and why. A design that wires one cannot be built
+    # here, and saying so is the whole point: without this the router drops
+    # the connection, produces a bitstream, and reports success.
+    absent_terminals: dict[tuple[str, str], str]
     # Schematic port name -> the physical `ua` number that port really is.
     #
     # A design sheet's five bus pins are called ua1..ua5 on both parts, because
@@ -438,6 +443,7 @@ TNT = Chip(
         "diode_connect_via_outp": "otan_mode0",
         "diode_connect_via_outm": "otan_mode1",
     },
+    absent_terminals={},
     ua_index={f"ua[{k}]": k for k in range(1, 6)},
     needs_reset=False,
 )
@@ -490,6 +496,20 @@ KANG = Chip(
     ota_setting_fields={
         "tail": "otan_tail",
         "output_diode_connected": "otan_diode",
+    },
+    absent_terminals={
+        # Wrapped here rather than at the call site, so the sentence a
+        # reader meets is written once, in the place that knows the fact.
+        ("ota", "outp"): (
+            "This chip's OTA has one output, not two. Both parts are the\n"
+            "  same five-transistor amplifier, but tnt's brings the\n"
+            "  diode-connected node out to the switch matrix as a second\n"
+            "  output, while this one keeps that node inside the block. So\n"
+            "  the + output exists on silicon and simply cannot be reached\n"
+            "  from outside.\n\n"
+            "  To fix: use the - output, which is the one with the gain on\n"
+            "  it, and leave the + output unconnected."
+        ),
     },
     ua_index={f"ua[{k}]": k - 1 for k in range(1, 6)},
     # Andrew's wrapper has an active-low reset on ui[2]. tnt's design has no

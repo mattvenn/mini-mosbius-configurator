@@ -397,3 +397,40 @@ def test_device_script_reports_bias_delivery_separately_from_failure():
     assert 'result["ibias_set"] = False' in script
     bias_block = script.split("analog_current_source")[1]
     assert 'result["error"]' not in bias_block.split("Sec 3.5 step 1")[0]
+
+
+# --- programming the wrong part --------------------------------------------
+
+def test_programming_a_chip_the_bitstream_was_not_routed_for_is_refused():
+    """The hazard that made a second part worth supporting properly. The
+    configuration knows which chip it was routed for and --project says which
+    is in the socket; if they disagree the chain means something else
+    entirely, and the chip reports no error at all.
+    """
+    from mosbius.chips import KANG, TNT
+    from mosbius.model import SwitchConfig
+
+    config = SwitchConfig(bits=frozenset({0}), chip=TNT)
+    from mosbius.program import ProgramError, program
+
+    with pytest.raises(ProgramError) as excinfo:
+        program(config, project=KANG.macro)
+    message = str(excinfo.value)
+    assert "tt_um_mosbius" in message
+    assert "tt_um_tnt_mosbius" in message
+    assert "re-route" in message
+
+
+def test_the_chain_length_and_reset_follow_the_part():
+    """Shifting the wrong number of bits is not a near miss: every bit lands
+    one position out. And tnt's design has no reset to pulse."""
+    from mosbius.chips import KANG, TNT
+    from mosbius.model import SwitchConfig
+
+    for chip, length, has_reset in ((TNT, 192, "False"), (KANG, 196, "True")):
+        script = generate_device_script(
+            SwitchConfig(bits=frozenset({0}), chip=chip), project=chip.macro
+        )
+        bits = next(l for l in script.splitlines() if l.startswith("BITS ="))
+        assert len(bits.split('"')[1]) == length
+        assert f"HAS_RESET = {has_reset}" in script

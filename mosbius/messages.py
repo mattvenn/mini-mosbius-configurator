@@ -809,6 +809,20 @@ CHECK_B1_TOO_MANY_FIX = (
 
 # --- chips/__init__.py -----------------------------------------------------
 
+# --- chips/__init__.py -----------------------------------------------------
+
+ROUTE_TERMINAL_NOT_ON_THIS_CHIP = (
+    "DOESN'T FIT - {device}'s {terminal} cannot be wired on this chip.\n\n"
+    "  You have connected {device} ({role}) {terminal} to '{net}', and on\n"
+    "  {chip} that terminal has no switch to the bus at all.\n\n"
+    "  {why}\n\n"
+    "  The same schematic may well route on the other mini-MOSbius, which\n"
+    "  is what --project selects. Nothing else about your design needs to\n"
+    "  change."
+)
+
+# --- chips/__init__.py -----------------------------------------------------
+
 CHIP_UNKNOWN_MACRO = (
     "this toolchain has no bit map for the project {macro}.\n\n"
     "  More than one mini-MOSbius has been taped out, and they do not\n"
@@ -994,6 +1008,19 @@ PROGRAM_UPLOAD_BLOCKED = (
 )
 
 PROGRAM_UPLOAD_ERROR = "CAN'T PROGRAM - {error}"
+
+PROGRAM_WRONG_CHIP = (
+    "this bitstream was not built for the chip you are programming.\n\n"
+    "  You asked to program {project}, but this configuration was routed\n"
+    "  for {routed_for} ({routed_title}).\n\n"
+    "  The two mini-MOSbius parts do not share a configuration chain: the\n"
+    "  same bit closes a different switch on each. Shifting this one in\n"
+    "  would not build a slightly different circuit, it would build an\n"
+    "  unrelated one, and the chip would report no error at all.\n\n"
+    "  To fix: re-route the design for the chip in your socket, passing\n"
+    "  the same --project you are programming with, and program what that\n"
+    "  writes."
+)
 
 PROGRAM_UPLOAD_DIDNT_STICK = (
     "UPLOAD DIDN'T STICK - the board says '{enabled}' is selected, "

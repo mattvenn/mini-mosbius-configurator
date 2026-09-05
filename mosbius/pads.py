@@ -62,6 +62,7 @@ import urllib.request
 from pathlib import Path
 
 from mosbius import messages
+from mosbius.chips import Chip, chip_for_macro
 from mosbius.decode import decode
 from mosbius.model import SwitchConfig
 from mosbius.route import TERMINAL_WORD
@@ -209,19 +210,32 @@ def _analog_pins(shuttle: str, macro: str) -> list[int]:
     return pins
 
 
-def pad_map(shuttle: str, macro: str) -> dict[str, str]:
+def pad_map(shuttle: str, macro: str, chip: Chip | None = None) -> dict[str, str]:
     """{'ibias': 'K', 'ua1': 'C', ...} for one design on one shuttle.
 
     Composed from the two halves in the module docstring: the index API for
     ua -> internal analog pin, and the carrier's own wiring for internal
     analog pin -> PCB pad.
 
-    `ua` 0 is named `ibias` here because that is what this chip's bias
-    reference pin is called everywhere else in this package and on every
-    schematic. Every other `ua[k]` keeps its number.
+    The names on the left are the ones a schematic uses: `ibias` for the bias
+    reference, and `ua1`..`ua5` for the five pins that reach the switch
+    matrix. Which physical `ua[k]` each of those is depends on the part, and
+    the two disagree: tnt puts the bias reference on ua[0] and the matrix pins
+    on ua[1]..ua[5], Andrew Kang's the other way round. So the physical
+    numbering is read off the chip rather than assumed, and only ever used
+    here, to index the shuttle's own `analog_pins` list.
     """
+    # The index lookup goes first: whether a project has analog pins at all
+    # is a fact about the shuttle, and answering "this one is purely digital"
+    # is more use than "no bit map for that macro" to someone who typed the
+    # wrong project name.
     pins = _analog_pins(shuttle, macro)
+    chip = chip or chip_for_macro(macro)
     pads = carrier_pads(shuttle)
+
+    physical = {chip.ibias_ua: "ibias"}
+    physical.update({index: name.replace("ua[", "ua").rstrip("]")
+                     for name, index in chip.ua_index.items()})
 
     mapping = {}
     for ua, internal in enumerate(pins):
@@ -232,7 +246,9 @@ def pad_map(shuttle: str, macro: str) -> dict[str, str]:
                     n_pads=len(pads), pads=", ".join(pads),
                 )
             )
-        mapping["ibias" if ua == 0 else f"ua{ua}"] = pads[internal]
+        name = physical.get(ua)
+        if name is not None:
+            mapping[name] = pads[internal]
     return mapping
 
 
@@ -261,7 +277,7 @@ def pads_in_use(config: SwitchConfig, shuttle: str, macro: str) -> dict[str, str
     if _bias_users(decoded):
         wanted.add("ibias")
 
-    pads = pad_map(shuttle, macro)
+    pads = pad_map(shuttle, macro, config.chip)
     return {name: pad for name, pad in pads.items() if name in wanted}
 
 
