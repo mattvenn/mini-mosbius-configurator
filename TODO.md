@@ -20,3 +20,5 @@ ideally the same bitstreams will produce similiar results, but at least the rout
 4 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
 
 5 overview of how the router works
+
+6 can the name from the xschem make it to the pinout? so we'd see 'inverter input' if we'd labelled it
