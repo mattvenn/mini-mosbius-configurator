@@ -20,6 +20,7 @@ from mosbius import messages
 from mosbius.model import SwitchConfig
 from mosbius.simulate import (
     SimulateError,
+    _mosbius_subckt_ports,
     name_from_routed_path,
     render_mosbius_wrapper,
     simulate_from_routed_json,
@@ -266,3 +267,56 @@ def test_current_routing_passes(tmp_path):
 
 def test_missing_routing_defers_to_the_existing_explanation(tmp_path):
     check_routed_fresh(tmp_path / "nothing.mosbius.json")  # must not raise here
+
+
+# --- the same design, as routed onto either part ---------------------------
+
+def test_both_parts_have_a_device_library_of_the_same_shape():
+    """simulate.py writes one kind of as-routed deck and should not have to
+    know which part it is describing, so the two libraries carry the same
+    cells and speak the same node names."""
+    from mosbius.chips import KANG, TNT
+
+    for chip in (TNT, KANG):
+        text = chip.device_library.read_text()
+        for cell in ("mosbius", "pad_model", "tt_asw_3v3", "mirror_n", "mirror_p",
+                     "diff_n", "diff_p", "nmos_prog", "pmos_prog", "ota_n"):
+            assert f".subckt {cell} " in text or f".subckt {cell}\n" in text, (chip.key, cell)
+        # The bus rows are what render_bus_wire_caps() writes against, so
+        # they have to be reachable from outside the block on both parts.
+        ports = _mosbius_subckt_ports(text)
+        for side in ("A", "B"):
+            for row in range(1, 7):
+                assert f"bus_{side}[{row}]" in ports, (chip.key, side, row)
+
+
+def test_a_pad_hangs_where_that_part_actually_puts_it():
+    """On tnt's the pin is bonded to a bus row, so the pad loads that row
+    whether the design uses the pin or not. On Andrew's the pin has its own
+    node with a switch to the row, so the pad loads the pin instead."""
+    from mosbius.chips import KANG, TNT
+
+    assert TNT.pad_node("ua[1]") == "bus_A[1]"
+    assert TNT.pad_node("ua[4]") == "bus_B[2]"
+    assert KANG.pad_node("ua[1]") == "pad_ua1"
+    assert KANG.pad_node("ua[5]") == "pad_ua5"
+
+
+def test_an_as_routed_deck_is_written_for_either_part():
+    from mosbius.chips import KANG, TNT
+    from mosbius.netlist import parse_netlist
+    from mosbius.route import route
+
+    netlist = """
+.subckt inv ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND
+XM1 ua2 ua1 VGND VGND mosbius_nmos
+XM2 ua2 ua1 VAPWR VAPWR mosbius_pmos
+.ends
+"""
+    design = parse_netlist(netlist)
+    for chip, ties, pad_node in ((TNT, 192, "bus_A[1]"), (KANG, 196, "pad_ua1")):
+        routed = route(design, chip)
+        text = render_mosbius_wrapper(routed.config, "inv")
+        assert text.count("\nRcfg") == ties
+        assert text.count("\nCwire") == 12
+        assert f"Xpad_ua1 VGND ua1 {pad_node} pad_model" in text

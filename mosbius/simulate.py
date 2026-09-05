@@ -123,7 +123,7 @@ def render_mosbius_wrapper(config: SwitchConfig, name: str) -> str:
     # ports (ordinary SPICE subcircuit scoping), no special-casing needed.
     used_pins = used_external_pins(config)
     pad_lines = [
-        f"Xpad_{_pin_net(pin)} VGND {_pin_net(pin)} {bus_node(*config.chip.external_pins[pin])} pad_model"
+        f"Xpad_{_pin_net(pin)} VGND {_pin_net(pin)} {config.chip.pad_node(pin)} pad_model"
         for pin in used_pins
     ]
 

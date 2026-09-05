@@ -282,6 +282,23 @@ class Chip:
             for pin, where in self.pins.rows.items()
         }
 
+    def pad_node(self, pin: str) -> str:
+        """The node inside the switch-matrix block that a package pin's bond
+        pad attaches to, for `pin` in "ua[1]".."ua[5]" form.
+
+        The two parts differ, and the difference is the whole reason this is
+        asked rather than assumed. On tnt's, the pin is bonded straight to a
+        bus row, so the pad hangs on that row and its capacitance loads the
+        row whether the design uses the pin or not. On Andrew's, the pin has
+        its own node with a switch between it and the row, so the pad loads
+        the pin and only reaches the row when the design closes that switch.
+        """
+        if self.pins.switched:
+            return f"pad_{pin.replace('ua[', 'ua').rstrip(']')}"
+        from mosbius.model import bus_node
+
+        return bus_node(*self.pins.rows[pin])
+
     def port_bit(self, net: str) -> int | None:
         """The bit that connects package pin `net` ("ua1") to its bus row,
         or None on a part where that connection is a bond wire and costs no
