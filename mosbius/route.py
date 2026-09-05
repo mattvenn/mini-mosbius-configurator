@@ -1131,9 +1131,9 @@ def route(design: MosbiusDesign, chip: Chip = DEFAULT_CHIP) -> RoutedDesign:
         # the choice rather than whichever instance xschem happened to
         # list first. Ranked by what the bridge costs, then by how many
         # rows the tap spends, then by row number so the answer is stable.
-        free = sorted((s, row) for (s, row) in chip.tappable_rows
-                      if chip.rail_tap_by_side_row[(s, row)][1] == rail
-                      and row_owner.get((s, row)) in (None, net))
+        taps = chip.rail_taps(rail)
+        free = sorted((s, row) for (s, row) in taps
+                      if row_owner.get((s, row)) in (None, net))
         usable = [(s, row) for (s, row) in free if row in reachable]
         if not usable:
             unreachable_note = ""
@@ -1151,13 +1151,20 @@ def route(design: MosbiusDesign, chip: Chip = DEFAULT_CHIP) -> RoutedDesign:
         usable.sort(key=lambda sr: (bridge_cost(*sr)[0], sr[1]))
         side, row = usable[0]
         claim_row(side, row, net)
-        bit, _ = chip.rail_tap_by_side_row[(side, row)]
+        bit = taps[(side, row)]
         bits.add(bit)
         route_touches_on_row(remaining, side, row, net)
 
     def route_port_net(net: str, touches: list[_Touch]) -> None:
         side, row = chip.port_row[net]
         claim_row(side, row, net)
+        # On a part whose pins are switched rather than bonded, reaching the
+        # outside world costs a bit of its own. Leaving it open routes the
+        # circuit correctly and connects it to nothing, which measures as a
+        # dead pin rather than as an error.
+        port_bit = chip.port_bit(net)
+        if port_bit is not None:
+            bits.add(port_bit)
         route_touches_on_row(touches, side, row, net)
 
     def route_internal_net(net: str, touches: list[_Touch]) -> None:
@@ -1273,7 +1280,8 @@ def route(design: MosbiusDesign, chip: Chip = DEFAULT_CHIP) -> RoutedDesign:
     # instead would swap which output has the gain, so a design's drawn and
     # routed halves would no longer be the same circuit.
     if "ota" in roles.values():
-        bits.add(setting_bit("ctrl_otan_mode", 0, chip))
+        for pin, index in chip.ota_amplifier_bits:
+            bits.add(setting_bit(pin, index, chip))
 
     return RoutedDesign(
         config=SwitchConfig(bits=frozenset(bits), chip=chip),

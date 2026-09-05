@@ -140,6 +140,19 @@ def _single(closed: frozenset[int], pin: str, chip: Chip) -> bool:
     return setting_bit(pin, 0, chip) in closed
 
 
+def _optional(closed: frozenset[int], pin: str, index: int, chip: Chip) -> bool:
+    """Like `_single`, but False when this part has no such bit at all.
+
+    The two parts control the OTA's output stage differently -- tnt with two
+    mode bits, Andrew with one diode bit -- so each has a control the other
+    does not. Reading a missing one as False keeps one DeviceSettings record
+    usable for both; which of them a user is shown comes from the chip's own
+    `ota_setting_fields`, so nobody reads a field that means nothing on their
+    part.
+    """
+    return chip.setting_bit_by_pin_index.get((pin, index)) in closed
+
+
 def _decode_cycler(closed: frozenset[int], pin: str, step: int, chip: Chip) -> int:
     lsb = 1 if setting_bit(pin, 0, chip) in closed else 0
     msb = 1 if setting_bit(pin, 1, chip) in closed else 0
@@ -184,8 +197,11 @@ class DeviceSettings:
     nfetb_source: bool  # xpt_nfetb_s tied directly to VGND
     dpp_source: bool  # PMOS diff-pair shared source tied to VAPWR
     dpn_source: bool  # NMOS diff-pair shared source tied to VGND
-    otan_mode0: bool  # ctrl_otan_mode[0]: diode-connects the OTA via outp
-    otan_mode1: bool  # ctrl_otan_mode[1]: diode-connects the OTA via outm
+    # The OTA's output stage. tnt has two mode bits, one per output; Andrew
+    # has one diode bit and no second output. Each part uses only its own.
+    otan_mode0: bool = False  # tnt: ctrl_otan_mode[0], diode-connects via outp
+    otan_mode1: bool = False  # tnt: ctrl_otan_mode[1], diode-connects via outm
+    otan_diode: bool = False  # Andrew: ctrl_otan_diode, diode-connects the output
 
     @classmethod
     def decode(cls, closed: frozenset[int], chip: Chip = DEFAULT_CHIP) -> "DeviceSettings":
@@ -207,8 +223,9 @@ class DeviceSettings:
             nfetb_source=_single(closed, "ctrl_nfetb_source", chip),
             dpp_source=_single(closed, "ctrl_dpp_source", chip),
             dpn_source=_single(closed, "ctrl_dpn_source", chip),
-            otan_mode0=setting_bit("ctrl_otan_mode", 0, chip) in closed,
-            otan_mode1=setting_bit("ctrl_otan_mode", 1, chip) in closed,
+            otan_mode0=_optional(closed, "ctrl_otan_mode", 0, chip),
+            otan_mode1=_optional(closed, "ctrl_otan_mode", 1, chip),
+            otan_diode=_optional(closed, "ctrl_otan_diode", 0, chip),
         )
 
 
@@ -384,11 +401,12 @@ class SwitchConfig:
         # exposed on the pad whether the design asked for it or not. On
         # Andrew's it is a switch, so the edge exists only when its bit is set.
         if self.chip.pins.switched:
-            for mb in self.closed_pin_connects():
-                _add_edge(
-                    graph, f"ua[{mb.pin_net[2:]}]", bus_node(mb.bus, mb.row),
-                    f"{mb.pin}[{mb.index}]",
-                )
+            for ua_pin, bit in self.chip.pins.bits.items():
+                if bit in self.bits:
+                    side, row = self.chip.pins.rows[ua_pin]
+                    mb = self.chip.matrix_bits[bit]
+                    _add_edge(graph, ua_pin, bus_node(side, row),
+                              f"{mb.pin}[{mb.index}]")
         else:
             for ua_pin, (side, row) in self.chip.external_pins.items():
                 _add_edge(graph, ua_pin, bus_node(side, row), f"{ua_pin} (bond wire)")

@@ -61,11 +61,9 @@ _DEVICE_SETTINGS_FIELDS: dict[str, dict[str, str]] = {
     "ndiffpair-": {"tail": "dpn_tail", "shared_source_tied_to_VGND": "dpn_source"},
     "pdiffpair+": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
     "pdiffpair-": {"tail": "dpp_tail", "shared_source_tied_to_VAPWR": "dpp_source"},
-    "ota": {
-        "tail": "otan_tail",
-        "diode_connect_via_outp": "otan_mode0",
-        "diode_connect_via_outm": "otan_mode1",
-    },
+    # The OTA's own fields come from the chip, since the two parts control
+    # their output stage differently -- see Chip.ota_setting_fields.
+    "ota": {},
 }
 
 
@@ -123,9 +121,13 @@ def decode(config: SwitchConfig) -> DecodedDesign:
         }
         if not wired:
             continue
+        # The OTA's fields come from the chip: the two parts control their
+        # output stage with different bits, so showing one part's labels
+        # against the other's silicon would report a control it does not have.
+        fields = _DEVICE_SETTINGS_FIELDS[dev_name] or config.chip.ota_setting_fields
         dev_settings = {
             label: getattr(settings, field_name)
-            for label, field_name in _DEVICE_SETTINGS_FIELDS[dev_name].items()
+            for label, field_name in fields.items()
         }
         devices.append(DeviceInstance(name=dev_name, terminals=wired, settings=dev_settings))
 

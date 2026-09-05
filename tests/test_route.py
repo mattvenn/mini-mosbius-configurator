@@ -847,3 +847,39 @@ def test_two_source_followers_route_whatever_order_they_are_listed_in():
         routed = route(parse_netlist("\n".join(order) + "\n"))
         assert check(routed.config).errors == []
         assert routed.net_rows["VAPWR"] == {"A": 6, "B": 6}
+
+
+# --- routing onto Andrew Kang's part ---------------------------------------
+
+def test_a_port_net_closes_its_own_pin_switch_on_kang():
+    """Andrew's package pins reach the bus through a `cfg_bus_ext` switch
+    rather than a bond wire. Leaving that open routes the circuit correctly
+    and connects it to nothing, which measures as a dead pin rather than as
+    an error, so this is the check that it is never skipped.
+    """
+    from mosbius.chips import KANG
+    from mosbius.netlist import parse_netlist
+    from mosbius.route import route
+
+    design = parse_netlist(INVERTER_NETLIST)
+    routed = route(design, KANG)
+    for net in routed.net_rows:
+        bit = KANG.port_bit(net) if net in KANG.port_row else None
+        if bit is not None:
+            assert bit in routed.config.bits, f"{net} routed without closing its pin switch"
+
+
+def test_the_same_netlist_routes_to_both_parts_with_different_bitstreams():
+    """One sheet, either chip. The bitstreams differ because the two parts
+    do not share a configuration chain -- that is the whole reason the chip
+    has to be chosen rather than assumed."""
+    from mosbius.chips import KANG, TNT
+    from mosbius.netlist import parse_netlist
+    from mosbius.route import route
+
+    design = parse_netlist(INVERTER_NETLIST)
+    tnt = route(design, TNT)
+    kang = route(design, KANG)
+    assert len(tnt.config.to_bitstream()) == 48
+    assert len(kang.config.to_bitstream()) == 49
+    assert tnt.device_roles == kang.device_roles

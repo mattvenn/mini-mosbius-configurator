@@ -1,3 +1,6 @@
 [submodule "ttsky-mini-mosbius"]
 	path = ttsky-mini-mosbius
 	url = https://github.com/smunaut/ttsky-mini-mosbius.git
+[submodule "ttsky25a-minimosbius"]
+	path = ttsky25a-minimosbius
+	url = https://github.com/andrewkkang/ttsky25a-minimosbius.git

@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 
 from mosbius import bitstream, messages
-from mosbius.chips import TNT, UnknownChipError, chip_for_macro
+from mosbius.chips import KANG, TNT, UnknownChipError, chip_for_macro
 from mosbius.model import SwitchConfig
 
 
@@ -54,13 +54,8 @@ def test_tnt_row_6_is_the_only_row_free_on_both_sides():
 
 
 def test_tnt_rail_taps_are_three_per_rail_on_fixed_rows():
-    taps = TNT.rail_tap_by_side_row
-    assert len(taps) == 6
-    by_rail: dict[str, list] = {}
-    for (side, row), (_bit, rail) in taps.items():
-        by_rail.setdefault(rail, []).append((side, row))
-    assert sorted(by_rail["VAPWR"]) == [("A", 4), ("B", 1), ("B", 6)]
-    assert sorted(by_rail["VGND"]) == [("A", 2), ("A", 6), ("B", 5)]
+    assert sorted(TNT.rail_taps("VAPWR")) == [("A", 4), ("B", 1), ("B", 6)]
+    assert sorted(TNT.rail_taps("VGND")) == [("A", 2), ("A", 6), ("B", 5)]
 
 
 def test_diffpair_and_ota_inputs_reach_only_rows_1_to_3():
@@ -102,14 +97,14 @@ def test_chip_for_macro_finds_the_default_part():
 
 
 def test_an_unmapped_macro_stops_rather_than_guessing():
-    """The other mini-MOSbius is real and is on four shuttles, so this is a
-    macro a user can plausibly type. Guessing would produce an unrelated
-    circuit, not a slightly wrong one."""
+    """Guessing would produce an unrelated circuit, not a slightly wrong one,
+    so an unknown macro stops and lists what is known."""
     with pytest.raises(UnknownChipError) as excinfo:
-        chip_for_macro("tt_um_mosbius")
+        chip_for_macro("tt_um_something_else")
     message = str(excinfo.value)
-    assert "tt_um_mosbius" in message
+    assert "tt_um_something_else" in message
     assert "tt_um_tnt_mosbius" in message
+    assert "tt_um_mosbius" in message
     assert "--project" in message
 
 
@@ -143,3 +138,75 @@ def test_a_switch_config_validates_against_its_own_chip():
     assert str(excinfo.value) == messages.MODEL_BIT_OUT_OF_RANGE.format(
         bad=[192], max_bit=191, num_bits=192,
     )
+
+
+# --- Andrew Kang's part ----------------------------------------------------
+
+def test_kang_chain_is_196_bits_in_49_hex_characters():
+    assert KANG.num_bits == 196
+    assert KANG.hex_chars == 49
+    assert len(KANG.matrix_bits) == 167
+    assert len(KANG.setting_bits) == 29
+
+
+def test_kang_has_27_crosspoints_because_its_ota_has_one_output():
+    """Both parts are the same five-transistor core. tnt brings the
+    diode-connected node out to the matrix as a second output; Andrew keeps
+    it internal, so the symbol's `outp` has no crosspoint here."""
+    assert len(KANG.crosspoints) == 27
+    assert set(KANG.device_terminals["ota"]) == {"inp", "inm", "outm"}
+    assert KANG.device_terminals["ota"]["outm"] == "xpt_otan_out"
+
+
+def test_kang_pins_are_switches_so_no_row_is_spent_by_default():
+    """A pin costs a bit rather than a row, so every row is free for an
+    internal net and an unused pin is genuinely disconnected."""
+    assert KANG.pins.switched is True
+    assert KANG.pinned_rows == set()
+    assert KANG.free_rows == KANG.all_rows
+    assert KANG.port_row == {f"ua{k}": ("A", k) for k in range(1, 6)}
+
+
+def test_kang_pins_all_sit_on_side_a_in_order():
+    for k in range(1, 6):
+        assert KANG.port_bit(f"ua{k}") is not None
+    assert TNT.port_bit("ua1") is None
+
+
+def test_kang_can_join_both_bus_sides_on_any_row():
+    """No bond wire anywhere, so the scarcity that makes row 6 precious on
+    tnt's part does not exist here."""
+    assert KANG.joinable_rows == [1, 2, 3, 4, 5, 6]
+
+
+def test_kang_reaches_both_rails_from_every_a_row():
+    assert sorted(KANG.rail_taps("VAPWR")) == [("A", r) for r in range(1, 7)]
+    assert sorted(KANG.rail_taps("VGND")) == [("A", r) for r in range(1, 7)]
+
+
+def test_the_two_parts_number_their_bias_pin_the_opposite_way_round():
+    """CLAUDE.md trap 1 in a new place. A sheet's ua1..ua5 are the five
+    matrix pins on both parts; on Andrew's those are physically ua[0]..ua[4],
+    with the bias reference on ua[5]."""
+    assert TNT.ibias_ua == 0
+    assert KANG.ibias_ua == 5
+    assert TNT.ua_index == {f"ua[{k}]": k for k in range(1, 6)}
+    assert KANG.ua_index == {f"ua[{k}]": k - 1 for k in range(1, 6)}
+
+
+def test_only_one_part_needs_its_reset_driven():
+    assert TNT.needs_reset is False
+    assert KANG.needs_reset is True
+
+
+def test_the_ota_amplifier_mode_is_a_closed_bit_on_one_part_and_open_on_the_other():
+    """tnt floats its load gates unless `ctrl_otan_mode[0]` is closed.
+    Andrew's `ctrl_otan_diode` means the opposite: closing it diode-connects
+    the output, so amplifier mode is the open state."""
+    assert TNT.ota_amplifier_bits == (("ctrl_otan_mode", 0),)
+    assert KANG.ota_amplifier_bits == ()
+
+
+def test_chip_for_macro_finds_both_parts():
+    assert chip_for_macro("tt_um_mosbius") is KANG
+    assert chip_for_macro("tt_um_tnt_mosbius") is TNT

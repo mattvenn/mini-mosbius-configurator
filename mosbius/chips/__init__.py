@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from mosbius.chips import tnt_bits
+from mosbius.chips import kang_bits, tnt_bits
 from mosbius.chips.bits import DeviceSettingBit, MatrixBit
 
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -80,10 +80,37 @@ class Chip:
     device_terminals: dict[str, dict[str, str]]
     bus_wire_cap: dict[str, float]
     device_library: Path
-    # Which `ua[k]` carries the bias reference. tnt puts it on ua[0], Andrew on
-    # ua[5]. It is the one analog pin with no switch matrix behind it, so it is
-    # named rather than numbered everywhere a user sees it.
+    # Which physical `ua[k]` carries the bias reference. tnt puts it on ua[0],
+    # Andrew on ua[5]. It is the one analog pin with no switch matrix behind
+    # it, so it is named rather than numbered everywhere a user sees it.
     ibias_ua: int
+    # Which device-setting bits put the OTA in amplifier mode: the load gates
+    # have to follow one of its own drains, and nothing in a schematic says
+    # which. tnt needs `ctrl_otan_mode[0]` closed, matching the ideal symbol,
+    # which hardwires both load gates to `outp`. Andrew's `ctrl_otan_diode`
+    # means the opposite -- closing it diode-connects the *output*, turning
+    # the block into a follower rather than an amplifier -- so his amplifier
+    # mode is the open state and this is empty. Leaving tnt's open floats the
+    # gate node and the block is not an amplifier at all.
+    ota_amplifier_bits: tuple[tuple[str, int], ...]
+    # How to describe the OTA's own settings to a user, as
+    # {label: DeviceSettings field}. The two parts genuinely differ here, so
+    # the label a reader sees follows the part rather than being one wording
+    # bent to cover both.
+    ota_setting_fields: dict[str, str]
+    # Schematic port name -> the physical `ua` number that port really is.
+    #
+    # A design sheet's five bus pins are called ua1..ua5 on both parts, because
+    # that is the vocabulary a user draws in and the same sheet has to route to
+    # either chip. On tnt's part those names are also the physical pin numbers.
+    # On Andrew's they are not: his bias reference is ua[5] and his five matrix
+    # pins are ua[0]..ua[4], so the sheet's ua1 is physically his ua[0].
+    #
+    # Only pad lookup needs the physical number, since the shuttle index is
+    # written in those terms. Nothing on the demoboard is labelled with either
+    # numbering -- a user reads PCB pad letters -- so this translation stays
+    # inside mosbius/pads.py rather than surfacing as two names for one pin.
+    ua_index: dict[str, int]
     # Whether programming has to drive the design's reset. Andrew's chain has a
     # reset input; tnt's does not, and driving one that is not there is silent.
     needs_reset: bool
@@ -126,18 +153,24 @@ class Chip:
         }
 
     @cached_property
-    def rail_tap_by_side_row(self) -> dict[tuple[str, int], tuple[int, str]]:
-        """(side, row) -> (bit, rail), for every way a bus row reaches a rail.
+    def _rail_taps(self) -> dict[str, dict[tuple[str, int], int]]:
+        """rail -> {(side, row): bit}, every way a bus row reaches a rail.
 
-        tnt has six of these, three per rail, each on a fixed row. Andrew's has
-        twelve, both rails on all six A-side rows, so on that part this is a
-        full column rather than a scattering of taps.
+        Keyed by rail first, because a (side, row) alone does not identify a
+        tap: tnt's six taps happen to sit on six different rows, one rail
+        each, but Andrew's are two full columns, so every A-side row can reach
+        either rail and a (side, row) key would collide.
         """
-        return {
-            (mb.bus, mb.row): (bit, mb.rail)
-            for bit, mb in self.matrix_bits.items()
-            if mb.rail is not None
-        }
+        taps: dict[str, dict[tuple[str, int], int]] = {}
+        for bit, mb in self.matrix_bits.items():
+            if mb.rail is None:
+                continue
+            taps.setdefault(mb.rail, {})[(mb.bus, mb.row)] = bit
+        return taps
+
+    def rail_taps(self, rail: str) -> dict[tuple[str, int], int]:
+        """Where this rail can be reached, and which bit does it."""
+        return self._rail_taps.get(rail, {})
 
     @cached_property
     def setting_bit_by_pin_index(self) -> dict[tuple[str, int], int]:
@@ -234,6 +267,16 @@ class Chip:
             for pin, where in self.pins.rows.items()
         }
 
+    def port_bit(self, net: str) -> int | None:
+        """The bit that connects package pin `net` ("ua1") to its bus row,
+        or None on a part where that connection is a bond wire and costs no
+        bit. Routing a port net has to close this, or the pin is left
+        genuinely disconnected and the design measures nothing.
+        """
+        if not self.pins.switched:
+            return None
+        return self.pins.bits[f"ua[{net[2:]}]"]
+
     @cached_property
     def pin_by_row(self) -> dict[tuple[str, int], str]:
         """The same map backwards: which pin sits on a row, so a diagnostic
@@ -253,7 +296,8 @@ class Chip:
 
     @cached_property
     def tappable_rows(self) -> set[tuple[str, int]]:
-        return set(self.rail_tap_by_side_row)
+        """Every (side, row) that can reach some rail."""
+        return {sr for taps in self._rail_taps.values() for sr in taps}
 
     @cached_property
     def free_rows(self) -> set[tuple[str, int]]:
@@ -388,11 +432,73 @@ TNT = Chip(
     bus_wire_cap=_TNT_BUS_WIRE_CAP,
     device_library=DATA_DIR / "mosbius_device_library.spice",
     ibias_ua=0,
+    ota_amplifier_bits=(("ctrl_otan_mode", 0),),
+    ota_setting_fields={
+        "tail": "otan_tail",
+        "diode_connect_via_outp": "otan_mode0",
+        "diode_connect_via_outm": "otan_mode1",
+    },
+    ua_index={f"ua[{k}]": k for k in range(1, 6)},
     needs_reset=False,
 )
 
 
-CHIPS: dict[str, Chip] = {chip.key: chip for chip in (TNT,)}
+KANG = Chip(
+    key="kang",
+    macro="tt_um_mosbius",
+    title="Andrew Kang's mini-MOSbius",
+    num_bits=kang_bits.NUM_BITS,
+    matrix_bits=kang_bits.MATRIX_BITS,
+    setting_bits=kang_bits.DEVICE_SETTING_BITS,
+    # Every pin is on side A, reached through a `cfg_bus_ext` switch rather
+    # than a bond wire, and the sheet's ua1..ua5 sit on rows 1..5 in order.
+    # The bits come from the generated table rather than being restated here.
+    pins=SwitchedPins(
+        rows={f"ua[{k}]": ("A", k) for k in range(1, 6)},
+        bits={
+            f"ua[{mb.row}]": bit
+            for bit, mb in kang_bits.MATRIX_BITS.items()
+            if mb.pin_net is not None
+        },
+    ),
+    device_terminals={
+        **_SHARED_TERMINALS,
+        # One output, not two, and it is the *high-impedance* one.
+        #
+        # Both parts are the same five-transistor core: one PMOS load is
+        # diode-connected and mirrors into the other, whose drain is the
+        # output with the gain on it. tnt brings both nodes out to the matrix
+        # and lets a config bit choose which is diode-connected; Andrew keeps
+        # the diode-connected node internal and brings out only the gain
+        # node. The symbol calls that node `outm` -- with tnt's
+        # `ctrl_otan_mode[0]` closed, which is what this router emits, `outp`
+        # is the diode and `outm` has the gain -- so Andrew's single output is
+        # the symbol's `outm`, and its `outp` has no crosspoint here at all.
+        "ota": {
+            "inp": "xpt_otan_inp", "inm": "xpt_otan_inm",
+            "outm": "xpt_otan_out",
+        },
+    },
+    # Not extracted. Andrew's layout has its own metal and nobody has run PEX
+    # on it, so these are tnt's numbers reused as a stated estimate: the two
+    # matrices are the same shape and the same cell, so the magnitude is
+    # right, but no digit here is a measurement of this part.
+    bus_wire_cap=_TNT_BUS_WIRE_CAP,
+    device_library=DATA_DIR / "kang_device_library.spice",
+    ibias_ua=5,
+    ota_amplifier_bits=(),
+    ota_setting_fields={
+        "tail": "otan_tail",
+        "output_diode_connected": "otan_diode",
+    },
+    ua_index={f"ua[{k}]": k - 1 for k in range(1, 6)},
+    # Andrew's wrapper has an active-low reset on ui[2]. tnt's design has no
+    # reset at all, and driving one that is not there is silent.
+    needs_reset=True,
+)
+
+
+CHIPS: dict[str, Chip] = {chip.key: chip for chip in (TNT, KANG)}
 CHIP_BY_MACRO: dict[str, Chip] = {chip.macro: chip for chip in CHIPS.values()}
 
 # What the rest of the toolchain assumes when nothing says otherwise. This is
