@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from mosbius import messages
+from mosbius.chips import UnknownChipError, chip_for_macro
 from mosbius.bitstream import BitstreamError
 from mosbius.check import SafetyReport, check, check_design, check_routing, merge_findings
 from mosbius.decode import decode, format_summary
@@ -106,10 +107,21 @@ def _format_report(report, *, verbose: bool = False) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
+def _chip_for(args: argparse.Namespace):
+    """Which mini-MOSbius this invocation is about, from --project.
+
+    Every command that builds or reads a configuration goes through here, so
+    an unknown macro stops with one explanation rather than each command
+    inventing its own.
+    """
+    return chip_for_macro(getattr(args, "project", None) or DEFAULT_PROJECT)
+
+
 def cmd_decode(args: argparse.Namespace) -> int:
     try:
-        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
-    except (ArgumentError, BitstreamError) as e:
+        config = SwitchConfig.from_bitstream(
+            _bitstream_arg(args.bitstream), ibias=args.ibias, chip=_chip_for(args))
+    except (ArgumentError, BitstreamError, UnknownChipError) as e:
         print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     print(format_summary(decode(config)))
@@ -174,8 +186,9 @@ def cmd_pads(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     try:
-        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
-    except (ArgumentError, BitstreamError) as e:
+        config = SwitchConfig.from_bitstream(
+            _bitstream_arg(args.bitstream), ibias=args.ibias, chip=_chip_for(args))
+    except (ArgumentError, BitstreamError, UnknownChipError) as e:
         print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     report = check(config)
@@ -194,6 +207,12 @@ def cmd_route(args: argparse.Namespace) -> int:
         print(messages.CLI_IMPOSSIBLE.format(e=e), file=sys.stderr)
         return 1
 
+    try:
+        chip = _chip_for(args)
+    except UnknownChipError as e:
+        print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
+        return 1
+
     # Netlist-level checks first: a design fault can make the router fail
     # for a reason that has nothing to do with the real mistake, and an
     # error here means there is no point routing at all.
@@ -204,9 +223,9 @@ def cmd_route(args: argparse.Namespace) -> int:
 
     try:
         if args.out:
-            routed = route_sticky(design, args.out, force=args.force)
+            routed = route_sticky(design, args.out, force=args.force, chip=chip)
         else:
-            routed = route_fresh(design)
+            routed = route_fresh(design, chip)
     except RouteError as e:
         # Design warnings go out even on the failure path -- when one
         # fires, it is usually the explanation for the failure below.
@@ -238,8 +257,8 @@ def cmd_route(args: argparse.Namespace) -> int:
 def cmd_simulate(args: argparse.Namespace) -> int:
     try:
         check_routed_fresh(args.routed)
-        name, spice_text = simulate_from_routed_json(args.routed)
-    except SimulateError as e:
+        name, spice_text = simulate_from_routed_json(args.routed, _chip_for(args))
+    except (SimulateError, UnknownChipError) as e:
         print(messages.CLI_CANT_SIMULATE.format(e=e), file=sys.stderr)
         return 1
     out = args.out or args.routed.with_name(f"{name}_routed.spice")
@@ -250,7 +269,7 @@ def cmd_simulate(args: argparse.Namespace) -> int:
 
 def cmd_watch(args: argparse.Namespace) -> int:
     try:
-        watch(args.netlist, once=args.once)
+        watch(args.netlist, once=args.once, chip=_chip_for(args))
     except KeyboardInterrupt:
         # Ctrl-C is how anyone stops a watch -- it is the documented exit,
         # so it should not look like a crash. mosbius/watch.py's own
@@ -334,11 +353,21 @@ def build_parser() -> argparse.ArgumentParser:
     def add_ibias(p):
         p.add_argument("--ibias", type=float, default=DEFAULT_IBIAS, help=messages.CLI_HELP_IBIAS)
 
-    def add_board(p):
+    def add_project(p):
+        """Which mini-MOSbius the command is about.
+
+        This is on every command that builds or reads a configuration, not
+        just the ones that talk to a board, because the bit map is what makes
+        a bitstream mean anything: routing for one part and programming the
+        other produces an unrelated circuit, not a slightly wrong one.
+        """
         p.add_argument(
             "--project", default=DEFAULT_PROJECT,
             help=messages.CLI_HELP_PROJECT.format(default_project=DEFAULT_PROJECT),
         )
+
+    def add_board(p):
+        add_project(p)
         p.add_argument(
             "--shuttle", default=None,
             help=messages.CLI_HELP_SHUTTLE.format(default_shuttle=DEFAULT_SHUTTLE),
@@ -348,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("decode", help=messages.CLI_HELP_DECODE)
     p.add_argument("bitstream", help=messages.CLI_HELP_BITSTREAM_ARG)
     add_ibias(p)
+    add_project(p)
     p.set_defaults(func=cmd_decode)
 
     p = sub.add_parser("pads", help=messages.CLI_HELP_PADS)
@@ -360,6 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("bitstream", help=messages.CLI_HELP_BITSTREAM_ARG)
     add_ibias(p)
     p.add_argument("--verbose", "-v", action="store_true", help=messages.CLI_HELP_VERBOSE)
+    add_project(p)
     p.set_defaults(func=cmd_check)
 
     p = sub.add_parser("route", help=messages.CLI_HELP_ROUTE)
@@ -367,16 +398,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, help=messages.CLI_HELP_ROUTE_OUT)
     p.add_argument("--force", action="store_true", help=messages.CLI_HELP_ROUTE_FORCE)
     p.add_argument("--verbose", "-v", action="store_true", help=messages.CLI_HELP_VERBOSE)
+    add_project(p)
     p.set_defaults(func=cmd_route)
 
     p = sub.add_parser("simulate", help=messages.CLI_HELP_SIMULATE)
     p.add_argument("routed", type=Path, help=messages.CLI_HELP_SIMULATE_ROUTED_ARG)
     p.add_argument("--out", type=Path, help=messages.CLI_HELP_SIMULATE_OUT)
+    add_project(p)
     p.set_defaults(func=cmd_simulate)
 
     p = sub.add_parser("watch", help=messages.CLI_HELP_WATCH)
     p.add_argument("netlist", type=Path)
     p.add_argument("--once", action="store_true", help=messages.CLI_HELP_WATCH_ONCE)
+    add_project(p)
     p.set_defaults(func=cmd_watch)
 
     p = sub.add_parser("program", help=messages.CLI_HELP_PROGRAM)

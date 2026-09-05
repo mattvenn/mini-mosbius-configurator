@@ -807,6 +807,24 @@ CHECK_B1_TOO_MANY_FIX = (
 )
 
 
+# --- chips/__init__.py -----------------------------------------------------
+
+CHIP_UNKNOWN_MACRO = (
+    "this toolchain has no bit map for the project {macro}.\n\n"
+    "  More than one mini-MOSbius has been taped out, and they do not\n"
+    "  share a configuration chain: the same bit closes a different\n"
+    "  switch on each one. So a bitstream built for one part does not\n"
+    "  do something slightly different on another, it does something\n"
+    "  unrelated, and that is why this stops rather than guessing.\n\n"
+    "  The parts it does know are:\n"
+    "{known}\n\n"
+    "  If the chip in your socket is one of those, pass its macro name\n"
+    "  with --project. If it is a mini-MOSbius that is genuinely new,\n"
+    "  its bit map has to be generated first - see\n"
+    "  tools/extract_bitmap.py."
+)
+
+
 # --- pads.py ---------------------------------------------------------------
 
 PADS_PROJECT_NOT_ON_SHUTTLE = (

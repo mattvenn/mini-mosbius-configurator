@@ -36,12 +36,10 @@ from typing import Callable
 from mosbius import messages
 from mosbius.netlist import IMPLICIT_PINS, PORT_NAMES, MosbiusDesign
 from mosbius.route import FIXED_GEOMETRY, DeviceTail, DeviceWidth
+from mosbius.chips import DEFAULT_CHIP, Chip
 from mosbius.model import (
     DEVICE_DC_PATHS,
-    DEVICE_TERMINALS,
-    EXTERNAL_PINS,
     INDEPENDENT_FETS,
-    TERMINAL_BY_CROSSPOINT,
     DeviceSettings,
     Edge,
     Graph,
@@ -279,11 +277,13 @@ def _check_e4_pin_contention(graph: Graph, comp: dict[str, int]) -> list[Finding
     return findings
 
 
-def _check_w1_shorted_channel(graph: Graph, comp: dict[str, int]) -> list[Finding]:
+def _check_w1_shorted_channel(
+    graph: Graph, comp: dict[str, int], chip: Chip = DEFAULT_CHIP,
+) -> list[Finding]:
     findings = []
     for name in INDEPENDENT_FETS:
-        d = DEVICE_TERMINALS[name]["d"]
-        s = DEVICE_TERMINALS[name]["s"]
+        d = chip.device_terminals[name]["d"]
+        s = chip.device_terminals[name]["s"]
         if comp[d] != comp[s]:
             continue
         path = _shortest_path(graph, d, s)
@@ -315,12 +315,13 @@ def _biasing_graph(graph: Graph, settings: DeviceSettings) -> Graph:
     return augmented
 
 
-def _terminal_name(node: str) -> str:
-    return TERMINAL_BY_CROSSPOINT.get(node, node)
+def _terminal_name(node: str, chip: Chip = DEFAULT_CHIP) -> str:
+    return chip.terminal_by_crosspoint.get(node, node)
 
 
 def _check_w2_floating_crosspoint(
     graph: Graph, comp: dict[str, int], settings: DeviceSettings,
+    chip: Chip = DEFAULT_CHIP,
 ) -> list[Finding]:
     """A net with no DC path to anything that pins its voltage.
 
@@ -343,7 +344,7 @@ def _check_w2_floating_crosspoint(
     """
     bias = _biasing_graph(graph, settings)
     bias_comp = connected_components(bias)
-    anchors = {"VAPWR", "VGND", *EXTERNAL_PINS}
+    anchors = {"VAPWR", "VGND", *chip.external_pins}
     anchor_comps = {bias_comp[a] for a in anchors if a in bias_comp}
 
     # Group the wired crosspoints into nets, using the *switch* graph --
@@ -360,7 +361,7 @@ def _check_w2_floating_crosspoint(
         # biasing component -- testing the first is testing all of them.
         if bias_comp[nodes[0]] in anchor_comps:
             continue
-        terminals = sorted(_terminal_name(n) for n in nodes)
+        terminals = sorted(_terminal_name(n, chip) for n in nodes)
         names = ", ".join(terminals)
         if len(terminals) == 1:
             headline = messages.CHECK_W2_HEADLINE_ONE.format(names=names)
@@ -393,9 +394,11 @@ def _check_w2_floating_crosspoint(
     return findings
 
 
-def _check_w3_unconnected_terminal(graph: Graph) -> list[Finding]:
+def _check_w3_unconnected_terminal(
+    graph: Graph, chip: Chip = DEFAULT_CHIP,
+) -> list[Finding]:
     findings = []
-    for name, terminals in DEVICE_TERMINALS.items():
+    for name, terminals in chip.device_terminals.items():
         used = [f"{name}.{t}" for t, xpt in terminals.items() if graph.get(xpt)]
         unused = [f"{name}.{t}" for t, xpt in terminals.items() if not graph.get(xpt)]
         if not used or not unused:
@@ -1003,8 +1006,9 @@ def check(config: SwitchConfig) -> SafetyReport:
     findings += _check_e2_ibias_short(graph, comp)
     findings += _check_e3_driven_pin_into_rail(graph, comp)
     findings += _check_e4_pin_contention(graph, comp)
-    findings += _check_w1_shorted_channel(graph, comp)
-    findings += _check_w2_floating_crosspoint(graph, comp, config.device_settings())
-    findings += _check_w3_unconnected_terminal(graph)
+    findings += _check_w1_shorted_channel(graph, comp, config.chip)
+    findings += _check_w2_floating_crosspoint(
+        graph, comp, config.device_settings(), config.chip)
+    findings += _check_w3_unconnected_terminal(graph, config.chip)
     findings += _check_i1_sparse_bus(graph)
     return SafetyReport(findings=findings)

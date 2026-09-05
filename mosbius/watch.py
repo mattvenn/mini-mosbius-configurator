@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from mosbius import messages
+from mosbius.chips import DEFAULT_CHIP, Chip
 from mosbius.check import check, check_design, check_routing, merge_findings
 from mosbius.netlist import NetlistError, StaleNetlistError, check_netlist_fresh, parse_netlist
 from mosbius.route import (
@@ -35,7 +36,7 @@ def _now() -> str:
     return time.strftime("%H:%M:%S")
 
 
-def _report(netlist_path: Path) -> str:
+def _report(netlist_path: Path, chip: Chip = DEFAULT_CHIP) -> str:
     """Run parse -> route -> check once and return the report text."""
     try:
         text = netlist_path.read_text()
@@ -76,7 +77,7 @@ def _report(netlist_path: Path) -> str:
     ]
 
     try:
-        routed = route(design)
+        routed = route(design, chip)
     except RouteError as e:
         lines = [f"{header}   " + messages.WATCH_STATUS_IMPOSSIBLE]
         for note in design_notes:
@@ -112,7 +113,8 @@ def _report(netlist_path: Path) -> str:
     return "\n".join(lines)
 
 
-def watch(netlist_path: Path, *, once: bool = False, out=None) -> None:
+def watch(netlist_path: Path, *, once: bool = False, out=None,
+          chip: Chip = DEFAULT_CHIP) -> None:
     """Poll `netlist_path` and print a report every time it changes.
 
     `once=True` runs a single report and returns (used by tests, and by
@@ -133,14 +135,14 @@ def watch(netlist_path: Path, *, once: bool = False, out=None) -> None:
         if mtime != last_mtime:
             last_mtime = mtime
             if mtime is not None:
-                print(_report(netlist_path), file=out)
+                print(_report(netlist_path, chip), file=out)
                 print(file=out)
             if once:
                 return
         elif once:
             # File didn't exist / hasn't changed since we started watching --
             # for a one-shot call, report on it once regardless.
-            print(_report(netlist_path), file=out)
+            print(_report(netlist_path, chip), file=out)
             print(file=out)
             return
         time.sleep(POLL_INTERVAL_SECONDS)

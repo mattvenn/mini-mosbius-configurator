@@ -213,7 +213,9 @@ def test_ota_terminals_land_on_the_side_the_bit_map_says():
 def test_every_other_role_still_sits_wholly_on_one_side():
     # The tables are derived from bitmap.py now rather than transcribed, so
     # this pins the derivation against what the transcription used to say.
-    from mosbius.model import DEVICE_TERMINALS
+    from mosbius.chips import DEFAULT_CHIP
+
+    DEVICE_TERMINALS = DEFAULT_CHIP.device_terminals
     from mosbius.route import TERMINAL_SIDE
 
     expected = {

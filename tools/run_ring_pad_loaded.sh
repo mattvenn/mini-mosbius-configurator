@@ -13,7 +13,7 @@
 # from netlisting tb_mosbius_ringo.sch -- proven correct, that's what
 # produced the 93.5MHz result -- and generates a fresh top-level testbench
 # around it: real VAPWR=3.3V/VDPWR=1.8V/Ibias=100uA sources, one Rcfg tie
-# per config bit (using mosbius/bitmap.py + mosbius/model.py directly, the
+# per config bit (using mosbius/chips/ + mosbius/model.py directly, the
 # same source of truth mosbius/spice.py's render_config_spice() uses --
 # not hand-typed), and exactly one pad_model instance.
 #
@@ -97,7 +97,8 @@ python3 - "$RING_BITSTREAM" <<'PYEOF'
 import sys
 sys.path.insert(0, ".")
 from mosbius.model import SwitchConfig
-from mosbius.bitmap import ALL_BITS
+from mosbius.chips import DEFAULT_CHIP
+ALL_BITS = DEFAULT_CHIP.all_bits
 from mosbius.spice import CONFIG_TIE_OHMS, SINGLE_BIT_PINS
 
 bitstream = sys.argv[1]

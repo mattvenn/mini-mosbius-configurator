@@ -32,11 +32,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from mosbius import bitstream, messages
-from mosbius.bitmap import MATRIX_BITS
+from mosbius.chips import DEFAULT_CHIP, Chip
 from mosbius.model import (
     DEFAULT_IBIAS,
-    DEVICE_TERMINALS,
-    EXTERNAL_PINS,
     SwitchConfig,
     bus_node,
     encode_cycler,
@@ -57,39 +55,13 @@ class RouteError(ValueError):
 # Hardware roles (SPEC.md Sec 2.12 device inventory).
 # ---------------------------------------------------------------------------
 
-# Which cfga_/cfgb_ switch pin each device terminal is wired to, and which
-# bus side that puts it on. Both are *derived* from bitmap.py rather than
-# transcribed, for the reason this module's docstring gives: a bit-map
-# correction there must not silently drift out of sync with the router.
-#
-# Side is a property of the terminal, not of the device. Eleven of the
-# twelve FET/mirror roles sit wholly on one side, but the OTA straddles
-# both -- inp/outp on side A, inm/outm on side B -- so no single value
-# could ever describe it. Asking for a *role's* side is what used to raise
-# KeyError('ota') the moment anyone routed one, until 2026-08-21.
-def _derive_terminal_tables() -> tuple[dict[tuple[str, str], str], dict[tuple[str, str], str]]:
-    by_crosspoint: dict[str, tuple[str, str]] = {}
-    for mb in MATRIX_BITS.values():
-        if mb.crosspoint is None:
-            continue  # cfg_bus_short/cfg_bus_pwr: no device terminal behind them
-        known = by_crosspoint.setdefault(mb.crosspoint, (mb.pin, mb.bus))
-        if known != (mb.pin, mb.bus):
-            raise AssertionError(
-                f"{mb.crosspoint} is reached by two different switch pins, "
-                f"{known} and {(mb.pin, mb.bus)} -- bitmap.py disagrees with itself"
-            )
-
-    pins: dict[tuple[str, str], str] = {}
-    sides: dict[tuple[str, str], str] = {}
-    for role, terminals in DEVICE_TERMINALS.items():
-        for terminal, crosspoint in terminals.items():
-            pin, side = by_crosspoint[crosspoint]
-            pins[(role, terminal)] = pin
-            sides[(role, terminal)] = side
-    return pins, sides
-
-
-TERMINAL_PIN, TERMINAL_SIDE = _derive_terminal_tables()
+# Which switch pin each device terminal is wired to, which bus side that puts
+# it on, and which rows each pin can reach, all live on the Chip and are
+# derived there from its generated bit map. These names are the default part's
+# copies, kept because they are what this module and its tests have always
+# called them; anything that has a Chip in hand should ask it instead.
+TERMINAL_PIN = DEFAULT_CHIP.terminal_pin
+TERMINAL_SIDE = DEFAULT_CHIP.terminal_side
 
 # The word a beginner would use for each terminal: the schematic says "g",
 # a diagnostic should say "gate" (CLAUDE.md: spell it out, and match the
@@ -310,75 +282,29 @@ def _encode_setting(value: int, step: int, *, device: str, prop: str) -> tuple[i
         ) from None
 
 
-# bit for (pin, row), for every matrix signal that has a crosspoint
-# (i.e. every ordinary cfga_*/cfgb_* switch -- excludes cfg_bus_short and
-# cfg_bus_pwr, handled separately below since they have no crosspoint).
-_MATRIX_BIT_BY_PIN_ROW: dict[tuple[str, int], int] = {
-    (mb.pin, mb.row): bit for bit, mb in MATRIX_BITS.items() if mb.crosspoint is not None
-}
-
-# bit for cfg_bus_short[row].
-_BUS_SHORT_BIT_BY_ROW: dict[int, int] = {
-    mb.row: bit for bit, mb in MATRIX_BITS.items() if mb.pin == "cfg_bus_short"
-}
-
-# (side, row) -> (bit, rail) for cfg_bus_pwr taps (SPEC.md Sec 2.7).
-_PWR_TAP_BY_SIDE_ROW: dict[tuple[str, int], tuple[int, str]] = {
-    (mb.bus, mb.row): (bit, mb.rail) for bit, mb in MATRIX_BITS.items() if mb.pin == "cfg_bus_pwr"
-}
-
-# "uaN" (route.py/netlist.py's port-net naming, SPEC.md Sec 3.1b) -> (side, row).
-PORT_ROW: dict[str, tuple[str, int]] = {
-    pin.replace("ua[", "ua").rstrip("]"): (side, row)
-    for pin, (side, row) in EXTERNAL_PINS.items()
-}
-
-# The same map read backwards: which ua[] pin's bond wire sits on a row.
-# Used to name the pin a rail bridge would short, in the user's own
-# vocabulary rather than as a bus coordinate.
-PIN_BY_ROW: dict[tuple[str, int], str] = {sr: pin for pin, sr in PORT_ROW.items()}
-
-# Every (side, row) that's either port-pinned or rail-tappable, i.e. NOT
-# free for an ordinary internal net without side effects (SPEC.md Sec
-# 2.10: the pinned and rail-tappable sets are disjoint and exhaustive
-# apart from one row). Internal nets must avoid the pinned set entirely
-# (a permanent bond wire, not a switch -- using it always leaks the net
-# to that pin) but MAY use a tappable row, as long as its pwr-tap bit is
-# simply left open.
-_PINNED_ROWS: set[tuple[str, int]] = set(PORT_ROW.values())
-_TAPPABLE_ROWS: set[tuple[str, int]] = set(_PWR_TAP_BY_SIDE_ROW)
-ALL_ROWS: set[tuple[str, int]] = {(side, row) for side in ("A", "B") for row in range(1, 7)}
-_FREE_ROWS: set[tuple[str, int]] = ALL_ROWS - _PINNED_ROWS  # tappable + the one unencumbered row
-
-ALL_SIX_ROWS = frozenset(range(1, 7))
-
-# The rows an internal net spanning *both* sides can ever use: free of a
-# ua[] bond wire on side A and on side B at once. Derived, because which
-# rows those are is a consequence of the pin map (SPEC.md Sec 2.10) rather
-# than an independent fact -- today it comes out as row 6 alone.
-ROWS_FREE_ON_BOTH_SIDES: frozenset[int] = frozenset(
-    row for row in ALL_SIX_ROWS
-    if ("A", row) in _FREE_ROWS and ("B", row) in _FREE_ROWS
-)
+# Every table the router used to derive here from the bit map now lives on
+# the Chip, because each is a property of one part: which bit closes a switch
+# on a row, which rows carry a package pin, which rows can reach a rail, and
+# which rows a net spanning both bus sides may use. See
+# mosbius/chips/__init__.py, and ask the chip a routing run was given.
+#
+# The names below are the default part's copies. They exist because this
+# module's own tests and SPEC.md refer to them, and because a caller with no
+# Chip in hand still means tnt's part.
+PORT_ROW: dict[str, tuple[str, int]] = DEFAULT_CHIP.port_row
+PIN_BY_ROW: dict[tuple[str, int], str] = DEFAULT_CHIP.pin_by_row
+ALL_ROWS: set[tuple[str, int]] = DEFAULT_CHIP.all_rows
+ALL_SIX_ROWS = DEFAULT_CHIP.rows
+ROWS_FREE_ON_BOTH_SIDES: frozenset[int] = frozenset(DEFAULT_CHIP.joinable_rows)
 
 
-def _derive_rows_by_pin() -> dict[str, frozenset[int]]:
-    rows: dict[str, set[int]] = {}
-    for pin, row in _MATRIX_BIT_BY_PIN_ROW:
-        rows.setdefault(pin, set()).add(row)
-    return {pin: frozenset(r) for pin, r in rows.items()}
+def rows_reachable(pin: str, chip: Chip = DEFAULT_CHIP) -> frozenset[int]:
+    """The bus rows `pin`'s crosspoint has a switch to.
 
-
-# Which bus rows each switch pin can reach at all. Most crosspoints have a
-# switch to all six rows; the differential-pair and OTA *inputs* have
-# switches to rows 1-3 only (SPEC.md Sec 2.12, CLAUDE.md trap 6). Derived
-# from the bit map, so this is the hardware talking, not a transcription.
-_ROWS_BY_PIN: dict[str, frozenset[int]] = _derive_rows_by_pin()
-
-
-def rows_reachable(pin: str) -> frozenset[int]:
-    """The bus rows `pin`'s crosspoint has a switch to."""
-    return _ROWS_BY_PIN.get(pin, frozenset())
+    Most crosspoints reach every row; the differential-pair and OTA *inputs*
+    reach rows 1-3 only (SPEC.md Sec 2.12, CLAUDE.md trap 6).
+    """
+    return chip.rows_by_pin.get(pin, frozenset())
 
 
 def _fmt_rows(rows) -> str:
@@ -448,6 +374,12 @@ class RoutedDesign:
     device_tails: dict[str, DeviceTail] = field(default_factory=dict)
     undeclared_tails: tuple[UndeclaredTail, ...] = ()
 
+    @property
+    def chip(self) -> Chip:
+        """Which part this was routed for. Read off the config rather than
+        stored twice, so the two cannot disagree."""
+        return self.config.chip
+
 
 def format_device_roles(routed) -> list[str]:
     """The route table: which hardware each device became, and the width
@@ -472,14 +404,17 @@ def format_device_roles(routed) -> list[str]:
     return lines
 
 
-# The bus segment each package pin is permanently bonded to, keyed by the
-# net name a schematic would use ("ua2"), so a report can name the pad a
-# net picked up. Derived from EXTERNAL_PINS rather than restated: which
-# pin sits on which segment straddles both bus sides and is the single
-# easiest fact in this project to get backwards (CLAUDE.md trap 1).
-PIN_BOND_SEGMENT: dict[str, str] = {
-    net: bus_node(side, row) for net, (side, row) in PORT_ROW.items()
-}
+def pin_bond_segments(chip: Chip = DEFAULT_CHIP) -> dict[str, str]:
+    """The bus segment each package pin reaches, keyed by the net name a
+    schematic would use ("ua2"), so a report can name the pad a net picked
+    up. Derived from the chip's pin map rather than restated: which pin
+    sits on which segment straddles both bus sides and is the single
+    easiest fact in this project to get backwards (CLAUDE.md trap 1).
+    """
+    return {net: bus_node(side, row) for net, (side, row) in chip.port_row.items()}
+
+
+PIN_BOND_SEGMENT: dict[str, str] = pin_bond_segments(DEFAULT_CHIP)
 
 
 def format_net_rows(routed) -> list[str]:
@@ -528,10 +463,15 @@ def format_pad_note(routed) -> list[str]:
 # four diff-pair roles share this reach (CLAUDE.md trap 6), so any one of
 # them stands in for the other three. Used by _allocate_fets_by_constraint
 # below (TODO.md was Sec 2, closed 2026-08-22).
-_DIFFPAIR_GATE_REACH = rows_reachable(TERMINAL_PIN[("ndiffpair+", "g")])
+def _diffpair_gate_reach(chip: Chip) -> frozenset[int]:
+    return rows_reachable(chip.terminal_pin[("ndiffpair+", "g")], chip)
 
 
-def _net_sides(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, set[str]]:
+_DIFFPAIR_GATE_REACH = _diffpair_gate_reach(DEFAULT_CHIP)
+
+
+def _net_sides(design: MosbiusDesign, roles: dict[str, str],
+               chip: Chip = DEFAULT_CHIP) -> dict[str, set[str]]:
     """Which bus side(s) each net touches, given a role assignment.
 
     `roles` need not cover every device -- callers use this mid-search,
@@ -551,18 +491,19 @@ def _net_sides(design: MosbiusDesign, roles: dict[str, str]) -> dict[str, set[st
         if role is None:
             continue
         for terminal, net in d.terminals.items():
-            if terminal not in DEVICE_TERMINALS.get(role, {}):
+            if terminal not in chip.device_terminals.get(role, {}):
                 continue
             if (terminal == "s" and role in SOURCE_TIE_PIN
                     and net == SOURCE_TIE_RAIL[role]):
                 continue  # tied to its rail for free -- see _apply_free_source_ties
-            sides.setdefault(net, set()).add(TERMINAL_SIDE[(role, terminal)])
+            sides.setdefault(net, set()).add(chip.terminal_side[(role, terminal)])
     return sides
 
 
 def _diffpair_gate_violations(
     gate_nets: dict[str, str], candidate_roles: dict[str, str],
     pair_roles: tuple[str, str], net_sides: dict[str, set[str]],
+    chip: Chip = DEFAULT_CHIP,
 ) -> int:
     """How many of `candidate_roles`' diff-pair-role devices have a gate
     that provably cannot reach its net -- SPEC.md Sec 2.12's two known
@@ -578,9 +519,9 @@ def _diffpair_gate_violations(
         if role not in pair_roles:
             continue
         net = gate_nets[name]
-        if net in PORT_ROW:
-            _, row = PORT_ROW[net]
-            if row not in _DIFFPAIR_GATE_REACH:
+        if net in chip.port_row:
+            _, row = chip.port_row[net]
+            if row not in _diffpair_gate_reach(chip):
                 violations += 1
             continue
         if len(net_sides.get(net, ())) > 1:
@@ -588,7 +529,8 @@ def _diffpair_gate_violations(
     return violations
 
 
-def _joined_row_violations(net_sides: dict[str, set[str]]) -> int:
+def _joined_row_violations(net_sides: dict[str, set[str]],
+                           chip: Chip = DEFAULT_CHIP) -> int:
     """How many more nets want a bus row free on *both* sides than the
     chip has such rows -- 0 when they all fit.
 
@@ -607,14 +549,15 @@ def _joined_row_violations(net_sides: dict[str, set[str]]) -> int:
     given, which is exactly what the caller is choosing.
     """
     joined = sum(1 for net, sides in net_sides.items()
-                 if len(sides) > 1 and net not in PORT_ROW)
-    return max(0, joined - len(ROWS_FREE_ON_BOTH_SIDES))
+                 if len(sides) > 1 and net not in chip.port_row)
+    return max(0, joined - len(chip.joinable_rows))
 
 
 def _allocate_fets_by_constraint(
     requests: list[DeviceRequest], pair_roles: tuple[str, str], independent_roles: tuple[str, str],
     pair_rail: str, label: str, tail: DeviceRequest | None,
     fixed_roles: dict[str, str], design: MosbiusDesign,
+    chip: Chip = DEFAULT_CHIP,
 ) -> dict[str, str]:
     """`_allocate_fets`, but choosing *which* ordering to run it with
     (TODO.md was Sec 2, closed 2026-08-22) instead of always the
@@ -669,9 +612,9 @@ def _allocate_fets_by_constraint(
             candidate = _allocate_fets(list(order), pair_roles, independent_roles, pair_rail, label, tail=tail)
         except RouteError:
             continue
-        net_sides = _net_sides(design, {**fixed_roles, **candidate})
-        violations = (_diffpair_gate_violations(gate_nets, candidate, pair_roles, net_sides)
-                      + _joined_row_violations(net_sides))
+        net_sides = _net_sides(design, {**fixed_roles, **candidate}, chip)
+        violations = (_diffpair_gate_violations(gate_nets, candidate, pair_roles, net_sides, chip)
+                      + _joined_row_violations(net_sides, chip))
         if violations == 0:
             return candidate
 
@@ -784,7 +727,7 @@ def _allocate_fets(
     return roles
 
 
-def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
+def allocate_devices(design: MosbiusDesign, chip: Chip = DEFAULT_CHIP) -> dict[str, str]:
     """Map each device request's name to a specific hardware role."""
     roles: dict[str, str] = {}
 
@@ -843,12 +786,12 @@ def allocate_devices(design: MosbiusDesign) -> dict[str, str]:
     )
     nmos_roles = _allocate_fets_by_constraint(
         nmos, NMOS_PAIR_ROLES, NMOS_INDEPENDENT_ROLES, "VGND", "NMOS",
-        ntail[0] if ntail else None, {**roles, **naive_pmos}, design,
+        ntail[0] if ntail else None, {**roles, **naive_pmos}, design, chip,
     )
     roles.update(nmos_roles)
     pmos_roles = _allocate_fets_by_constraint(
         pmos, PMOS_PAIR_ROLES, PMOS_INDEPENDENT_ROLES, "VAPWR", "PMOS",
-        ptail[0] if ptail else None, roles, design,
+        ptail[0] if ptail else None, roles, design, chip,
     )
     roles.update(pmos_roles)
 
@@ -868,7 +811,7 @@ class _Touch:
     pin: str
 
 
-def _matrix_bit(touch: _Touch, row: int, net: str) -> int:
+def _matrix_bit(touch: _Touch, row: int, net: str, chip: Chip = DEFAULT_CHIP) -> int:
     """The chain bit closing `touch`'s crosspoint onto its side's `row`.
 
     Every (pin, row) pair that is missing from the bit map means the same
@@ -878,14 +821,14 @@ def _matrix_bit(touch: _Touch, row: int, net: str) -> int:
     turns a slip into an explanation instead of a KeyError.
     """
     try:
-        return _MATRIX_BIT_BY_PIN_ROW[(touch.pin, row)]
+        return chip.matrix_bit_by_pin_row[(touch.pin, row)]
     except KeyError:
-        reachable = rows_reachable(touch.pin)
-        if net in PORT_ROW:
+        reachable = rows_reachable(touch.pin, chip)
+        if net in chip.port_row:
             # A port net's row is a bond wire, not a choice -- so the only
             # move is a different pin, and there is no point making the
             # reader work out which ones those are (SPEC.md Sec 2.10).
-            usable = [pin for pin, (_s, r) in sorted(PORT_ROW.items()) if r in reachable]
+            usable = [pin for pin, (_s, r) in sorted(chip.port_row.items()) if r in reachable]
             if len(usable) > 1:
                 options = ", ".join(usable[:-1]) + f" or {usable[-1]}"
             elif usable:
@@ -893,7 +836,7 @@ def _matrix_bit(touch: _Touch, row: int, net: str) -> int:
             else:
                 options = "no package pin at all, on this chip"  # unreachable today
             why = messages.ROUTE_PORT_NET_UNREACHABLE_ROW.format(
-                net=net, side=PORT_ROW[net][0], row=row,
+                net=net, side=chip.port_row[net][0], row=row,
                 why_limited_reach=_WHY_LIMITED_REACH, options=options,
             )
         else:
@@ -910,7 +853,9 @@ def _matrix_bit(touch: _Touch, row: int, net: str) -> int:
         raise error from None
 
 
-def _apply_free_source_ties(design: MosbiusDesign, roles: dict[str, str]) -> tuple[set[int], set[tuple[str, str]]]:
+def _apply_free_source_ties(
+    design: MosbiusDesign, roles: dict[str, str], chip: Chip = DEFAULT_CHIP,
+) -> tuple[set[int], set[tuple[str, str]]]:
     """Close every ctrl_*_source bit whose device's own "s" net is exactly
     that role's tail rail (SPEC.md Sec 3.2: "cheaper -- no bus consumed").
     Applies uniformly to independent FETs (their own source) and diff-pair
@@ -925,26 +870,27 @@ def _apply_free_source_ties(design: MosbiusDesign, roles: dict[str, str]) -> tup
         if role not in SOURCE_TIE_PIN or "s" not in d.terminals:
             continue
         if d.terminals["s"] == SOURCE_TIE_RAIL[role]:
-            bits.add(setting_bit(SOURCE_TIE_PIN[role]))
+            bits.add(setting_bit(SOURCE_TIE_PIN[role], 0, chip))
             handled.add((d.name, "s"))
     return bits, handled
 
 
 def _collect_touches(
     design: MosbiusDesign, roles: dict[str, str], handled: set[tuple[str, str]],
+    chip: Chip = DEFAULT_CHIP,
 ) -> dict[str, list[_Touch]]:
     by_net: dict[str, list[_Touch]] = {}
     for d in design.devices:
         role = roles[d.name]
         for terminal, net in d.terminals.items():
-            if terminal not in DEVICE_TERMINALS[role]:
+            if terminal not in chip.device_terminals[role]:
                 continue  # e.g. a diff-pair half's generic "s" pin: no matrix terminal exists
             if (d.name, terminal) in handled:
                 continue  # already tied to its rail for free -- see _apply_free_source_ties
             by_net.setdefault(net, []).append(
                 _Touch(device=d.name, role=role, terminal=terminal,
-                       side=TERMINAL_SIDE[(role, terminal)],
-                       pin=TERMINAL_PIN[(role, terminal)])
+                       side=chip.terminal_side[(role, terminal)],
+                       pin=chip.terminal_pin[(role, terminal)])
             )
     return by_net
 
@@ -1088,14 +1034,14 @@ def undeclared_pair_tails(
     return tuple(found.values())
 
 
-def route(design: MosbiusDesign) -> RoutedDesign:
-    """Route `design` onto the switch matrix and return the resulting
+def route(design: MosbiusDesign, chip: Chip = DEFAULT_CHIP) -> RoutedDesign:
+    """Route `design` onto `chip`'s switch matrix and return the resulting
     SwitchConfig plus a human-readable route table.
     """
-    roles = allocate_devices(design)
+    roles = allocate_devices(design, chip)
     _check_shared_source_is_reachable(design, roles)
-    tie_bits, tied_terminals = _apply_free_source_ties(design, roles)
-    touches_by_net = _collect_touches(design, roles, tied_terminals)
+    tie_bits, tied_terminals = _apply_free_source_ties(design, roles, chip)
+    touches_by_net = _collect_touches(design, roles, tied_terminals, chip)
 
     bits: set[int] = set(tie_bits)
     net_rows: dict[str, dict[str, int]] = {}
@@ -1112,7 +1058,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
 
     def pick_free_row(side: str, net: str, touches: list[_Touch]) -> int:
         free = sorted(
-            row for (s, row) in _FREE_ROWS
+            row for (s, row) in chip.free_rows
             if s == side and row_owner.get((s, row)) in (None, net)
         )
         if not free:
@@ -1140,10 +1086,10 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         needs_short = any(t.side == opposite for t in touches)
         if needs_short:
             claim_row(opposite, row, net)
-            bits.add(_BUS_SHORT_BIT_BY_ROW[row])
+            bits.add(chip.bus_short_bit_by_row[row])
             net_rows.setdefault(net, {})[opposite] = row
         for t in touches:
-            bits.add(_matrix_bit(t, row, net))
+            bits.add(_matrix_bit(t, row, net, chip))
         net_rows.setdefault(net, {})[side] = row
 
     # -- Rail nets (VAPWR/VGND): terminals with a free ctrl_*_source tie
@@ -1171,8 +1117,8 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             opposite = "B" if side == "A" else "A"
             if not any(t.side == opposite for t in remaining):
                 return 0, ""            # no bridge, so no partner row at all
-            if (opposite, row) in _PINNED_ROWS:
-                pin = PIN_BY_ROW[(opposite, row)]
+            if (opposite, row) in chip.pinned_rows:
+                pin = chip.pin_by_row[(opposite, row)]
                 return 2, (f"bus_{opposite}[{row}] carries {pin}'s bond wire, so "
                            f"bridging to it would short {pin} to {rail}")
             owner = row_owner.get((opposite, row))
@@ -1185,8 +1131,8 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         # the choice rather than whichever instance xschem happened to
         # list first. Ranked by what the bridge costs, then by how many
         # rows the tap spends, then by row number so the answer is stable.
-        free = sorted((s, row) for (s, row) in _TAPPABLE_ROWS
-                      if _PWR_TAP_BY_SIDE_ROW[(s, row)][1] == rail
+        free = sorted((s, row) for (s, row) in chip.tappable_rows
+                      if chip.rail_tap_by_side_row[(s, row)][1] == rail
                       and row_owner.get((s, row)) in (None, net))
         usable = [(s, row) for (s, row) in free if row in reachable]
         if not usable:
@@ -1205,12 +1151,12 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         usable.sort(key=lambda sr: (bridge_cost(*sr)[0], sr[1]))
         side, row = usable[0]
         claim_row(side, row, net)
-        bit, _ = _PWR_TAP_BY_SIDE_ROW[(side, row)]
+        bit, _ = chip.rail_tap_by_side_row[(side, row)]
         bits.add(bit)
         route_touches_on_row(remaining, side, row, net)
 
     def route_port_net(net: str, touches: list[_Touch]) -> None:
-        side, row = PORT_ROW[net]
+        side, row = chip.port_row[net]
         claim_row(side, row, net)
         route_touches_on_row(touches, side, row, net)
 
@@ -1225,8 +1171,8 @@ def route(design: MosbiusDesign) -> RoutedDesign:
         # Spans both sides: need a free row on each side, joined by the
         # matching cfg_bus_short. Try every free A-row/B-row pair rather
         # than assuming row numbers line up between the two sides.
-        a_rows = sorted(r for (s, r) in _FREE_ROWS if s == "A" and row_owner.get((s, r)) in (None, net))
-        b_rows = sorted(r for (s, r) in _FREE_ROWS if s == "B" and row_owner.get((s, r)) in (None, net))
+        a_rows = sorted(r for (s, r) in chip.free_rows if s == "A" and row_owner.get((s, r)) in (None, net))
+        b_rows = sorted(r for (s, r) in chip.free_rows if s == "B" and row_owner.get((s, r)) in (None, net))
         both_free = sorted(set(a_rows) & set(b_rows))
         reachable = _shared_reach(touches)
         for row in both_free:
@@ -1234,9 +1180,9 @@ def route(design: MosbiusDesign) -> RoutedDesign:
                 continue  # some terminal here has no switch to this row
             claim_row("A", row, net)
             claim_row("B", row, net)
-            bits.add(_BUS_SHORT_BIT_BY_ROW[row])
+            bits.add(chip.bus_short_bit_by_row[row])
             for t in touches:
-                bits.add(_matrix_bit(t, row, net))
+                bits.add(_matrix_bit(t, row, net, chip))
             net_rows[net] = {"A": row, "B": row}
             return
 
@@ -1249,7 +1195,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
                     net=net, reach_lines=_reach_lines(touches),
                     both_free_rows=_fmt_rows(both_free), reachable_rows=_fmt_rows(reachable),
                     why_limited_reach=_WHY_LIMITED_REACH,
-                    rows_free_both=_fmt_rows(ROWS_FREE_ON_BOTH_SIDES),
+                    rows_free_both=_fmt_rows(chip.joinable_rows),
                 )
             )
 
@@ -1265,7 +1211,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
     # source followers fitted or didn't depending on the order xschem
     # happened to list the instances in (fixed 2026-08-30).
     def route_order(net: str) -> tuple[int, str]:
-        if net in PORT_ROW:
+        if net in chip.port_row:
             return (0, net)
         if net in ("VAPWR", "VGND"):
             return (1, net)
@@ -1277,7 +1223,7 @@ def route(design: MosbiusDesign) -> RoutedDesign:
             raise RouteError(messages.ROUTE_VDPWR_UNREACHABLE)
         if net in ("VAPWR", "VGND"):
             route_rail_net(net, net, touches)
-        elif net in PORT_ROW:
+        elif net in chip.port_row:
             route_port_net(net, touches)
         else:
             route_internal_net(net, touches)
@@ -1297,18 +1243,18 @@ def route(design: MosbiusDesign) -> RoutedDesign:
                 device=dev_name, prop=widths[dev_name].prop,
             )
             if lsb:
-                bits.add(setting_bit(pin, 0))
+                bits.add(setting_bit(pin, 0, chip))
             if msb:
-                bits.add(setting_bit(pin, 1))
+                bits.add(setting_bit(pin, 1, chip))
         if role in TAIL_SETTING:
             pin, step = TAIL_SETTING[role]
             lsb, msb = _encode_setting(
                 tails[dev_name].effective, step, device=dev_name, prop="tail",
             )
             if lsb:
-                bits.add(setting_bit(pin, 0))
+                bits.add(setting_bit(pin, 0, chip))
             if msb:
-                bits.add(setting_bit(pin, 1))
+                bits.add(setting_bit(pin, 1, chip))
 
     # -- The OTA's mirror gates have to be tied to one of its own outputs,
     # and nothing in a schematic says which. ctrl_otan_mode[0] ties them to
@@ -1327,10 +1273,10 @@ def route(design: MosbiusDesign) -> RoutedDesign:
     # instead would swap which output has the gain, so a design's drawn and
     # routed halves would no longer be the same circuit.
     if "ota" in roles.values():
-        bits.add(setting_bit("ctrl_otan_mode", 0))
+        bits.add(setting_bit("ctrl_otan_mode", 0, chip))
 
     return RoutedDesign(
-        config=SwitchConfig(bits=frozenset(bits)),
+        config=SwitchConfig(bits=frozenset(bits), chip=chip),
         device_roles=roles,
         net_rows=net_rows,
         device_widths=widths,
@@ -1401,7 +1347,8 @@ def load_routed_design(path: Path) -> dict | None:
     return json.loads(path.read_text())
 
 
-def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = False) -> RoutedDesign:
+def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = False,
+                 chip: Chip = DEFAULT_CHIP) -> RoutedDesign:
     """Route `design`, reusing the routing stored at `config_path` verbatim
     if the design's topology hasn't changed since it was written.
     `force=True` (SPEC.md Sec 3.2b's `--reroute`) always re-solves.
@@ -1434,8 +1381,9 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
             os.utime(config_path, None)
             return RoutedDesign(
                 config=SwitchConfig(
-                    bits=bitstream.unpack(stored["bitstream"]),
+                    bits=bitstream.unpack(stored["bitstream"], chip.num_bits),
                     ibias=stored.get("ibias", DEFAULT_IBIAS),
+                    chip=chip,
                 ),
                 device_roles=roles,
                 net_rows=stored["net_rows"],
@@ -1448,6 +1396,6 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
                 undeclared_tails=undeclared_pair_tails(design, roles),
             )
 
-    routed = route(design)
+    routed = route(design, chip)
     save_routed_design(routed, design, config_path)
     return routed

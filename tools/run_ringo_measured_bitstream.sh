@@ -157,7 +157,8 @@ python3 - "$MEASURED_BITSTREAM" <<'PYEOF'
 import sys
 sys.path.insert(0, ".")
 from mosbius.model import SwitchConfig
-from mosbius.bitmap import ALL_BITS
+from mosbius.chips import DEFAULT_CHIP
+ALL_BITS = DEFAULT_CHIP.all_bits
 from mosbius.spice import CONFIG_TIE_OHMS, SINGLE_BIT_PINS
 
 bitstream = sys.argv[1]

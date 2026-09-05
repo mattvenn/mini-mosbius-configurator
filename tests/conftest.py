@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from mosbius.bitmap import DEVICE_SETTING_BITS, MATRIX_BITS
+from mosbius.chips.tnt_bits import DEVICE_SETTING_BITS, MATRIX_BITS
 from mosbius.model import SwitchConfig
 
 

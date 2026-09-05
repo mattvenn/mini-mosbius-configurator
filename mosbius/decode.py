@@ -17,9 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mosbius import messages
+from mosbius.chips import DEFAULT_CHIP, Chip
 from mosbius.model import (
-    DEVICE_TERMINALS,
-    EXTERNAL_PINS,
     SwitchConfig,
     bus_node,
     connected_components,
@@ -44,6 +43,7 @@ class DecodedDesign:
     nets: list[Net]
     devices: list[DeviceInstance]
     ibias: float
+    chip: "Chip" = DEFAULT_CHIP
 
 
 # Which DeviceSettings fields belong to each device, so the summary shows
@@ -69,7 +69,7 @@ _DEVICE_SETTINGS_FIELDS: dict[str, dict[str, str]] = {
 }
 
 
-def _net_name(nodes: frozenset[str], counter: list[int]) -> str:
+def _net_name(nodes: frozenset[str], counter: list[int], chip: Chip) -> str:
     """Any node touching a rail or an external pin takes that name
     (SPEC.md Sec 3.8 step 4); everything else gets net1, net2, ...
     Priority: a rail identifies the net more fundamentally than a pin that
@@ -78,9 +78,9 @@ def _net_name(nodes: frozenset[str], counter: list[int]) -> str:
     for rail in ("VAPWR", "VGND", "VDPWR"):
         if rail in nodes:
             return rail
-    if "ibias" in nodes or "ua[0]" in nodes:
+    if "ibias" in nodes or chip.ibias_pin in nodes:
         return "ibias"
-    for pin in EXTERNAL_PINS:
+    for pin in chip.external_pins:
         if pin in nodes:
             return pin
     counter[0] += 1
@@ -104,7 +104,7 @@ def decode(config: SwitchConfig) -> DecodedDesign:
     # decode() is reproducible for a given config.
     for cid in sorted(by_component, key=lambda c: sorted(by_component[c])[0]):
         nodes = frozenset(by_component[cid])
-        name = _net_name(nodes, counter)
+        name = _net_name(nodes, counter, config.chip)
         net_by_component[cid] = name
         nets.append(Net(name=name, nodes=nodes))
 
@@ -115,7 +115,7 @@ def decode(config: SwitchConfig) -> DecodedDesign:
 
     settings = config.device_settings()
     devices: list[DeviceInstance] = []
-    for dev_name, terminals in DEVICE_TERMINALS.items():
+    for dev_name, terminals in config.chip.device_terminals.items():
         wired = {
             t: crosspoint_to_net[xpt]
             for t, xpt in terminals.items()
@@ -129,7 +129,7 @@ def decode(config: SwitchConfig) -> DecodedDesign:
         }
         devices.append(DeviceInstance(name=dev_name, terminals=wired, settings=dev_settings))
 
-    return DecodedDesign(nets=nets, devices=devices, ibias=config.ibias)
+    return DecodedDesign(nets=nets, devices=devices, ibias=config.ibias, chip=config.chip)
 
 
 # ---------------------------------------------------------------------------
@@ -171,12 +171,12 @@ def format_summary(decoded: DecodedDesign) -> str:
         # (CLAUDE.md trap 1: ua[4] is bus_B[2], never bus_A[2]). A net can
         # also carry more than one pin once cfg_bus_short joins two rows,
         # so show all of them rather than just the first.
-        pins = sorted(n for n in net.nodes if n in EXTERNAL_PINS)
+        pins = sorted(n for n in net.nodes if n in decoded.chip.external_pins)
         pin_desc = ""
         if pins:
             pin_desc = "  ".join(
                 messages.DECODE_SUMMARY_NET_PIN.format(
-                    pin=pin, bus_node=bus_node(*EXTERNAL_PINS[pin])
+                    pin=pin, bus_node=bus_node(*decoded.chip.external_pins[pin])
                 )
                 for pin in pins
             ) + "  "

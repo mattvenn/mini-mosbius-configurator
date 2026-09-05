@@ -13,7 +13,10 @@ import re
 
 import pytest
 
-from mosbius.bitmap import ALL_BITS, DEVICE_SETTING_BITS, MATRIX_BITS
+from mosbius.chips.tnt_bits import DEVICE_SETTING_BITS, MATRIX_BITS
+from mosbius.chips import TNT
+
+ALL_BITS = TNT.all_bits
 
 # SPEC.md Sec 2.3 -- VERIFIED layout column order (position = X / 1840).
 COLUMN_ORDER = [

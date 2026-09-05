@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """SwitchConfig: the canonical in-memory (and file) representation of a
-mini-MOSbius configuration -- which of the 192 chain bits are set, plus the
-bias current that goes with them (SPEC.md Sec 3.4b, Sec 3.6).
+mini-MOSbius configuration -- which chain bits are set, plus the bias current
+that goes with them (SPEC.md Sec 3.4b, Sec 3.6) and which part they are for.
 
 Also resolves the raw device-setting bits (widths, mirror ratios,
 diff-pair/OTA tails, source ties, OTA mode) into human-readable values, and
@@ -9,67 +9,31 @@ builds the undirected electrical graph that mosbius/check.py and
 mosbius/decode.py both walk -- nodes are bus segments, crosspoints, rails,
 `ibias` and the external `ua[]` pins; edges are closed switches plus the
 fixed physical bonds (SPEC.md Sec 3.1, Sec 2.10).
+
+A configuration only means anything alongside the part it was built for: the
+same bit closes a different switch on each mini-MOSbius. So a SwitchConfig
+carries its `chip`, and every table it used to read from a module-level
+constant now comes from there. See mosbius/chips/__init__.py.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mosbius import bitstream, messages
-from mosbius.bitmap import DEVICE_SETTING_BITS, MATRIX_BITS
+from mosbius.chips import DEFAULT_CHIP, Chip
 
 # Default bias current: upstream's testbenches drive `ibias` with 100 uA
 # (SPEC.md Sec 3.4b). This is just a starting point -- every mirror ratio and
 # every diff-pair/OTA tail scales with whatever value is actually stored.
 DEFAULT_IBIAS = 100e-6
 
-# SPEC.md Sec 2.10 -- VERIFIED external analog pin map, straight from
-# ttsky-mini-mosbius/src/project.v `assign ua[k] = bus_X[n];`.
-EXTERNAL_PINS = {
-    "ua[1]": ("A", 1),
-    "ua[2]": ("A", 3),
-    "ua[3]": ("A", 5),
-    "ua[4]": ("B", 2),
-    "ua[5]": ("B", 4),
-}
+# The external pin map and the device terminal table moved to
+# mosbius/chips/__init__.py when a second mini-MOSbius had to be supported,
+# because each is a property of one part rather than of the toolchain. Ask a
+# Chip for `external_pins`, `device_terminals` or `terminal_by_crosspoint`.
 
 RAILS = ("VAPWR", "VGND", "VDPWR")
-
-# Every device's terminal names -> crosspoint node (SPEC.md Sec 2.12 device
-# inventory). Shared by mosbius/check.py (W1/W3) and mosbius/decode.py
-# (per-device net reporting) so the topology is defined in exactly one place.
-#
-# The 4 independent FETs expose d/g/s. The diff-pair halves and OTA don't
-# expose a source terminal (it's shared/internal, SPEC.md Sec 2.12) -- ndiffpair+/
-# pdiffpair+ read the netlist's "inp"/"outp" as g/d, ndiffpair-/pdiffpair- read "inm"/"outm"
-# as g/d. The 4 current mirrors expose one terminal, named "out". The OTA is
-# used as one 5-transistor block with 4 terminals.
-DEVICE_TERMINALS: dict[str, dict[str, str]] = {
-    "nmos_a": {"d": "xpt_nfeta_d", "g": "xpt_nfeta_g", "s": "xpt_nfeta_s"},
-    "nmos_b": {"d": "xpt_nfetb_d", "g": "xpt_nfetb_g", "s": "xpt_nfetb_s"},
-    "pmos_a": {"d": "xpt_pfeta_d", "g": "xpt_pfeta_g", "s": "xpt_pfeta_s"},
-    "pmos_b": {"d": "xpt_pfetb_d", "g": "xpt_pfetb_g", "s": "xpt_pfetb_s"},
-    "ndiffpair+": {"g": "xpt_dpn_inp", "d": "xpt_dpn_outp"},
-    "ndiffpair-": {"g": "xpt_dpn_inm", "d": "xpt_dpn_outm"},
-    "pdiffpair+": {"g": "xpt_dpp_inp", "d": "xpt_dpp_outp"},
-    "pdiffpair-": {"g": "xpt_dpp_inm", "d": "xpt_dpp_outm"},
-    "nsink_a": {"out": "xpt_mirn_a"},
-    "nsink_b": {"out": "xpt_mirn_b"},
-    "psource_a": {"out": "xpt_mirp_a"},
-    "psource_b": {"out": "xpt_mirp_b"},
-    "ota": {
-        "inp": "xpt_otan_inp", "outp": "xpt_otan_outp",
-        "inm": "xpt_otan_inm", "outm": "xpt_otan_outm",
-    },
-    # The tail banks (TODO.md was Sec 2, closed 2026-08-22) have no
-    # matrix terminal of their own
-    # -- the shared node they sit on is never reachable from the bus
-    # (SPEC.md Sec 2.12) -- so they have no crosspoints to declare here.
-    # They still need an entry: mosbius/route.py's _collect_touches()
-    # indexes this dict by every allocated role.
-    "ntail": {},
-    "ptail": {},
-}
 
 # The 4 devices with an independently-routable source, for W1 (SPEC.md
 # Sec 2.12: "eight FETs are freely usable singly").
@@ -157,44 +121,28 @@ DEVICE_DC_PATHS: tuple[DCPath, ...] = (
 )
 
 
-# Crosspoint node -> "device.terminal", so diagnostics can say `ndiffpair+.g`
-# instead of `xpt_dpn_inp` (the same naming decode.py prints).
-TERMINAL_BY_CROSSPOINT: dict[str, str] = {
-    xpt: f"{device}.{terminal}"
-    for device, terminals in DEVICE_TERMINALS.items()
-    for terminal, xpt in terminals.items()
-}
-
-
 # ---------------------------------------------------------------------------
 # Device settings: decode the raw cycler/toggle bits into named values.
 # ---------------------------------------------------------------------------
 
-# Index bit -> (pin, index) once, up front, instead of re-scanning
-# DEVICE_SETTING_BITS on every field lookup.
-_SETTING_BIT_BY_PIN_INDEX: dict[tuple[str, int], int] = {
-    (sb.pin, sb.index): bit for bit, sb in DEVICE_SETTING_BITS.items()
-}
-
-
-def setting_bit(pin: str, index: int = 0) -> int:
+def setting_bit(pin: str, index: int = 0, chip: Chip = DEFAULT_CHIP) -> int:
     """The chain bit number for a device-setting pin's given bit index.
     Public: mosbius/route.py uses this to emit width/ratio/tail/source
     bits, the mirror image of what DeviceSettings.decode() reads.
     """
     try:
-        return _SETTING_BIT_BY_PIN_INDEX[(pin, index)]
+        return chip.setting_bit_by_pin_index[(pin, index)]
     except KeyError:
-        raise KeyError(f"no bit found for {pin}[{index}]") from None
+        raise KeyError(f"no bit found for {pin}[{index}] on {chip.title}") from None
 
 
-def _single(closed: frozenset[int], pin: str) -> bool:
-    return setting_bit(pin, 0) in closed
+def _single(closed: frozenset[int], pin: str, chip: Chip) -> bool:
+    return setting_bit(pin, 0, chip) in closed
 
 
-def _decode_cycler(closed: frozenset[int], pin: str, step: int) -> int:
-    lsb = 1 if setting_bit(pin, 0) in closed else 0
-    msb = 1 if setting_bit(pin, 1) in closed else 0
+def _decode_cycler(closed: frozenset[int], pin: str, step: int, chip: Chip) -> int:
+    lsb = 1 if setting_bit(pin, 0, chip) in closed else 0
+    msb = 1 if setting_bit(pin, 1, chip) in closed else 0
     return step * (1 + lsb + 2 * msb)
 
 
@@ -240,27 +188,27 @@ class DeviceSettings:
     otan_mode1: bool  # ctrl_otan_mode[1]: diode-connects the OTA via outm
 
     @classmethod
-    def decode(cls, closed: frozenset[int]) -> "DeviceSettings":
+    def decode(cls, closed: frozenset[int], chip: Chip = DEFAULT_CHIP) -> "DeviceSettings":
         return cls(
-            pfeta_width=_decode_cycler(closed, "ctrl_pfeta_width", step=1),
-            pfetb_width=_decode_cycler(closed, "ctrl_pfetb_width", step=1),
-            nfeta_width=_decode_cycler(closed, "ctrl_nfeta_width", step=1),
-            nfetb_width=_decode_cycler(closed, "ctrl_nfetb_width", step=1),
-            mirp_a_ratio=_decode_cycler(closed, "ctrl_mirp_a", step=1),
-            mirp_b_ratio=_decode_cycler(closed, "ctrl_mirp_b", step=1),
-            mirn_a_ratio=_decode_cycler(closed, "ctrl_mirn_a", step=1),
-            mirn_b_ratio=_decode_cycler(closed, "ctrl_mirn_b", step=1),
-            dpp_tail=_decode_cycler(closed, "ctrl_dpp_tail", step=2),
-            dpn_tail=_decode_cycler(closed, "ctrl_dpn_tail", step=2),
-            otan_tail=_decode_cycler(closed, "ctrl_otan_tail", step=2),
-            pfeta_source=_single(closed, "ctrl_pfeta_source"),
-            pfetb_source=_single(closed, "ctrl_pfetb_source"),
-            nfeta_source=_single(closed, "ctrl_nfeta_source"),
-            nfetb_source=_single(closed, "ctrl_nfetb_source"),
-            dpp_source=_single(closed, "ctrl_dpp_source"),
-            dpn_source=_single(closed, "ctrl_dpn_source"),
-            otan_mode0=setting_bit("ctrl_otan_mode", 0) in closed,
-            otan_mode1=setting_bit("ctrl_otan_mode", 1) in closed,
+            pfeta_width=_decode_cycler(closed, "ctrl_pfeta_width", 1, chip),
+            pfetb_width=_decode_cycler(closed, "ctrl_pfetb_width", 1, chip),
+            nfeta_width=_decode_cycler(closed, "ctrl_nfeta_width", 1, chip),
+            nfetb_width=_decode_cycler(closed, "ctrl_nfetb_width", 1, chip),
+            mirp_a_ratio=_decode_cycler(closed, "ctrl_mirp_a", 1, chip),
+            mirp_b_ratio=_decode_cycler(closed, "ctrl_mirp_b", 1, chip),
+            mirn_a_ratio=_decode_cycler(closed, "ctrl_mirn_a", 1, chip),
+            mirn_b_ratio=_decode_cycler(closed, "ctrl_mirn_b", 1, chip),
+            dpp_tail=_decode_cycler(closed, "ctrl_dpp_tail", 2, chip),
+            dpn_tail=_decode_cycler(closed, "ctrl_dpn_tail", 2, chip),
+            otan_tail=_decode_cycler(closed, "ctrl_otan_tail", 2, chip),
+            pfeta_source=_single(closed, "ctrl_pfeta_source", chip),
+            pfetb_source=_single(closed, "ctrl_pfetb_source", chip),
+            nfeta_source=_single(closed, "ctrl_nfeta_source", chip),
+            nfetb_source=_single(closed, "ctrl_nfetb_source", chip),
+            dpp_source=_single(closed, "ctrl_dpp_source", chip),
+            dpn_source=_single(closed, "ctrl_dpn_source", chip),
+            otan_mode0=setting_bit("ctrl_otan_mode", 0, chip) in closed,
+            otan_mode1=setting_bit("ctrl_otan_mode", 1, chip) in closed,
         )
 
 
@@ -313,35 +261,44 @@ def connected_components(graph: Graph) -> dict[str, int]:
 
 @dataclass(frozen=True)
 class SwitchConfig:
-    """A full 192-bit configuration: which chain bits are set, plus ibias.
+    """A full configuration: which chain bits are set, plus ibias, plus the
+    part they mean something on.
 
     This is the file format described in SPEC.md Sec 3.6: inspectable,
     hand-editable, and the thing mosbius.spice/bitstream.py/check.py/
     decode.py all operate on. `schema` follows SPEC.md Sec 3.6's versioning
     promise from the first commit.
+
+    `chip` is not serialised as part of the bit set, because it is not a
+    property of the bits -- it is what makes them readable. It defaults to the
+    part this project was built against, so every existing caller is unchanged.
     """
 
     bits: frozenset[int]
     ibias: float = DEFAULT_IBIAS
     schema: int = 1
+    chip: Chip = field(default=DEFAULT_CHIP, compare=False)
 
     def __post_init__(self):
-        bad = [b for b in self.bits if not (0 <= b < bitstream.NUM_BITS)]
+        bad = [b for b in self.bits if not (0 <= b < self.chip.num_bits)]
         if bad:
             raise ValueError(
                 messages.MODEL_BIT_OUT_OF_RANGE.format(
-                    bad=sorted(bad), max_bit=bitstream.NUM_BITS - 1, num_bits=bitstream.NUM_BITS,
+                    bad=sorted(bad), max_bit=self.chip.num_bits - 1,
+                    num_bits=self.chip.num_bits,
                 )
             )
 
     # -- construction / serialisation ------------------------------------
 
     @classmethod
-    def from_bitstream(cls, hexstr: str, ibias: float = DEFAULT_IBIAS) -> "SwitchConfig":
-        return cls(bits=bitstream.unpack(hexstr), ibias=ibias)
+    def from_bitstream(
+        cls, hexstr: str, ibias: float = DEFAULT_IBIAS, chip: Chip = DEFAULT_CHIP,
+    ) -> "SwitchConfig":
+        return cls(bits=bitstream.unpack(hexstr, chip.num_bits), ibias=ibias, chip=chip)
 
     def to_bitstream(self) -> str:
-        return bitstream.pack(self.bits)
+        return bitstream.pack(self.bits, self.chip.num_bits)
 
     def is_closed(self, bit: int) -> bool:
         return bit in self.bits
@@ -349,27 +306,41 @@ class SwitchConfig:
     # -- decoding ----------------------------------------------------------
 
     def device_settings(self) -> DeviceSettings:
-        return DeviceSettings.decode(self.bits)
+        return DeviceSettings.decode(self.bits, self.chip)
 
     def closed_matrix_switches(self):
         """MatrixBit entries for closed bits that carry a crosspoint (i.e.
-        an actual cfga_*/cfgb_* switch -- excludes cfg_bus_short/cfg_bus_pwr,
-        which are handled separately since they don't have a crosspoint)."""
+        an actual cfga_*/cfgb_* switch -- excludes the bus-level bits, which
+        are handled separately since they don't have a crosspoint)."""
         return [
-            mb for bit, mb in MATRIX_BITS.items()
+            mb for bit, mb in self.chip.matrix_bits.items()
             if bit in self.bits and mb.crosspoint is not None
         ]
 
     def closed_bus_shorts(self):
         return [
-            mb for bit, mb in MATRIX_BITS.items()
+            mb for bit, mb in self.chip.matrix_bits.items()
             if bit in self.bits and mb.pin == "cfg_bus_short"
         ]
 
-    def closed_bus_pwr_taps(self):
+    def closed_rail_ties(self):
+        """Closed bits that tie a bus segment straight to a rail: tnt's
+        `cfg_bus_pwr`, Andrew's `cfga_vapwr`/`cfga_vgnd`. Told apart from an
+        ordinary switch by carrying a rail rather than a crosspoint.
+        """
         return [
-            mb for bit, mb in MATRIX_BITS.items()
-            if bit in self.bits and mb.pin == "cfg_bus_pwr"
+            mb for bit, mb in self.chip.matrix_bits.items()
+            if bit in self.bits and mb.rail is not None
+        ]
+
+    def closed_pin_connects(self):
+        """Closed bits that connect a package pin to a bus row. Empty on a
+        part whose pins are bonded rather than switched, where the connection
+        is permanent and has no bit.
+        """
+        return [
+            mb for bit, mb in self.chip.matrix_bits.items()
+            if bit in self.bits and mb.pin_net is not None
         ]
 
     def build_graph(self) -> Graph:
@@ -378,17 +349,15 @@ class SwitchConfig:
 
         # Always-present nodes, even with no edges yet (so an unused
         # crosspoint/segment still shows up for I1/W2-style queries).
-        for side in ("A", "B"):
-            for row in range(1, 7):
-                graph.setdefault(bus_node(side, row), [])
+        for side, row in self.chip.all_rows:
+            graph.setdefault(bus_node(side, row), [])
         for rail in RAILS:
             graph.setdefault(rail, [])
         graph.setdefault("ibias", [])
-        for pin in EXTERNAL_PINS:
+        for pin in self.chip.external_pins:
             graph.setdefault(pin, [])
-        graph.setdefault("ua[0]", [])
-        crosspoints = {mb.crosspoint for mb in MATRIX_BITS.values() if mb.crosspoint}
-        for xpt in crosspoints:
+        graph.setdefault(self.chip.ibias_pin, [])
+        for xpt in self.chip.crosspoints:
             graph.setdefault(xpt, [])
 
         # Regular matrix switches: crosspoint <-> bus_<side>[row].
@@ -401,19 +370,29 @@ class SwitchConfig:
             label = f"cfg_bus_short[{mb.index}]"
             _add_edge(graph, bus_node("A", mb.row), bus_node("B", mb.row), label)
 
-        # cfg_bus_pwr[n]: bus_<side>[row] <-> rail.
-        for mb in self.closed_bus_pwr_taps():
-            label = f"cfg_bus_pwr[{mb.index}]"
-            _add_edge(graph, bus_node(mb.bus, mb.row), mb.rail, label)
+        # Rail ties: bus_<side>[row] <-> rail.
+        for mb in self.closed_rail_ties():
+            _add_edge(graph, bus_node(mb.bus, mb.row), mb.rail, f"{mb.pin}[{mb.index}]")
 
         # FET source ties: xpt_*_s <-> rail (see FET_SOURCE_TIE_TO_RAIL docs).
         for pin, (xpt, rail) in FET_SOURCE_TIE_TO_RAIL.items():
-            if _single(self.bits, pin):
+            if _single(self.bits, pin, self.chip):
                 _add_edge(graph, xpt, rail, pin)
 
-        # Fixed physical bonds: always present, not gated by any bit.
-        for ua_pin, (side, row) in EXTERNAL_PINS.items():
-            _add_edge(graph, ua_pin, bus_node(side, row), f"{ua_pin} (bond wire)")
-        _add_edge(graph, "ua[0]", "ibias", "ua[0] (bond wire)")
+        # How each package pin reaches the bus. On tnt's part that is a bond
+        # wire, always present and gated by no bit, so a net on that row is
+        # exposed on the pad whether the design asked for it or not. On
+        # Andrew's it is a switch, so the edge exists only when its bit is set.
+        if self.chip.pins.switched:
+            for mb in self.closed_pin_connects():
+                _add_edge(
+                    graph, f"ua[{mb.pin_net[2:]}]", bus_node(mb.bus, mb.row),
+                    f"{mb.pin}[{mb.index}]",
+                )
+        else:
+            for ua_pin, (side, row) in self.chip.external_pins.items():
+                _add_edge(graph, ua_pin, bus_node(side, row), f"{ua_pin} (bond wire)")
+        _add_edge(graph, self.chip.ibias_pin, "ibias",
+                  f"{self.chip.ibias_pin} (bond wire)")
 
         return graph

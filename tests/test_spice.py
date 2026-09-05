@@ -10,10 +10,12 @@ without the EDA toolchain.
 
 from __future__ import annotations
 
-from mosbius.bitmap import ALL_BITS
+from mosbius.chips import TNT
+
+ALL_BITS = TNT.all_bits
+BUS_WIRE_CAPACITANCE_F = TNT.bus_wire_cap
 from mosbius.model import SwitchConfig
 from mosbius.spice import (
-    BUS_WIRE_CAPACITANCE_F,
     SINGLE_BIT_PINS,
     CONFIG_TIE_OHMS,
     render_bus_wire_caps,

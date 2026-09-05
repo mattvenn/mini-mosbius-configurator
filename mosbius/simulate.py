@@ -29,11 +29,14 @@ from pathlib import Path
 
 from mosbius import messages
 from mosbius.bitstream import BitstreamError
+from mosbius.chips import DEFAULT_CHIP, Chip
 from mosbius.netlist import schematic_for_netlist
-from mosbius.model import DEFAULT_IBIAS, EXTERNAL_PINS, SwitchConfig, bus_node, connected_components
+from mosbius.model import DEFAULT_IBIAS, SwitchConfig, bus_node, connected_components
 from mosbius.spice import render_bus_wire_caps, render_config_spice
 
-DEVICE_LIBRARY_PATH = Path(__file__).parent / "data" / "mosbius_device_library.spice"
+# Which switch-matrix library a design gets is a property of the part it was
+# routed for, so it lives on the Chip. This name is the default part's copy.
+DEVICE_LIBRARY_PATH = DEFAULT_CHIP.device_library
 
 
 def _pin_net(pin: str) -> str:
@@ -46,7 +49,7 @@ def _pin_net(pin: str) -> str:
 
 def used_external_pins(config: SwitchConfig) -> list[str]:
     """Which of the 5 real package pins (in "ua[1]".."ua[5]" form,
-    EXTERNAL_PINS' own key format) this config's routing actually connects
+    the chip's own key format) this config's routing actually connects
     to a device -- i.e. a closed-switch path exists from the pin's bond
     wire to some device crosspoint.
 
@@ -67,7 +70,7 @@ def used_external_pins(config: SwitchConfig) -> list[str]:
     for node, cid in comp.items():
         by_component.setdefault(cid, set()).add(node)
     used = []
-    for pin in EXTERNAL_PINS:
+    for pin in config.chip.external_pins:
         nodes = by_component[comp[pin]]
         if any(n.startswith("xpt_") for n in nodes):
             used.append(pin)
@@ -107,7 +110,7 @@ def render_mosbius_wrapper(config: SwitchConfig, name: str) -> str:
     `ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND`, matching every hand-drawn
     design in this project.
     """
-    library_text = DEVICE_LIBRARY_PATH.read_text()
+    library_text = config.chip.device_library.read_text()
     ports = _mosbius_subckt_ports(library_text)
 
     # Reuse every mosbius subckt port name literally as the local net name
@@ -120,7 +123,7 @@ def render_mosbius_wrapper(config: SwitchConfig, name: str) -> str:
     # ports (ordinary SPICE subcircuit scoping), no special-casing needed.
     used_pins = used_external_pins(config)
     pad_lines = [
-        f"Xpad_{_pin_net(pin)} VGND {_pin_net(pin)} {bus_node(*EXTERNAL_PINS[pin])} pad_model"
+        f"Xpad_{_pin_net(pin)} VGND {_pin_net(pin)} {bus_node(*config.chip.external_pins[pin])} pad_model"
         for pin in used_pins
     ]
 
@@ -142,7 +145,7 @@ def render_mosbius_wrapper(config: SwitchConfig, name: str) -> str:
         "",
         render_config_spice(config).rstrip("\n"),
         "",
-        render_bus_wire_caps().rstrip("\n"),
+        render_bus_wire_caps(config.chip).rstrip("\n"),
         "",
         "* Real pad model(s) -- only for package pins this config's routing",
         "* actually uses; any other ua[] port simply stays unconnected",
@@ -248,7 +251,7 @@ def check_routed_fresh(routed_path: Path) -> None:
     )
 
 
-def simulate_from_routed_json(path: Path) -> tuple[str, str]:
+def simulate_from_routed_json(path: Path, chip: Chip = DEFAULT_CHIP) -> tuple[str, str]:
     """Load a routed design JSON (as written by `mosbius route --out`) and
     return `(name, spice_text)` -- `spice_text` from
     `render_mosbius_wrapper`.
@@ -286,7 +289,8 @@ def simulate_from_routed_json(path: Path) -> tuple[str, str]:
         raise SimulateError(messages.SIMULATE_NO_BITSTREAM_KEY.format(path=path))
 
     try:
-        config = SwitchConfig.from_bitstream(data["bitstream"], ibias=data.get("ibias", DEFAULT_IBIAS))
+        config = SwitchConfig.from_bitstream(
+            data["bitstream"], ibias=data.get("ibias", DEFAULT_IBIAS), chip=chip)
     except (BitstreamError, TypeError) as e:
         # The underlying message is itself a multi-line explanation, so
         # indent every line of it to sit under this one.
