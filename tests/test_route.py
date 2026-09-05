@@ -909,3 +909,31 @@ X1 ua1 ua2 ua3 ua4 ibias VAPWR VGND mosbius_ota
     assert "+ output" in message
     assert "one output, not two" in message
     assert "--project" in message
+
+
+def test_an_absent_terminal_wired_to_nothing_else_is_allowed():
+    """A schematic cannot leave a symbol pin unwired -- xschem emits every
+    pin, so the netlist always names a net. "Leave the + output unconnected"
+    therefore means a net nothing else is on, and refusing that would make
+    the advice impossible to follow. A net something else *is* on still
+    fails, because dropping that wire would change the circuit.
+    """
+    from mosbius.chips import KANG
+    from mosbius.netlist import parse_netlist
+    from mosbius.route import RouteError, route
+
+    idle = """
+.subckt buf ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND
+XA1 ua1 ua2 nc_outp ua2 ibias VGND VAPWR mosbius_ota tail=4
+.ends
+"""
+    routed = route(parse_netlist(idle), KANG)
+    assert len(routed.config.to_bitstream()) == 49
+
+    live = """
+.subckt buf ibias ua1 ua2 ua3 ua4 ua5 VAPWR VDPWR VGND
+XA1 ua1 ua2 ua3 ua2 ibias VGND VAPWR mosbius_ota tail=4
+.ends
+"""
+    with pytest.raises(RouteError):
+        route(parse_netlist(live), KANG)

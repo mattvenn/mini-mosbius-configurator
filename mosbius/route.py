@@ -875,6 +875,30 @@ def _apply_free_source_ties(
     return bits, handled
 
 
+def _net_is_otherwise_unused(
+    design: MosbiusDesign, roles: dict[str, str], chip: Chip,
+    net: str, device: str, terminal: str,
+) -> bool:
+    """Is `net` reached by nothing except this one terminal?
+
+    A rail or a package pin is always in use -- the outside world is on it --
+    so those are never idle. Otherwise the net is idle when no other device
+    terminal that this chip actually brings out sits on it.
+    """
+    if net in ("VAPWR", "VGND", "VDPWR") or net in chip.port_row:
+        return False
+    for other in design.devices:
+        other_role = roles[other.name]
+        for other_terminal, other_net in other.terminals.items():
+            if other_net != net:
+                continue
+            if (other.name, other_terminal) == (device, terminal):
+                continue
+            if other_terminal in chip.device_terminals.get(other_role, {}):
+                return False
+    return True
+
+
 def _collect_touches(
     design: MosbiusDesign, roles: dict[str, str], handled: set[tuple[str, str]],
     chip: Chip = DEFAULT_CHIP,
@@ -892,6 +916,14 @@ def _collect_touches(
                 # out is a design that cannot be built, and dropping it
                 # silently would emit a bitstream and report success.
                 why = chip.absent_terminals.get((role, terminal))
+                if why is not None and _net_is_otherwise_unused(design, roles, chip, net, d.name, terminal):
+                    # Nothing else is on this net, so the wire does nothing
+                    # and dropping it changes no circuit. A schematic cannot
+                    # leave a symbol pin unwired -- xschem emits every pin --
+                    # so this is what "leave it unconnected" actually looks
+                    # like in a netlist, and refusing it would make the
+                    # advice impossible to follow.
+                    why = None
                 if why is not None:
                     raise RouteError(
                         messages.ROUTE_TERMINAL_NOT_ON_THIS_CHIP.format(
