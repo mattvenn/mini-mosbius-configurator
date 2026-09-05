@@ -194,9 +194,13 @@ def test_the_two_parts_number_their_bias_pin_the_opposite_way_round():
     assert KANG.ua_index == {f"ua[{k}]": k - 1 for k in range(1, 6)}
 
 
-def test_only_one_part_needs_its_reset_driven():
-    assert TNT.needs_reset is False
-    assert KANG.needs_reset is True
+def test_the_two_parts_take_their_reset_from_different_lines():
+    """Both have a reset. tnt's wrapper passes the Tiny Tapeout harness reset
+    through to the chain; Andrew's leaves that unconnected and takes the
+    chain's reset from its own ui_in[2] instead. Driving the wrong one clears
+    nothing and says nothing."""
+    assert TNT.reset_via == "project"
+    assert KANG.reset_via == "ui2"
 
 
 def test_the_ota_amplifier_mode_is_a_closed_bit_on_one_part_and_open_on_the_other():

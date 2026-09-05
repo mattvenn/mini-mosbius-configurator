@@ -421,16 +421,38 @@ def test_programming_a_chip_the_bitstream_was_not_routed_for_is_refused():
     assert "re-route" in message
 
 
-def test_the_chain_length_and_reset_follow_the_part():
+def test_the_chain_length_follows_the_part():
     """Shifting the wrong number of bits is not a near miss: every bit lands
-    one position out. And tnt's design has no reset to pulse."""
+    one position out."""
     from mosbius.chips import KANG, TNT
     from mosbius.model import SwitchConfig
 
-    for chip, length, has_reset in ((TNT, 192, "False"), (KANG, 196, "True")):
+    for chip, length in ((TNT, 192), (KANG, 196)):
         script = generate_device_script(
             SwitchConfig(bits=frozenset({0}), chip=chip), project=chip.macro
         )
         bits = next(l for l in script.splitlines() if l.startswith("BITS ="))
         assert len(bits.split('"')[1]) == length
-        assert f"HAS_RESET = {has_reset}" in script
+
+
+def test_each_part_is_reset_on_the_line_that_actually_reaches_its_chain():
+    """Both parts have a reset and they take it from different places. tnt's
+    wrapper passes the harness reset through; Andrew's leaves that
+    unconnected and uses ui_in[2], so reset_project() does nothing there.
+    Driving the wrong one is silent -- the chain simply never clears.
+    """
+    from mosbius.chips import KANG, TNT
+    from mosbius.model import SwitchConfig
+
+    tnt_script = generate_device_script(
+        SwitchConfig(bits=frozenset({0}), chip=TNT), project=TNT.macro)
+    assert "RESET_VIA = 'project'" in tnt_script
+    assert "tt.reset_project(True)" in tnt_script
+
+    kang_script = generate_device_script(
+        SwitchConfig(bits=frozenset({0}), chip=KANG), project=KANG.macro)
+    assert "RESET_VIA = 'ui2'" in kang_script
+    assert "tt.ui_in[2] = 0" in kang_script
+    # Active low and shared with nothing else, so it must be left high for
+    # the whole shift, not just released after the pulse.
+    assert "tt.ui_in[2] = 1" in kang_script

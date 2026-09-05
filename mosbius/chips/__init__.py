@@ -116,9 +116,19 @@ class Chip:
     # numbering -- a user reads PCB pad letters -- so this translation stays
     # inside mosbius/pads.py rather than surfacing as two names for one pin.
     ua_index: dict[str, int]
-    # Whether programming has to drive the design's reset. Andrew's chain has a
-    # reset input; tnt's does not, and driving one that is not there is silent.
-    needs_reset: bool
+    # Which line resets the config chain. Both parts have a reset; they do not
+    # take it from the same place, and the wrong one is silent in both
+    # directions -- the chain simply never clears.
+    #
+    # "project" means the Tiny Tapeout harness reset, which is what
+    # ttboard's reset_project() drives. tnt's wrapper passes that straight
+    # through to the chain.
+    #
+    # "ui2" means the design's own ui_in[2]. Andrew's wrapper leaves the
+    # harness reset unconnected and takes the chain's reset from that input
+    # instead, so reset_project() does nothing on his part. It is active low,
+    # so it also has to be held high for the whole shift.
+    reset_via: str
     num_rows: int = 6
 
     # -- identity -----------------------------------------------------------
@@ -445,7 +455,7 @@ TNT = Chip(
     },
     absent_terminals={},
     ua_index={f"ua[{k}]": k for k in range(1, 6)},
-    needs_reset=False,
+    reset_via="project",
 )
 
 
@@ -512,9 +522,7 @@ KANG = Chip(
         ),
     },
     ua_index={f"ua[{k}]": k - 1 for k in range(1, 6)},
-    # Andrew's wrapper has an active-low reset on ui[2]. tnt's design has no
-    # reset at all, and driving one that is not there is silent.
-    needs_reset=True,
+    reset_via="ui2",
 )
 
 
