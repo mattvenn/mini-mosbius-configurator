@@ -490,20 +490,23 @@ _TNT_BUS_WIRE_CAP: dict[str, float] = {
 # Why these are not the raw extracted numbers:
 #
 #   Extracting the whole chip gives 1.15x to 1.28x what tnt's committed numbers
-#   above say, consistently across all twelve rows, because those were taken
-#   from `asw_matrix.mag` alone and so miss everything outside the matrix that
-#   couples to a row. tnt's numbers are the ones a silicon measurement was
-#   fitted against, so they are the calibration, and replacing them here would
-#   quietly change every published as-routed number for that part. Instead each
-#   row below is tnt's committed value scaled by the ratio the two full-chip
-#   extractions give for that row, which puts both parts on one footing and
-#   leaves the absolute scale where silicon put it. The raw pair is in the
-#   commit that added this.
+#   above say, consistently across all twelve rows. Two things cause that, and
+#   they were separated by re-extracting `asw_matrix.mag` on its own with these
+#   same settings: **what is summed** is worth about 1.11x, and **scope** only
+#   about 1.05x. The rows above count a row's coupling to other signal nets and
+#   not its capacitance to the rails and substrate, which is what "every real
+#   (non-self) capacitor" meant; excluding the rails from a run of the same
+#   cell here lands within 4-6% of them. Extracting the whole chip rather than
+#   the matrix cell adds the rest.
 #
-#   Worth knowing if that calibration is ever revisited: the ring oscillator
-#   simulates about 1.28x faster than silicon, i.e. as if capacitance were
-#   short, and a full-chip extraction is 1.23x higher on average. Those two
-#   numbers being the same size is suggestive, not a result.
+#   Whichever of those is right, the rows above are what every published
+#   as-routed number for tnt rests on, so changing them is a separate piece of
+#   work with its own verification. Instead each row below is tnt's committed
+#   value scaled by the ratio the two whole-chip extractions give for that row.
+#   Both extractions use identical settings, so that ratio is a like-for-like
+#   comparison of the two chips whatever the offset from the committed set is,
+#   and scaling by it puts both parts on one footing. The raw pair is in the
+#   commit that added this.
 #
 # `bus_B[5]` inherits tnt's estimate for that row (see above), scaled like the
 # rest, so it is an estimate here too.
