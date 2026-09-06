@@ -43,10 +43,6 @@ reproduces its published 1.600 V exactly. What is left:
   moves the answer a little: on a 67-point sweep of the inverter the trip
   point reads 1.5996 V where the floating pin gave 1.5988 V.
 
-- his bus-wire capacitance and the 43.19 fF row-coupling figure are tnt's
-  extracted numbers reused, and the generated library says so. Nobody has run
-  PEX on his layout.
-
 - nothing here has been near his silicon. `--verify` will not catch a wrong
   bit-to-function mapping either, only a broken chain, since it just shifts
   the same bits back out.
@@ -56,14 +52,33 @@ far is sky130A, so the PDK axis is still hypothetical, and
 https://index.tinytapeout.com/index.json plus `<shuttle>.json` is how to ask
 which chips carry a design.
 
+3 decide whether tnt's own bus-wire capacitance should be re-extracted from
+the whole chip rather than from the matrix cell alone. Extracting both parts
+whole (`tools/extract_bus_caps.sh`, written for Andrew's numbers) shows tnt's
+committed figures are 1.15x to 1.28x low, consistently across all twelve rows,
+because `asw_matrix.mag` on its own has none of the chip around it coupling to
+a row. The reason not to just change them is that they are the calibration: the
+ring oscillator was fitted against silicon with those numbers in place, and
+every published as-routed figure for that part rests on them.
+
+What makes this worth doing rather than leaving alone is that the correction
+points the right way. The ring simulates about 1.28x faster than the silicon it
+was measured against -- as if capacitance were short -- and the missing
+capacitance is 1.23x on average. Those being the same size is suggestive and
+nothing more; the way to find out is to put the full-chip numbers in and re-run
+the measured ring bitstream (`tools/run_ringo_measured_bitstream.sh`) to see
+whether that 1.28x closes. If it does, both parts move onto extracted numbers
+and Andrew's stop being scaled. If it does not, something else is short and the
+scaling stays.
+
 ## Docs and user-facing text
 
-3 check all the schematic texts
+4 check all the schematic texts
 
-4 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+5 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
 
-5 overview of how the router works
+6 overview of how the router works
 
-6 can the name from the xschem make it to the pinout? so we'd see 'inverter input' if we'd labelled it
+7 can the name from the xschem make it to the pinout? so we'd see 'inverter input' if we'd labelled it
 
-7 proof the readme
+8 proof the readme

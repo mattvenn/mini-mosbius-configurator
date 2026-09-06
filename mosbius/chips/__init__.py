@@ -442,8 +442,8 @@ _SHARED_TERMINALS: dict[str, dict[str, str]] = {
 # row/column combination, not yet understood) -- using `bus_A[5]`'s value as a
 # same-row estimate, flagged here rather than silently guessed.
 #
-# These are tnt's layout. Andrew Kang's part has its own metal and has not
-# been extracted; see its own entry for what it uses instead.
+# These are tnt's layout. Andrew Kang's are below, and were measured against
+# these rather than replacing them.
 _TNT_BUS_WIRE_CAP: dict[str, float] = {
     "bus_A[1]": 885.65e-15,
     "bus_A[2]": 874.79e-15,
@@ -457,6 +457,69 @@ _TNT_BUS_WIRE_CAP: dict[str, float] = {
     "bus_B[4]": 772.52e-15,
     "bus_B[5]": 735.37e-15,  # estimated, see spice.py -- not independently measured
     "bus_B[6]": 746.72e-15,
+}
+
+
+# The same thing for Andrew Kang's part, in farads.
+#
+# His rows are not tnt's. Measured the same way on the same day, the two sets
+# differ row by row from 0.95x to 1.25x, averaging 1.09x, so one set cannot
+# serve both: a row's wire capacitance is the dominant load on anything routed
+# onto it, and 25% of it is worth having right. That was not obvious in advance
+# -- both matrices are 26 columns of the same `tt_asw_3v3` cell and their column
+# pitch differs by only 2.5% -- which is why these are measured rather than
+# reasoned about.
+#
+# How they were measured, by tools/extract_bus_caps.sh:
+#
+#   Both chips are extracted whole and flattened (magic, `cthresh 5f rthresh
+#   10`), then tools/extract_bus_caps.py identifies each of the twelve rows
+#   from the circuit -- package pin, then `cfg_bus_short`, then rail taps --
+#   and sums every capacitor on it. Nothing in either layout labels a bus row,
+#   and the switches inside a column are not in row order, so identification is
+#   the whole job; guessing that order is how the first attempt at tnt's
+#   `bus_B[2]` above landed on a node that was not `bus_B[2]`.
+#
+#   Every row on both parts is confirmed against that part's own bit map, which
+#   comes from the configurator geometry and not from the layout: the number of
+#   switch channels on each row matches the number of crosspoints, rail taps
+#   and shorts the bit map predicts, twelve out of twelve on each chip. That
+#   also reproduces trap 1 in CLAUDE.md from the metal -- tnt's `ua[2]` really
+#   is on `bus_A[3]`, and `ua[4]` really is on the far bus side.
+#
+# Why these are not the raw extracted numbers:
+#
+#   Extracting the whole chip gives 1.15x to 1.28x what tnt's committed numbers
+#   above say, consistently across all twelve rows, because those were taken
+#   from `asw_matrix.mag` alone and so miss everything outside the matrix that
+#   couples to a row. tnt's numbers are the ones a silicon measurement was
+#   fitted against, so they are the calibration, and replacing them here would
+#   quietly change every published as-routed number for that part. Instead each
+#   row below is tnt's committed value scaled by the ratio the two full-chip
+#   extractions give for that row, which puts both parts on one footing and
+#   leaves the absolute scale where silicon put it. The raw pair is in the
+#   commit that added this.
+#
+#   Worth knowing if that calibration is ever revisited: the ring oscillator
+#   simulates about 1.28x faster than silicon, i.e. as if capacitance were
+#   short, and a full-chip extraction is 1.23x higher on average. Those two
+#   numbers being the same size is suggestive, not a result.
+#
+# `bus_B[5]` inherits tnt's estimate for that row (see above), scaled like the
+# rest, so it is an estimate here too.
+_KANG_BUS_WIRE_CAP: dict[str, float] = {
+    "bus_A[1]": 1018.44e-15,
+    "bus_A[2]": 998.33e-15,
+    "bus_A[3]": 1051.34e-15,
+    "bus_A[4]": 856.63e-15,
+    "bus_A[5]": 916.69e-15,
+    "bus_A[6]": 751.02e-15,
+    "bus_B[1]": 917.28e-15,
+    "bus_B[2]": 1022.65e-15,
+    "bus_B[3]": 1030.05e-15,
+    "bus_B[4]": 792.04e-15,
+    "bus_B[5]": 705.45e-15,
+    "bus_B[6]": 707.75e-15,
 }
 
 
@@ -540,7 +603,7 @@ KANG = Chip(
     # on it, so these are tnt's numbers reused as a stated estimate: the two
     # matrices are the same shape and the same cell, so the magnitude is
     # right, but no digit here is a measurement of this part.
-    bus_wire_cap=_TNT_BUS_WIRE_CAP,
+    bus_wire_cap=_KANG_BUS_WIRE_CAP,
     device_library=DATA_DIR / "kang_device_library.spice",
     ibias_ua=5,
     ota_amplifier_bits=(),

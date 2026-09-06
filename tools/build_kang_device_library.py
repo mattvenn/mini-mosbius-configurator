@@ -35,11 +35,12 @@ the two repos -- it is the Tiny Tapeout harness pad and its analog mux, not
 anything either author designed -- so the cell is copied from tnt's library
 rather than rebuilt, and that is an equality rather than an approximation.
 
-What is *not* measured here, and is flagged in the output file rather than
-hidden: the row-coupling capacitance. The 43.19 fF figure comes from magic
-PEX on tnt's layout. Andrew's matrix is the same shape built from the same
-switch cell, so the magnitude carries over, but nobody has extracted his
-layout and no digit of it is a measurement of this part.
+**The row-coupling capacitance is his own now.** It used to be tnt's 43.19 fF
+reused, on the argument that the two matrices are the same shape from the same
+switch cell. Extracting both (tools/extract_bus_caps.sh) says his crosspoints
+couple about 6% harder than tnt's, which is small but is a measurement rather
+than an argument, and the same extraction pair moves his bus-row capacitance by
+up to 25% -- see mosbius/chips/__init__.py.
 
 Usage:
     python3 tools/build_kang_device_library.py [--check]
@@ -60,10 +61,16 @@ SOURCE = REPO_ROOT / "ttsky25a-minimosbius" / "xschem" / "simulation" / "tt_um_m
 TNT_LIBRARY = REPO_ROOT / "mosbius" / "data" / "mosbius_device_library.spice"
 OUT = REPO_ROOT / "mosbius" / "data" / "kang_device_library.spice"
 
-# One switch's own bus stub to its column's shared device-terminal net,
-# extracted from tnt's layout. See mosbius/chips/__init__.py for the full
-# provenance, and the note above for why it is reused here.
-COUPLING_F = "43.19f"
+# One switch's own bus stub to its column's shared device-terminal net.
+#
+# Measured on Andrew's own layout: the median of the 137 such capacitors a
+# whole-chip extraction finds is 46.16 fF against 43.74 fF for the 150 on
+# tnt's, and 43.74 against tnt's published 43.19 is what says the method
+# reproduces the number it is being checked on, to 1.3%. As with the bus-row
+# capacitance in mosbius/chips/__init__.py, the value written here is tnt's
+# published figure scaled by that ratio, so both parts sit on the one
+# calibration silicon was fitted against: 43.19 * 46.16 / 43.74.
+COUPLING_F = "45.58f"
 
 # Subcircuits to carry across. Everything else in the source netlist is either
 # the digital shift register (not part of the analog block a routed design
@@ -178,10 +185,13 @@ def build() -> str:
         "* The rows are also promoted to ports, because the bus-wire capacitance",
         "* is attached from outside this block.",
         "*",
-        f"* The {COUPLING_F} row-coupling capacitors below are NOT a measurement of",
-        "* this part. They are tnt's extracted figure, reused because the two",
-        "* matrices are the same shape built from the same switch cell. Nobody",
-        "* has run extraction on Andrew's layout.",
+        f"* The {COUPLING_F} row-coupling capacitors below come from this part's",
+        "* own layout: a whole-chip extraction finds 137 of them with a median",
+        "* of 46.16 fF, against 43.74 fF for the 150 on tnt's, whose published",
+        "* figure is 43.19 fF. The value written here is that published figure",
+        "* scaled by the ratio, so both parts stay on the one calibration a",
+        "* silicon measurement was fitted against. tools/extract_bus_caps.sh",
+        "* re-measures it; mosbius/chips/__init__.py has the reasoning.",
         "",
     ]
 

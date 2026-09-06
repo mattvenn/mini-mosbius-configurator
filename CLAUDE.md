@@ -866,6 +866,25 @@ These were all got wrong once. The sources that look authoritative are not.
 
 ## Useful facts
 
+- **Both parts' layouts are extractable, and `tools/extract_bus_caps.sh` does
+  it.** Andrew Kang's repo ships its own `.ext` files, so his half needs only
+  `ext2spice`; tnt's ships none, so his is extracted from the `.mag` hierarchy.
+  Run both with the same settings or the two sets are not comparable, which is
+  the whole point of the script. Three things it cost to learn:
+  *Nothing labels a bus row*, and the switches inside a column are not in row
+  order, so a row is identified from the circuit -- package pin, then
+  `cfg_bus_short`, then rail taps -- never from a node name.
+  *The bit map is an independent oracle for that*, since it comes from the
+  configurator geometry rather than the layout: the switch count on each row
+  has to match the crosspoints, taps and shorts it predicts, and on both chips
+  all twelve do. That check also reproduces trap 1 below straight from the
+  metal.
+  *Raw magic coordinates do not compare across the two repos.* Andrew's
+  top-level `.mag` is written at `magscale 1 2` where tnt's `asw_matrix.mag`
+  has no `magscale` line and is therefore 1:1, so his column pitch of 3772 is
+  1886 in tnt's units against tnt's 1840. Comparing the raw numbers says his
+  matrix is twice as wide, which is wrong; it is 2.5% wider.
+
 - **The generic-device symbols have no body or bias pin.** Both are
   hard-wired on silicon, so `mosbius_*.sym` supplies them through xschem's
   `extra` attribute (`extra="b"`, `template="... b=VGND"` for the FETs;
