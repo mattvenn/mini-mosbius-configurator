@@ -20,12 +20,43 @@ reproduces its published 1.600 V exactly. What is left:
 - one ideal symbol library covering both, for the as-drawn side. Every device
   has the same width and length and the same slice values on both parts; the
   whole geometry difference is that every PMOS on his part has 1.5x the
-  fingers. So a per-chip parameter include, not a second library. Check first
-  whether the finger count moves the sky130 model bin, which is trap 10's
-  failure mode. His PMOS bulk goes to its own source where tnt's goes to
-  VAPWR, which only matters when a PMOS source is off the rail; his NMOS
-  schematics say the same but there is no deep nwell anywhere in his layout,
-  so that bulk is the substrate and the two parts agree.
+  fingers, at the same total width. So width per finger is 5 um on his part
+  against 7.5 um on tnt's, and every PMOS width in use is 30, 60 or 120, so
+  both divide exactly.
+
+  **Answer the binning question first**, because it decides whether this is a
+  parameter or two genuinely different libraries. Same width and length at 4
+  fingers and at 6, biased at one current, compare the node voltages -- the
+  deck shape is `build/bintest3.spice`, which is what settled trap 10. A few
+  millivolts apart means the finger count does not move the sky130 bin and the
+  parameter approach is sound. Hundreds of millivolts, as trap 10 itself
+  produced, means the two parts are in different model bins by design and
+  their as-drawn numbers are allowed to disagree by more than rounding.
+
+  Then the geometry becomes one parameter, `pmos_wfin`, and each PMOS sheet
+  computes `nfdev='wdev/pmos_wfin'` where it now has a literal coefficient.
+  Keep the `wdev`/`nfdev` indirection: naming a parameter the callee also
+  defines is trap 10. The value comes from a committed per-chip include
+  (`mosbius/data/geometry_tnt.spice`, `geometry_kang.spice`, one `.param` line
+  each) that each testbench pulls in with one line, the way `xschemrc`'s
+  `mosbius_routed_include` proc already injects an absolute path at netlist
+  time. A testbench's user architecture code is genuinely global -- the
+  `**.subckt` line above it is a comment -- so one `.param` set there reaches
+  every device sheet, provided no sheet redefines that name locally.
+
+  Six sheets change: `mosbius_pmos` (has the code block already),
+  `mosbius_psource`, `mosbius_ptail`, `mosbius_ota` (two PMOS), `mosbius_bias`
+  (one), and `tb_template` gets the include so future examples inherit it. The
+  NMOS sheets are untouched, since NMOS is identical on both parts. Default to
+  tnt, and the proof is that every tnt netlist comes out with the same
+  evaluated W and nf and every published number reproduces exactly -- not
+  within tolerance, exactly, since for tnt this is a no-op.
+
+  One more difference, which is not about fingers: his PMOS bulk goes to its
+  own source where tnt's goes to VAPWR. That only matters when a PMOS source
+  is off the rail. His NMOS schematics say the same, but there is no deep
+  nwell anywhere in his layout, so that bulk is the substrate and the two
+  parts agree.
 
 - the examples, re-routed and published for his part. Five of the seven route
   as drawn, and neither refusal is a router failure:
