@@ -10,7 +10,9 @@ without the EDA toolchain.
 
 from __future__ import annotations
 
-from mosbius.chips import TNT
+import pytest
+
+from mosbius.chips import KANG, TNT
 
 ALL_BITS = TNT.all_bits
 BUS_WIRE_CAPACITANCE_F = TNT.bus_wire_cap
@@ -123,3 +125,52 @@ def test_render_bus_wire_caps_covers_every_bus_node_name():
     text = render_bus_wire_caps()
     for net in BUS_WIRE_CAPACITANCE_F:
         assert f" {net} VGND " in text
+
+
+def _mosbius_block_ports(chip):
+    """The `.subckt mosbius` port list from a part's generated device library.
+
+    This is the only independent oracle for what the config ties have to be
+    called: the block is transcribed from the taped-out schematic, so a tie
+    naming a node that is not in this list is tying nothing, and the real pin
+    -- a switch gate, with no other DC path -- is left floating.
+    """
+    joined, current = [], ""
+    for line in chip.device_library.read_text().splitlines():
+        if line.startswith("+"):
+            current += " " + line[1:].strip()
+            continue
+        joined.append(current)
+        current = line
+    joined.append(current)
+    for line in joined:
+        if line.lower().startswith(".subckt mosbius "):
+            return set(line.split()[2:])
+    raise AssertionError(f"{chip.key}: no .subckt mosbius in its device library")
+
+
+@pytest.mark.parametrize("chip", [TNT, KANG], ids=lambda c: c.key)
+def test_every_config_tie_names_a_real_block_pin(chip):
+    ports = _mosbius_block_ports(chip)
+    text = render_config_spice(SwitchConfig(bits=frozenset(), chip=chip))
+    missing = sorted(
+        line.split()[1]
+        for line in text.splitlines()
+        if line.startswith("Rcfg") and line.split()[1] not in ports
+    )
+    assert not missing, (
+        f"{chip.title}: these ties name nodes the mosbius block does not have, "
+        f"so the pin they were meant to drive is left floating: {missing}"
+    )
+
+
+@pytest.mark.parametrize("chip", [TNT, KANG], ids=lambda c: c.key)
+def test_every_config_pin_of_the_block_is_tied(chip):
+    ports = _mosbius_block_ports(chip)
+    text = render_config_spice(SwitchConfig(bits=frozenset(), chip=chip))
+    tied = {line.split()[1] for line in text.splitlines() if line.startswith("Rcfg")}
+    untied = sorted(p for p in ports - tied if p.startswith(("cfg", "ctrl")))
+    assert not untied, (
+        f"{chip.title}: these config pins of the mosbius block get no tie, so "
+        f"they float: {untied}"
+    )

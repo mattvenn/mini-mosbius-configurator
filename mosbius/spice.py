@@ -20,13 +20,16 @@ from __future__ import annotations
 from mosbius.chips import DEFAULT_CHIP, Chip
 from mosbius.model import SwitchConfig
 
-# mosbius.sym pins declared without a [N:0] bus suffix (SPEC.md Sec 2.11) --
-# these netlist as a bare pin name, not `pin[index]`.
-SINGLE_BIT_PINS = {
-    "ctrl_pfeta_source", "ctrl_pfetb_source",
-    "ctrl_nfeta_source", "ctrl_nfetb_source",
-    "ctrl_dpp_source", "ctrl_dpn_source",
-}
+# Config pins declared without a [N:0] bus suffix (SPEC.md Sec 2.11) -- these
+# netlist as a bare pin name, not `pin[index]`.
+#
+# Which pins those are differs between the two parts, so the list is derived
+# per part by `Chip.single_bit_pins` and this name is only the default part's
+# answer, kept for the one-shot experiments in tools/ that import it. Use
+# `chip.single_bit_pins` in anything that can be handed either part: writing
+# `ctrl_otan_diode[0]` for Andrew's `ctrl_otan_diode` leaves the real pin
+# floating, which ngspice reports as a singular matrix.
+SINGLE_BIT_PINS = DEFAULT_CHIP.single_bit_pins
 
 # Resistance of each config tie, in ohms, as SPICE text.
 #
@@ -61,7 +64,7 @@ def render_config_spice(config: SwitchConfig) -> str:
     ]
     for bit in range(config.chip.num_bits):
         info = config.chip.all_bits[bit]
-        if info.pin in SINGLE_BIT_PINS:
+        if info.pin in config.chip.single_bit_pins:
             pin_net = info.pin
         else:
             pin_net = f"{info.pin}[{info.index}]"

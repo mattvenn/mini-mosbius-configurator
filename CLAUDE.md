@@ -819,6 +819,51 @@ These were all got wrong once. The sources that look authoritative are not.
     `hpretl/iic-osic-tools:2026.05` for exactly this reason -- do not float
     any of them back to `:latest`.
 
+12. **`Warning: singular matrix: check node <x>` names where pivoting
+    failed, not what is wrong, and the node it names moves.** Andrew Kang's
+    as-routed decks emitted six of these and recovered through the transient
+    operating point; `TODO.md` recorded the node as `bus_A[6]` and built a
+    plausible story on it (the one row no package pin can reach). The node
+    the inverter deck actually names is the PMOS differential pair's tail,
+    and changing unrelated things -- the bulk ties, the shorted dummy
+    devices -- moved it again, to a crosspoint. None of those was the cause.
+    Do not reason from the node in the message; find the defect instead.
+
+    The cause, fixed 2026-09-06, was **one config pin left floating**.
+    `mosbius/spice.py` chose between a tie named `pin` and one named
+    `pin[index]` from a hard-coded set of six pin names, which was tnt's
+    list. Andrew's part has a seventh single-bit pin, `ctrl_otan_diode`, so
+    its tie was written `ctrl_otan_diode[0]` -- a node his mosbius block does
+    not have. The resistor tied nothing and the real pin, a switch gate with
+    no other DC path, floated, which is an all-zero row in the Jacobian.
+    `Chip.single_bit_pins` derives the set per part by counting the bits
+    behind each pin name, which reproduces tnt's six exactly, and
+    `tests/test_spice.py` now cross-checks every generated tie against the
+    `.subckt mosbius` port list in each part's device library, in both
+    directions -- that port list is the only independent oracle for these
+    names, since it is transcribed from the taped-out schematic.
+
+    Two things worth keeping from how it was found. The **reproduction is a
+    single `.op`** on the as-routed deck with the rails, a bias current and
+    one input driven -- 23 seconds including the model load. A DC sweep is
+    not needed to see it: all six warnings and all three failed continuation
+    methods appear in that one solve. And what
+    located it was **flattening the deck into a DC connectivity graph** --
+    every MOSFET couples drain-source, drain-bulk and source-bulk, a gate and
+    a capacitor couple nothing -- then asking which nodes have no path to a
+    source. Andrew's deck had exactly one, tnt's had none. Watch two traps in
+    writing that: every FET in these decks is an `X` instance of a PDK model
+    subcircuit, so a flattener that treats `X` as a subcircuit call skips all
+    of them, and `pad_model` reaches its `mod` node through an inductor, so
+    skipping `L` disconnects every pad.
+
+    It also explains the slow decks, which `TODO.md` had as a separate open
+    item at ~35%. The transient operating point was firing **once per sweep
+    point**: on a 67-point DC sweep of the inverter, 123 s with the pin
+    floating against 25 s with it tied, where tnt's is 23 s. Fixed, his part
+    is within 8% of tnt's, which is his deck being 2-3% bigger and nothing
+    else.
+
 ## Useful facts
 
 - **The generic-device symbols have no body or bias pin.** Both are

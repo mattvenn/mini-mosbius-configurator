@@ -150,6 +150,30 @@ class Chip:
         return {**self.matrix_bits, **self.setting_bits}
 
     @cached_property
+    def single_bit_pins(self) -> frozenset[str]:
+        """Config pins that netlist as a bare name, not `pin[index]`.
+
+        A pin declared on the block as a bus, `pin[N:0]`, netlists one node
+        per bit and its ties have to be written `pin[index]`; a pin carrying
+        a single bit is declared as a plain pin and netlists as itself, so a
+        tie written `pin[0]` names a node the block does not have. The pin is
+        then left floating -- a switch gate with no DC path, which ngspice
+        reports as a singular matrix and recovers from through its transient
+        operating point, so the deck still produces numbers.
+
+        Which pins those are is a property of the part, not of this project:
+        tnt has six (the free-source ties) and Andrew has a seventh,
+        `ctrl_otan_diode`. Counting the bits behind each pin gets it right for
+        both without a list to keep in step, and `tests/test_spice.py` checks
+        the answer against the device library's own port list.
+        """
+        counts: dict[str, int] = {}
+        for bit in range(self.num_bits):
+            pin = self.all_bits[bit].pin
+            counts[pin] = counts.get(pin, 0) + 1
+        return frozenset(pin for pin, n in counts.items() if n == 1)
+
+    @cached_property
     def matrix_bit_by_pin_row(self) -> dict[tuple[str, int], int]:
         """bit for (pin, row), for every matrix signal with a crosspoint."""
         return {
