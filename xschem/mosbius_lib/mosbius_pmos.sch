@@ -33,4 +33,4 @@ spiceprefix=X
 C {devices/iopin.sym} -50 -110 0 1 {name=p7 lab=s}
 C {devices/ipin.sym} -50 -20 2 1 {name=p1 lab=g}
 C {devices/iopin.sym} -50 90 0 1 {name=p2 lab=d}
-C {devices/code.sym} -220 -60 0 0 {name=SIZE only_toplevel=false value=".param wdev='30*w' nfdev='4*w'"}
+C {devices/code.sym} -220 -60 0 0 {name=SIZE only_toplevel=false value=".param wdev='30*w' nfdev='wdev/pmos_width_per_finger'"}

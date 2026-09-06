@@ -214,3 +214,57 @@ def test_the_ota_amplifier_mode_is_a_closed_bit_on_one_part_and_open_on_the_othe
 def test_chip_for_macro_finds_both_parts():
     assert chip_for_macro("tt_um_mosbius") is KANG
     assert chip_for_macro("tt_um_tnt_mosbius") is TNT
+
+
+# --------------------------------------------------------------------------
+# Which part the tools assume when the command line does not say.
+
+
+def test_the_default_part_is_tnt_when_the_environment_is_quiet(monkeypatch):
+    from mosbius.pads import PROJECT_ENV_VAR, default_project
+
+    monkeypatch.delenv(PROJECT_ENV_VAR, raising=False)
+    assert chip_for_macro(default_project()) is TNT
+
+
+def test_the_environment_can_choose_the_other_part(monkeypatch):
+    """`which chip is on my desk` is a property of the session, not of any one
+    schematic, so it is set in the shell. A sheet that named a part could
+    disagree with the netlist generated beside it and nothing would say so."""
+    from mosbius.pads import PROJECT_ENV_VAR, default_project
+
+    monkeypatch.setenv(PROJECT_ENV_VAR, "tt_um_mosbius")
+    assert chip_for_macro(default_project()) is KANG
+
+
+def test_a_blank_environment_variable_is_not_a_part_name(monkeypatch):
+    """Exporting it empty is how a shell says 'unset', and reading it as a
+    macro name would fail with a confusing empty string in the message."""
+    from mosbius.pads import PROJECT_ENV_VAR, default_project
+
+    monkeypatch.setenv(PROJECT_ENV_VAR, "   ")
+    assert chip_for_macro(default_project()) is TNT
+
+
+def test_the_command_line_still_wins_over_the_environment(monkeypatch, capsys):
+    from mosbius.cli import build_parser
+    from mosbius.pads import PROJECT_ENV_VAR
+
+    monkeypatch.setenv(PROJECT_ENV_VAR, "tt_um_mosbius")
+    args = build_parser().parse_args(
+        ["route", "build/nothing.spice", "--project", "tt_um_tnt_mosbius"])
+    assert args.project == "tt_um_tnt_mosbius"
+
+
+def test_a_typo_in_the_environment_stops_before_anything_runs(monkeypatch, capsys):
+    """The same typo would otherwise surface per command as an unknown-macro
+    error talking about --project, which is not where the value came from."""
+    from mosbius.cli import main
+    from mosbius.pads import PROJECT_ENV_VAR
+
+    monkeypatch.setenv(PROJECT_ENV_VAR, "tt_um_nonsense")
+    assert main(["decode", "00" * 24]) == 2
+    err = capsys.readouterr().err
+    assert PROJECT_ENV_VAR in err
+    assert "tt_um_nonsense" in err
+    assert TNT.macro in err and KANG.macro in err

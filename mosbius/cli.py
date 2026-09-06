@@ -11,19 +11,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from mosbius import messages
-from mosbius.chips import UnknownChipError, chip_for_macro
+from mosbius.chips import CHIPS, UnknownChipError, chip_for_macro
 from mosbius.bitstream import BitstreamError
 from mosbius.check import SafetyReport, check, check_design, check_routing, merge_findings
 from mosbius.decode import decode, format_summary
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig
 from mosbius.netlist import NetlistError, StaleNetlistError, check_netlist_fresh, parse_netlist
 from mosbius.pads import (
-    DEFAULT_PROJECT,
     DEFAULT_SHUTTLE,
+    PROJECT_ENV_VAR,
+    default_project,
     PadLookupError,
     format_pad_table,
 )
@@ -114,7 +116,7 @@ def _chip_for(args: argparse.Namespace):
     an unknown macro stops with one explanation rather than each command
     inventing its own.
     """
-    return chip_for_macro(getattr(args, "project", None) or DEFAULT_PROJECT)
+    return chip_for_macro(getattr(args, "project", None) or default_project())
 
 
 def cmd_decode(args: argparse.Namespace) -> int:
@@ -164,7 +166,7 @@ def _shuttle_for(args: argparse.Namespace) -> str:
             messages.CLI_PROJECT_NOT_ON_SHUTTLE.format(
                 shuttle=identity["shuttle"],
                 project=args.project,
-                default_project=DEFAULT_PROJECT,
+                default_project=default_project(),
             )
         )
     return identity["shuttle"]
@@ -361,9 +363,14 @@ def build_parser() -> argparse.ArgumentParser:
         a bitstream mean anything: routing for one part and programming the
         other produces an unrelated circuit, not a slightly wrong one.
         """
+        # Read the environment on every parse rather than once at import, so
+        # the variable behaves like a setting and not like a build-time
+        # constant -- and so the help text shows what this run will actually
+        # do, which is the whole point of naming a default in help text.
+        current = default_project()
         p.add_argument(
-            "--project", default=DEFAULT_PROJECT,
-            help=messages.CLI_HELP_PROJECT.format(default_project=DEFAULT_PROJECT),
+            "--project", default=current,
+            help=messages.CLI_HELP_PROJECT.format(default_project=current),
         )
 
     def add_board(p):
@@ -425,7 +432,33 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _check_project_env() -> int | None:
+    """Stop early if MOSBIUS_PROJECT names a part nothing here knows.
+
+    Without this the same typo surfaces per command as an unknown-macro
+    error that talks about `--project`, which is not where the value came
+    from, and the reader has no reason to look at their shell.
+    """
+    raw = os.environ.get(PROJECT_ENV_VAR, "").strip()
+    if not raw:
+        return None
+    try:
+        chip_for_macro(raw)
+    except UnknownChipError:
+        known = "\n".join(f"    {c.macro}  ({c.title})" for c in CHIPS.values())
+        print(
+            messages.CLI_BAD_PROJECT_ENV.format(
+                var=PROJECT_ENV_VAR, macro=raw, known=known),
+            file=sys.stderr,
+        )
+        return 2
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
+    bad_env = _check_project_env()
+    if bad_env is not None:
+        return bad_env
     args = build_parser().parse_args(argv)
     return args.func(args)
 

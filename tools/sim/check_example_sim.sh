@@ -92,6 +92,14 @@ netlist_schematic() {
 # This script lives in tools/sim/, so the repo root is two levels up. Every
 # path below (build/, examples/, .spiceinit) is relative to it.
 cd "$(dirname "$0")/../.."
+
+# Every reference number these checks compare against was measured on tnt's
+# part, so pin it rather than inheriting whatever MOSBIUS_PROJECT the person
+# running this happens to have exported. Without this, someone working on
+# another part would silently re-target the whole regression and be told its
+# numbers had drifted.
+MOSBIUS_PROJECT=tt_um_tnt_mosbius
+export MOSBIUS_PROJECT
 mkdir -p build
 
 echo "== netlisting, routing and building examples/$dir/$design.sch"

@@ -80,6 +80,22 @@ class Chip:
     device_terminals: dict[str, dict[str, str]]
     bus_wire_cap: dict[str, float]
     device_library: Path
+    # Width per finger, in um, of every PMOS this part draws. Both parts use
+    # the same total width and the same length everywhere; they differ only in
+    # how many fingers that width is split into, and every PMOS width in use
+    # (30, 60 and 120 um) divides exactly by both values. The ideal symbol
+    # library divides by this to get a finger count, so one set of schematics
+    # draws either part -- see mosbius/simulate.py, which writes it into the
+    # generated routed netlist as a global .param so that `--project` is the
+    # only place a part is ever chosen.
+    #
+    # It does not move the sky130 model bin (measured 2026-09-06 at all three
+    # widths): that PDK bins its high-voltage PMOS on total width and length,
+    # treats the finger count as an ordinary instance parameter, and has one
+    # width bin covering 20 um to 1.01 mm. What it does change is the
+    # per-finger effective width BSIM4's narrow-width terms see, worth about
+    # 1.2 mV of gate-source voltage at 187 uA.
+    pmos_width_per_finger: float
     # Which physical `ua[k]` carries the bias reference. tnt puts it on ua[0],
     # Andrew on ua[5]. It is the one analog pin with no switch matrix behind
     # it, so it is named rather than numbered everywhere a user sees it.
@@ -553,6 +569,7 @@ TNT = Chip(
     },
     bus_wire_cap=_TNT_BUS_WIRE_CAP,
     device_library=DATA_DIR / "mosbius_device_library.spice",
+    pmos_width_per_finger=7.5,
     ibias_ua=0,
     ota_amplifier_bits=(("ctrl_otan_mode", 0),),
     ota_setting_fields={
@@ -608,6 +625,7 @@ KANG = Chip(
     # right, but no digit here is a measurement of this part.
     bus_wire_cap=_KANG_BUS_WIRE_CAP,
     device_library=DATA_DIR / "kang_device_library.spice",
+    pmos_width_per_finger=5.0,
     ibias_ua=5,
     ota_amplifier_bits=(),
     ota_setting_fields={

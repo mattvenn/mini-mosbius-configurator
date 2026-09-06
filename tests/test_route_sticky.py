@@ -153,3 +153,53 @@ def test_reusing_a_stored_routing_stamps_it_current(tmp_path):
 
     route_sticky(design, out)  # same design: takes the reuse path
     assert out.stat().st_mtime > 1000
+
+
+# --------------------------------------------------------------------------
+# Which part a stored routing belongs to.
+
+
+def test_the_stored_routing_records_its_part(tmp_path: Path):
+    """A bitstream means nothing without it, so it travels with the routing
+    rather than being supplied again by whoever reads the file next."""
+    from mosbius.chips import TNT
+
+    config_path = tmp_path / "design.mosbius.json"
+    route_sticky(parse_netlist(INVERTER_NETLIST), config_path)
+    assert load_routed_design(config_path)["project"] == TNT.macro
+
+
+def test_another_parts_routing_is_re_solved_not_replayed(tmp_path: Path):
+    """Its rows, roles and bits all mean something else. Before this, routing
+    the same design after switching parts died in an unhandled error about
+    hex characters -- the first thing someone who has just set
+    MOSBIUS_PROJECT would meet."""
+    from mosbius.chips import KANG, TNT
+
+    config_path = tmp_path / "design.mosbius.json"
+    design = parse_netlist(INVERTER_NETLIST)
+
+    for_tnt = route_sticky(design, config_path, chip=TNT)
+    for_kang = route_sticky(design, config_path, chip=KANG)
+
+    assert for_kang.config.chip is KANG
+    assert for_kang.config.to_bitstream() != for_tnt.config.to_bitstream()
+    assert load_routed_design(config_path)["project"] == KANG.macro
+
+
+def test_a_routing_written_before_the_part_was_recorded_is_re_solved(tmp_path: Path):
+    """It makes no claim about which part it is, and guessing is what this
+    whole field exists to avoid. One extra route on a generated file."""
+    import json
+
+    config_path = tmp_path / "design.mosbius.json"
+    design = parse_netlist(INVERTER_NETLIST)
+    route_sticky(design, config_path)
+
+    stored = load_routed_design(config_path)
+    del stored["project"]
+    stored["net_rows"] = {}
+    config_path.write_text(json.dumps(stored))
+
+    again = route_sticky(design, config_path)
+    assert again.net_rows, "an old file was replayed instead of re-solved"

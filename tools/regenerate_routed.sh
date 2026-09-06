@@ -6,6 +6,14 @@
 #
 #     tools/regenerate_routed.sh examples/inverter/inverter.sch
 #
+# Which part it builds for comes from MOSBIUS_PROJECT, the same variable the
+# `mosbius` commands themselves default from, so this needs no flag of its
+# own and the testbench's `generate routed spice` button inherits it:
+#
+#     MOSBIUS_PROJECT=tt_um_mosbius tools/regenerate_routed.sh <design.sch>
+#
+# Unset, it builds for tnt's part.
+#
 # Run from the top of the repo -- xschem needs the repo's own xschemrc for
 # the symbol path, the sky130A PDK variant and netlist_dir=build/.
 #

@@ -320,3 +320,52 @@ XM2 ua2 ua1 VAPWR VAPWR mosbius_pmos
         assert text.count("\nRcfg") == ties
         assert text.count("\nCwire") == 12
         assert f"Xpad_ua1 VGND ua1 {pad_node} pad_model" in text
+
+
+def test_simulating_a_routing_as_the_wrong_part_stops(tmp_path):
+    """The two parts taped out so far have different chain lengths, so an
+    unpack would catch this today. It will not always: the check is here so a
+    third part with the same length cannot silently produce an unrelated
+    circuit from a bitstream that happens to fit."""
+    import json
+
+    from mosbius.chips import KANG, TNT
+    from mosbius.simulate import SimulateError, simulate_from_routed_json
+
+    path = tmp_path / "design.mosbius.json"
+    path.write_text(json.dumps({
+        "schema": 1,
+        "project": KANG.macro,
+        "bitstream": "0" * ((KANG.num_bits + 3) // 4),
+        "ibias": 100e-6,
+        "device_roles": {},
+        "net_rows": {},
+    }))
+
+    with pytest.raises(SimulateError) as e:
+        simulate_from_routed_json(path, TNT)
+    message = str(e.value)
+    assert KANG.macro in message and TNT.macro in message
+    assert "--project" in message
+
+
+def test_a_routing_with_no_part_recorded_still_simulates(tmp_path):
+    """Files written before the field existed make no claim, so they are
+    taken at their word rather than refused."""
+    import json
+
+    from mosbius.chips import TNT
+    from mosbius.simulate import simulate_from_routed_json
+
+    path = tmp_path / "design.mosbius.json"
+    path.write_text(json.dumps({
+        "schema": 1,
+        "bitstream": "0" * ((TNT.num_bits + 3) // 4),
+        "ibias": 100e-6,
+        "device_roles": {},
+        "net_rows": {},
+    }))
+
+    name, text = simulate_from_routed_json(path, TNT)
+    assert name == "design"
+    assert ".param pmos_width_per_finger=7.5" in text

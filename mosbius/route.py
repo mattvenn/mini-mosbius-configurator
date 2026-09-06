@@ -1388,6 +1388,12 @@ def save_routed_design(routed: RoutedDesign, design: MosbiusDesign, path: Path) 
     """
     data = {
         "schema": routed.schema,
+        # Which part this was routed for. A bitstream means nothing without
+        # it -- the same bit closes a different switch on each chip -- and
+        # every consumer of this file used to be told the part separately,
+        # which is one more thing that could disagree. Written here so it
+        # travels with the routing it describes.
+        "project": routed.config.chip.macro,
         "topology_hash": design_topology_hash(design),
         "bitstream": routed.config.to_bitstream(),
         "ibias": routed.config.ibias,
@@ -1420,7 +1426,17 @@ def route_sticky(design: MosbiusDesign, config_path: Path, *, force: bool = Fals
     topology = design_topology_hash(design)
     if not force:
         stored = load_routed_design(config_path)
-        if stored is not None and stored.get("topology_hash") == topology and (
+        # A stored routing for another part is not a routing of this one: its
+        # rows, roles and bits all mean something else. Re-solve rather than
+        # replay it. Before this test, switching parts on a design that had
+        # been routed before ended in an unhandled BitstreamError from the
+        # unpack below, complaining about hex characters -- which is exactly
+        # what someone who has just set MOSBIUS_PROJECT meets first. A file
+        # written before this field existed says nothing, so it is re-solved
+        # too; that costs one route on a generated file.
+        if stored is not None and stored.get("project") == chip.macro and (
+            stored.get("topology_hash") == topology
+        ) and (
             set(stored["device_roles"]) == {d.name for d in design.devices}
         ):
             roles = {

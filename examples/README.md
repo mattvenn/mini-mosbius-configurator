@@ -93,6 +93,60 @@ doing this and `xschemrc`'s `mosbius_routed_include` says so in the
 netlist and in a dialog, rather than leaving an ngspice error two steps
 later to be decoded.
 
+## Which part
+
+There is more than one mini-MOSbius. The examples here are drawn for tnt's
+(`tt_um_tnt_mosbius`), and Andrew Kang's (`tt_um_mosbius`) is the same
+architecture with one difference in device geometry: every PMOS splits the
+same total width into 1.5x as many fingers, so a finger is 5.0 um wide on
+his part and 7.5 um on tnt's. Both parts' NMOS are identical.
+
+**You choose a part once, in your shell, and nothing in any schematic
+mentions one.**
+
+```bash
+export MOSBIUS_PROJECT=tt_um_mosbius
+```
+
+Every `mosbius` command defaults from that, and so does the testbench's own
+**generate routed spice** button, since it shells out to the same commands.
+Set it before launching xschem. Unset, everything builds for tnt's part.
+`--project` still overrides it for one command:
+
+```bash
+python3 -m mosbius.cli route build/inverter.spice --project tt_um_mosbius \
+    --out build/inverter.mosbius.json
+python3 -m mosbius.cli simulate build/inverter.mosbius.json --project tt_um_mosbius
+```
+
+`mosbius simulate` writes that part's real widths and finger counts into the
+routed netlist as literals, and writes its width per finger at the top as a
+global `.param pmos_width_per_finger`. The testbench includes that netlist at
+the top level, so the parameter reaches the ideal `mosbius_*` symbols on the
+design sheet too, and the **as drawn** half follows the same part as the **as
+routed** half without being told separately. Press Netlist again and the
+whole comparison has moved to the other chip.
+
+That is deliberate. A testbench that named its own part could disagree with
+the routed netlist beside it, and you would be comparing two different chips
+with nothing saying so -- the same shape as the stale-netlist problem the
+routed-netlist warning already guards against. For the same reason the routed
+design JSON records which part it was routed for, so re-routing after
+changing the variable re-solves rather than replaying the other chip's rows,
+and simulating a file as the wrong part stops and names both.
+
+If you have a `build/` from before this existed, its routed netlists carry no
+such line, and pressing Netlist says so and names the button that rebuilds
+them. Without that you would meet a fatal ngspice error about an undefined
+parameter inside a device block you never drew.
+
+The finger count does not move the sky130 model bin, checked at all three
+PMOS widths in use: the PDK bins its high-voltage PMOS on total width and
+length and treats the finger count as an ordinary instance parameter, and its
+one width bin runs from 20 um to 1.01 mm. What changes is the per-finger
+effective width BSIM4's narrow-width terms see, worth about 1.2 mV of
+gate-source voltage at 187 uA.
+
 ## The probe
 
 Each testbench hangs `Cprobe_drawn` / `Rprobe_drawn` and `Cprobe_routed` /

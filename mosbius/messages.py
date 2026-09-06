@@ -823,6 +823,35 @@ ROUTE_TERMINAL_NOT_ON_THIS_CHIP = (
 
 # --- chips/__init__.py -----------------------------------------------------
 
+CLI_BAD_PROJECT_ENV = (
+    "the environment variable {var} names a project this toolchain has\n"
+    "no bit map for:\n\n"
+    "    {var}={macro}\n\n"
+    "  That variable is what every command here assumes when no --project\n"
+    "  is given, so nothing will run until it names a part or is unset.\n\n"
+    "  The parts it does know are:\n"
+    "{known}\n\n"
+    "  To fix, either correct it:\n"
+    "      export {var}=<one of the macros above>\n"
+    "  or drop it and go back to the default:\n"
+    "      unset {var}"
+)
+
+
+SIMULATE_WRONG_PROJECT = (
+    "{path} was routed for a different part than the one you asked for.\n\n"
+    "    the file says:  {stored}\n"
+    "    you asked for:  {asked}\n\n"
+    "  The same config bit closes a different switch on each part, so\n"
+    "  building this bitstream as the other one does not give a slightly\n"
+    "  different circuit, it gives an unrelated one.\n\n"
+    "  To fix, either simulate it as what it is:\n"
+    "      python3 -m mosbius.cli simulate {path} --project {stored}\n"
+    "  or route it again for the part you meant:\n"
+    "      python3 -m mosbius.cli route <netlist> --project {asked} --out {path}"
+)
+
+
 CHIP_UNKNOWN_MACRO = (
     "this toolchain has no bit map for the project {macro}.\n\n"
     "  More than one mini-MOSbius has been taped out, and they do not\n"

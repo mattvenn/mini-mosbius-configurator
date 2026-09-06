@@ -127,6 +127,17 @@ proc mosbius_design_sch {path} {
     return {}
 }
 
+# Does a generated routed netlist carry the global .param that tells the
+# ideal mosbius_* symbols which part they are drawing? Written by
+# mosbius/simulate.py above the subcircuit. Read failures answer yes, so a
+# permissions problem never turns into a wrong accusation.
+proc mosbius_routed_has_geometry {path} {
+    if {[catch {open $path r} fh]} { return 1 }
+    set text [read $fh]
+    close $fh
+    return [string match {*.param pmos_width_per_finger=*} $text]
+}
+
 # The routed netlist exists, but is it still the circuit on the sheet?
 #
 # This is the quiet failure the whole drawn-vs-routed testbench is exposed
@@ -141,6 +152,30 @@ proc mosbius_design_sch {path} {
 # complaining about a missing subcircuit, which points even further from
 # the cause. The comment block and the dialog are the warning.
 proc mosbius_routed_staleness {path abs} {
+    # A routed netlist generated before 2026-09-06 predates the line that
+    # tells the *drawn* half which part it is, and an mtime comparison cannot
+    # see that: nobody edited the design sheet, the file is simply older than
+    # the tool that wrote it. Left alone it surfaces as a fatal ngspice error
+    # about an undefined parameter inside a device subcircuit the user never
+    # opened. Cheaper to say so here.
+    if {![mosbius_routed_has_geometry $path]} {
+        set lines [list \
+            "$path was generated before the drawn half was told which part it is." \
+            "" \
+            "control click the 'generate routed spice' button to rebuild it." \
+            "" \
+            "without that line ngspice stops with an undefined parameter," \
+            "pmos_width_per_finger, inside one of the mosbius_ device blocks." ]
+        set msg [join $lines "\n"]
+        puts stderr "\n*** $msg\n"
+        if {[info exists ::has_x] && ![info exists ::mosbius_stale_warned($path)]} {
+            set ::mosbius_stale_warned($path) 1
+            catch {mosbius_show_stale_warning $msg}
+        }
+        set out {}
+        foreach l $lines { lappend out "* $l" }
+        return "[join $out "\n"]\n.include $abs"
+    }
     set sch [mosbius_design_sch $path]
     if {$sch eq {} || [file mtime $sch] <= [file mtime $path]} {
         unset -nocomplain ::mosbius_stale_warned($path)

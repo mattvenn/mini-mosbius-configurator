@@ -57,6 +57,7 @@ is the only end-to-end check the mapping has.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -79,7 +80,28 @@ from mosbius.route import TERMINAL_WORD
 # pad to clip onto, and a wrong one reads exactly like a right one -- so
 # this constant only appears in help text and in the `--shuttle ttsky25a`
 # the failure suggests for working away from the bench.
-DEFAULT_PROJECT = "tt_um_tnt_mosbius"
+#
+# Which part is the one thing here that a person genuinely does change: they
+# have a different chip on the desk, or they are simulating for one. That is a
+# property of the session, not of any one design, so it is an environment
+# variable rather than something written into a schematic -- a sheet that
+# named a part could disagree with the netlist generated beside it, and
+# nothing would say so. `--project` still overrides it per command.
+#
+#     export MOSBIUS_PROJECT=tt_um_mosbius
+#
+# Set it before launching xschem and the testbench's own `generate routed
+# spice` button follows it too, since that shells out to the same CLI.
+PROJECT_ENV_VAR = "MOSBIUS_PROJECT"
+BUILTIN_DEFAULT_PROJECT = "tt_um_tnt_mosbius"
+
+
+def default_project() -> str:
+    """The macro to assume when nothing on the command line names one."""
+    return os.environ.get(PROJECT_ENV_VAR, "").strip() or BUILTIN_DEFAULT_PROJECT
+
+
+DEFAULT_PROJECT = default_project()
 DEFAULT_SHUTTLE = "ttsky25a"
 PROJECT_INDEX_URL = "https://index.tinytapeout.com/{shuttle}/{macro}.json"
 PROJECT_PAGE_URL = "https://tinytapeout.com/chips/{shuttle}/{macro}"

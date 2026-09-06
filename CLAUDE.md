@@ -273,6 +273,137 @@ routed" assertion it could not make before, and
 `tools/run_srlatch_measured_edge.sh`'s `--drawn-w4` flag is gone, since
 the sheet is what that flag used to simulate.
 
+**One symbol library draws either part, the whole difference is one
+number, and `--project` is the only place a part is named (2026-09-06).**
+Every PMOS has the same total width and length on tnt's part and on Andrew
+Kang's; his splits each into 1.5x as many fingers, so a finger is 5.0 um
+wide on his and 7.5 um on tnt's, and the NMOS are identical. That is
+`Chip.pmos_width_per_finger`, and `mosbius simulate` writes it into the
+routed netlist it generates as a global `.param`, above the `.subckt`. A
+testbench includes that netlist at the top level, so the parameter reaches
+the ideal `mosbius_*` symbols on the design sheet as well, and the as-drawn
+half follows whatever `--project` the design was routed for without being
+told separately. Five sheets divide a literal total width by it --
+`mosbius_pmos` (inside the `wdev`/`nfdev` code block trap 10 forced on it),
+`mosbius_psource`, `mosbius_ptail`, `mosbius_ota` and `mosbius_bias`.
+`tests/test_geometry.py` is the join, since nothing else in Python reads
+that parameter: both parts divide every width in use exactly, the parameter
+is emitted above the subcircuit rather than inside it, no PMOS keeps a
+literal finger count, and no NMOS reaches for it.
+
+A routed netlist generated before this existed is a case an mtime
+comparison cannot see -- nobody edited the design sheet, the file is just
+older than the tool that wrote it -- and it surfaces as a fatal ngspice
+`Undefined parameter [nfdev]` inside a device subcircuit the user never
+opened. `xschemrc`'s `mosbius_routed_has_geometry` checks for the line at
+Netlist time and says which button rebuilds the file, beside the existing
+missing/stale warnings.
+
+**A per-testbench part selector was built first and then removed the same
+day; do not re-propose it.** It was a `GEOMETRY` block on each testbench
+sheet calling a `mosbius_geometry_include` proc in `xschemrc`, which pulled
+in a committed `mosbius/data/geometry_<part>.spice`. It worked, and it was
+wrong: it made the part a *second* thing to set, so a sheet saying `tnt`
+beside a netlist routed for Andrew's part gave a drawn-versus-routed
+comparison between two different chips, with nothing to say so -- the same
+shape as the stale-netlist bug this project already fixed once. Putting the
+number in the generated netlist deletes the proc, the two data files and the
+block, and makes the disagreement unrepresentable. It also survives an
+absolute-path problem the include had: `mosbius simulate` runs on the host
+while ngspice runs in the container, so a path Python writes is not a path
+ngspice can open.
+
+**Do not assume a geometry difference must mean a model-bin difference.**
+The obvious worry, given trap 10, was that 5.0 and 7.5 um fingers land in
+different sky130 bins and the two parts' as-drawn numbers are then allowed
+to disagree by more than rounding. They do not.
+`build/bintest_pmos_fingers.spice` diode-connects a
+`sky130_fd_pr__pfet_g5v0d10v5` at all three widths in use, at both finger
+counts, and all six select `phv_model.7`; |Vsg| differs by 1.18 mV at
+187 uA (0.09%) and the thresholds by 1.4 mV, which is BSIM4's narrow-width
+terms seeing a different per-finger effective width. The PDK says why, and
+it generalises: that model file's subcircuit hands the binned `phv_model`
+the instance's *total* `w` and `l` with `nf` alongside as an ordinary
+instance parameter, so the finger count is not an input to bin selection,
+and every bin carries `wmin = 2E-5 wmax = 1.01E-3` -- one width bin from
+20 um to 1.01 mm. The binning is on length.
+
+For tnt the change is exactly a no-op, and both halves of that were
+checked. `build/nfcheck.spice` prints every old literal finger count minus
+its new expression at 7.5 um and every difference is 0, since 30, 60 and
+120 all divide exactly; and all seven examples re-simulate to their
+published numbers. The other part was exercised end to end on the PMOS
+differential amplifier: routed and simulated with `--project
+tt_um_mosbius`, the generated netlist says Andrew Kang's part and sets 5.0,
+and the as-drawn quiescent output moves to exactly what hand-forcing his
+geometry produced, with no testbench edit. Two things found on the way,
+worth not rediscovering: Andrew's device library has five PMOS tnt's does
+not, and every one has drain, gate, source and bulk on the same node, so
+they are dummies -- "every PMOS is 1.5x" means every PMOS in the ideal
+library, not every PMOS on the die, and the pad mux is identical on both at
+W=180 nf=18.
+
+**The PMOS bulk is the one part difference still not modelled, and its size
+is known.** Andrew's generic PMOS and his PMOS differential-pair halves tie
+their bulk to their own source where tnt's tie it to VAPWR; every other
+PMOS on both parts sits with its source on the rail, so the bulk lands in
+the same place and there is nothing to model. It therefore only bites when
+a PMOS source is off the rail. Measured on a pair half at his geometry,
+200 uA, that is worth 51 mV of extra gate drive at 200 mV of source drop
+and 142 mV at 600 mV. At the *circuit* level it is much smaller than that
+suggests: on `examples/pdiffamp/`, whose tail node sits 580 mV below the
+rail, drawing the bulk on the source instead moves the gain from 21.21 to
+20.80 V/V (1.9%) and the quiescent output by 4.8 mV, because the tail
+source sets the current rather than the threshold and the pair's shared
+source is a virtual ground differentially, so the body effect drops out of
+the differential gain. Where it would *not* be ignorable is a circuit whose
+source moves with the signal: body transconductance is 25% of gm on this
+device, so a PMOS source follower drawn with the bulk on the rail comes out
+about 20% low. Note the asymmetry -- the as-routed side is already correct,
+since it comes from his own device library, so leaving this undone puts a
+2% artifact into his drawn-versus-routed comparison that is not the switch
+matrix. A bulk is a node and not a number, so it cannot ride the same
+`.param`; the shape that fits is an internal well node in `mosbius_pmos`
+tied to the rail through one resistor and to the source through another,
+with both values coming from the `Chip` alongside the width per finger.
+
+**Which part is an environment variable, `MOSBIUS_PROJECT`, and that is
+what makes the testbench's `generate routed spice` button work for either
+one.** The button shells out to `tools/regenerate_routed.sh`, which shells
+out to the same `mosbius` commands, so nothing in that chain needed a flag
+-- `mosbius/pads.py`'s `default_project()` reads the variable and every
+command defaults from it, with `--project` still overriding per command.
+`build_parser()` reads it at parse time rather than import time, so it
+behaves like a setting and the `--project` help text shows what this run
+will actually do. A typo in it stops in `main()` before anything runs, with
+a message naming the variable: the same typo left to `chip_for_macro` would
+talk about `--project`, which is not where the value came from, and the
+reader has no reason to look at their shell.
+
+The button was the last place a wrong part could be chosen silently, and it
+failed in the worst direction: it always built tnt's netlist, which then
+agreed with the drawn half, so both halves were consistently the wrong chip.
+`tools/sim/check_example_sim.sh` now pins `MOSBIUS_PROJECT=tt_um_tnt_mosbius`
+for the opposite reason -- every reference number it compares against was
+measured on tnt's part, so a developer working on the other one must not be
+able to re-target the regression by exporting a variable and then be told
+its numbers had drifted.
+
+**A routed design JSON records the part it was routed for, and that closed
+two silent paths.** `save_routed_design()` writes `"project"`, so a
+bitstream no longer travels without the thing that gives it meaning.
+`route_sticky()` refuses to replay a stored routing whose part is not the
+one being routed for -- before that, routing anything with an existing
+JSON after switching parts died in an unhandled `BitstreamError` about hex
+characters, which is the first thing someone who has just set
+`MOSBIUS_PROJECT` would have met. And `simulate_from_routed_json()` stops
+if the file's part is not the one asked for, naming both and giving the two
+commands that resolve it. That last check is not redundant with the
+bitstream length: the two parts taped out so far are 192 and 196 bits, so an
+unpack catches a mismatch today, but a third part at 192 bits would unpack
+happily and build an unrelated circuit. A file written before the field
+existed makes no claim and is accepted, and re-solved by the sticky router.
+
 `TODO.md` holds deferred work. It is renumbered from 1 whenever items are
 removed, so a `TODO.md` §number goes stale the moment anything above it
 closes -- cite one only in `TODO.md` itself, and describe the item in
