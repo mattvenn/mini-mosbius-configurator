@@ -15,7 +15,15 @@ tnt's. Routing, bitstreams, pad tables, programming and the as-routed SPICE
 model all work on both parts now; `--project` picks which, and an unmapped
 macro stops rather than guessing. The same inverter schematic routed onto each
 part and simulated agrees to 2 mV of trip point, and tnt's side still
-reproduces its published 1.600 V exactly. What is left:
+reproduces its published 1.600 V exactly.
+
+Start with the binning deck in the first bullet. It is twenty minutes, it needs
+nothing but a container, and it decides the shape of the largest piece of work
+left here -- whether the two parts share one ideal library with a parameter or
+are genuinely in different model bins. Everything else below can be done in any
+order, and none of it needs a chip except the last bullet.
+
+What is left:
 
 - one ideal symbol library covering both, for the as-drawn side. Every device
   has the same width and length and the same slice values on both parts; the
@@ -76,7 +84,12 @@ reproduces its published 1.600 V exactly. What is left:
 
 - nothing here has been near his silicon. `--verify` will not catch a wrong
   bit-to-function mapping either, only a broken chain, since it just shifts
-  the same bits back out.
+  the same bits back out. This needs no new hardware: his macro is on the same
+  ttsky25a chip as tnt's, at address 490 against 239, so the demoboard already
+  used for every measurement in this repo can program it. Do the simulation
+  work above first -- bench time is the scarce thing, and a session is worth
+  having only if every example is already routed with a predicted number to
+  disagree with. That is what pinned the corner on tnt's part.
 
 The wider question this came from is answered for now: every mini-MOSbius so
 far is sky130A, so the PDK axis is still hypothetical, and
