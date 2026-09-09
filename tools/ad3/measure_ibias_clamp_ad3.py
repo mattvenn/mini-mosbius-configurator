@@ -14,6 +14,20 @@ current is what you think -- so this script settles both on their own.
 Run it from the repo root, on the host (it needs USB for the demoboard):
 
     python3 tools/ad3/measure_ibias_clamp_ad3.py --resistor 20000
+    python3 tools/ad3/measure_ibias_clamp_ad3.py --project tt_um_mosbius --resistor 20000
+
+Defaults to tnt's part (`tt_um_tnt_mosbius`); `--project tt_um_mosbius`
+measures the same thing through Andrew Kang's part instead, which reaches
+`ibias` on a different physical pad (the pad mapping is a property of
+where each project sits on the shuttle, not of the reference circuit).
+**There is deliberately no per-part output file.** The reference being
+measured -- `mirror_n.sch`'s diode-connected NMOS -- is one of the devices
+"one symbol library draws either part" left untouched: identical geometry
+on both parts, so both projects' `--ibias` calibrates the same physical
+circuit and belong in one curve. Every script that reads
+`build/ibias_clamp.json` (this file's own name, and every `implied_bias()`)
+does so without a project suffix for that reason -- run this once for
+whichever pad you have wired and it serves all of them.
 
 **What it is actually testing.** `ua[0]` feeds the gate and drain of the
 diode-connected NMOS that references every mirror and tail on the chip
@@ -56,11 +70,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from mosbius.chips import chip_for_macro  # noqa: E402
 from mosbius.pads import format_analog_header, pad_map  # noqa: E402
 
-PROJECT = "tt_um_tnt_mosbius"
+DEFAULT_PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"
-ALL_SWITCHES_OPEN = "0" * 48
+
+
+def all_switches_open(project: str) -> str:
+    """The all-zero bitstream for whichever part's config chain this is.
+
+    Not a fixed 48-hex-char literal: Andrew Kang's part is a 196-bit chain
+    (49 hex chars), and a 48-char all-zero string handed to his part's
+    unpacker would be the wrong width rather than merely the wrong part.
+    """
+    return "0" * chip_for_macro(project).hex_chars
 
 # The sweep window. V+ is settable over 0.5..5.0 V on an AD3 (read off the
 # device 2026-08-29), and the scope window is centred to hold 0..4.65 V
@@ -109,7 +133,7 @@ def wiring_table(pad: str, resistor: float) -> str:
     return "\n".join(out) + "\n"
 
 
-def program_chip(port: str | None) -> None:
+def program_chip(project: str, port: str | None) -> None:
     """Select this project's analog mux slot, with every switch open.
 
     `--ibias 0` matters: on a board that *does* have the bias circuit it
@@ -119,8 +143,8 @@ def program_chip(port: str | None) -> None:
     rather than reporting a clean upload and a bias current it never
     delivered.
     """
-    cmd = [sys.executable, "-m", "mosbius.cli", "program", ALL_SWITCHES_OPEN,
-           "--project", PROJECT, "--ibias", "0"]
+    cmd = [sys.executable, "-m", "mosbius.cli", "program", all_switches_open(project),
+           "--project", project, "--ibias", "0"]
     if port:
         cmd += ["--port", port]
     print("== selecting the project, with every switch open")
@@ -160,7 +184,7 @@ def sweep(handle, resistor: float) -> list[dict]:
     return points
 
 
-def report(points: list[dict], resistor: float, pad: str) -> None:
+def report(points: list[dict], resistor: float, pad: str, project: str) -> None:
     print(f"\n  V+ set   rail at R    pad {pad}      current")
     print("  ------   ---------    ---------   ----------")
     for p in points:
@@ -191,13 +215,17 @@ def report(points: list[dict], resistor: float, pad: str) -> None:
               "  current source still being on: this script asks for --ibias 0, so\n"
               "  check what `mosbius program` reported about it above.")
     elif slope > 0.7:
+        confirmed = {
+            "tt_um_tnt_mosbius": "ua1->C, ua2->J and ua3->D",
+            "tt_um_mosbius": "ua1->K and ua2->C (examples/inverter, 2026-09-08)",
+        }.get(project, "no pad on this project")
         print("\n  OPEN CIRCUIT -- the pad is following the rail, so no current is\n"
               "  flowing and there is no diode on the other end. In order of\n"
               f"  likelihood: the project's analog mux slot is not selected; pad {pad}\n"
               "  is not this chip's ibias after all; or a lead is off. Note that\n"
-              f"  pad {pad} is NOT one of the three confirmed on silicon -- ua1->C,\n"
-              "  ua2->J and ua3->D are; this one is composed from the shuttle index\n"
-              "  and the carrier wiring and has not been checked at a bench before.")
+              f"  pad {pad} is not among the ones confirmed on silicon for {project} --\n"
+              f"  {confirmed} are; this one is composed from the shuttle index and the\n"
+              "  carrier wiring and has not been checked at a bench before.")
     elif max(p["pad"] for p in points) < 0.15:
         print("\n  GROUNDED -- the pad is held at 0 V however hard the rail pushes.\n"
               "  Eight of the ETR header's lettered pads (A, B, E, H, L, M, N, P)\n"
@@ -241,6 +269,8 @@ def _rail_for(points: list[dict], amps: float) -> float | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--project", default=DEFAULT_PROJECT,
+                        help=f"which part's ibias pad to measure (default: {DEFAULT_PROJECT})")
     parser.add_argument("--resistor", type=float, default=20000.0,
                         help="series resistance in ohms (default: 20k)")
     parser.add_argument("--pad", default=None,
@@ -250,9 +280,9 @@ def main() -> None:
                         help="skip programming; the project must already be selected")
     args = parser.parse_args()
 
-    pad = args.pad or pad_map(SHUTTLE, PROJECT)["ibias"]
+    pad = args.pad or pad_map(SHUTTLE, args.project)["ibias"]
     if not args.no_program:
-        program_chip(args.port)
+        program_chip(args.project, args.port)
     print(wiring_table(pad, args.resistor))
     input("  Press Enter once that is wired and the resistor is in place... ")
 
@@ -261,9 +291,10 @@ def main() -> None:
 
     out = Path("build/ibias_clamp.json")
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps({"resistor": args.resistor, "pad": pad, "points": points}))
+    out.write_text(json.dumps({"resistor": args.resistor, "pad": pad,
+                               "project": args.project, "points": points}))
     print(f"\n== {len(points)} points written to {out}")
-    report(points, args.resistor, pad)
+    report(points, args.resistor, pad, args.project)
 
 
 if __name__ == "__main__":

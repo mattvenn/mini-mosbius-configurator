@@ -8,6 +8,14 @@ the output does. Run from the repo root, on the host:
 
     python3 tools/ad3/measure_settling_ad3.py otabuf
     python3 tools/ad3/measure_settling_ad3.py diffamp
+    python3 tools/ad3/measure_settling_ad3.py otabuf --project tt_um_mosbius
+
+Defaults to tnt's part (`tt_um_tnt_mosbius`); `--project tt_um_mosbius`
+measures the same schematic routed for Andrew Kang's part instead, where
+supported -- otabuf's slew rate has a Kang-routed profile, diffamp's tau
+does not yet (its published tau/Rout figures have no reproducible
+derivation recorded to redo for a second part; the diff amp's gain is
+already measured on Kang's part by measure_diffamp_ad3.py).
 
 `examples/otabuf/` is slew-limited -- its tail current charges the output
 node at a fixed rate -- so what is timed is a slew rate, output crossing
@@ -51,11 +59,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.chips import KANG, TNT  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-PROJECT, SHUTTLE = "tt_um_tnt_mosbius", "ttsky25a"
+SHUTTLE = "ttsky25a"
 NSAMPLES, CAPTURES = 4096, 16
 STIMULUS_HZ = 10_000.0
 BIAS_RAIL = 3.28
@@ -68,50 +76,73 @@ AD3_CPROBE, SHEET_CPROBE = 24e-12, 10e-12
 
 IN_CH, OUT_CH = 0, 1
 
-# Each profile's bitstream is its example as the router placed it on
-# 2026-08-29 -- the same strings tools/ad3/measure_otabuf_ad3.py and
-# tools/ad3/measure_diffamp_ad3.py program, and the configurations the step
-# responses below were measured against. They are records of experiments,
-# not cached build artifacts: if the router's allocation ever changes,
-# re-route and re-measure rather than editing these strings, or the
-# published numbers quietly stop describing what was on the chip.
+# Each project entry's bitstream is its example as the router placed it for
+# that part, and the configuration the step responses were measured
+# against. They are records of experiments, not cached build artifacts: if
+# the router's allocation for a part ever changes, re-route and re-measure
+# rather than editing these strings, or the published numbers quietly stop
+# describing what was on the chip.
 # The OTA follower's published slew rates come from the checker that
 # asserts them against examples/otabuf/README.md, so there is one literal
-# for the pair rather than one per file. The diff amp's tau below has no
-# such counterpart -- it is published nowhere else -- so it stays a literal.
+# for the tnt pair rather than one per file. Kang's pair has no such
+# counterpart -- it is not published anywhere, only simulated here -- so it
+# stays a literal, from a tb_otabuf.sch run with MOSBIUS_PROJECT=tt_um_mosbius,
+# 2026-09-09.  The diff amp's tau below has no such counterpart either, for
+# either part, and Kang's is not characterized at all yet -- see the module
+# docstring.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "sim"))
 from check_otabuf_sim import REFERENCE_SLEW_V_PER_US as OTABUF_SLEW  # noqa: E402
 
 PROFILES = {
     "otabuf": {
-        "bitstream": "404000000000000000000000000000000000000000850210",
         "in_pin": "ua1", "out_pin": "ua2",
         "step": (1.0, 2.3),          # what tb_otabuf.sch steps between
         "kind": "slew",
         "band": (1.3, 2.0),          # the sheet measures the slew here
         "trigger": ("in", 1.65),
-        # slew = I_tail / C, so C follows from the published rate.
-        # Imported, not copied: this pair is published in
-        # examples/otabuf/README.md's table and asserted by
-        # tools/sim/check_otabuf_sim.py, and a second literal here would be a
-        # third copy with nothing keeping it in step.
-        "published": {"as drawn": OTABUF_SLEW["drawn"],
-                      "as routed": OTABUF_SLEW["routed"]},
         "tail_amps": 400e-6,
         "dc_gain": 1.0,
         "units": "V/us",
+        "projects": {
+            "tt_um_tnt_mosbius": {
+                "chip": TNT,
+                "bitstream": "404000000000000000000000000000000000000000850110",
+                # slew = I_tail / C, so C follows from the published rate.
+                # Imported, not copied: this pair is published in
+                # examples/otabuf/README.md's table and asserted by
+                # tools/sim/check_otabuf_sim.py, and a second literal here
+                # would be a third copy with nothing keeping it in step.
+                "published": {"as drawn": OTABUF_SLEW["drawn"],
+                              "as routed": OTABUF_SLEW["routed"]},
+            },
+            "tt_um_mosbius": {
+                "chip": KANG,
+                "bitstream": "0000000000000000000010888000000001020200000000000",
+                "published": {"as drawn": 42.7, "as routed": 15.3},
+            },
+        },
     },
     "diffamp": {
-        "bitstream": "00100000c020004820000000004821000000000000000030",
         "in_pin": "ua1", "out_pin": "ua4", "hold_pin": "ua2",
         "step_mv": 40.0,             # +/- about the operating point
         "common_mode": 1.5,
         "kind": "tau",
         "trigger": ("out", None),    # level found from the capture itself
-        # tau = Rout * C, so C follows from the published tau and Rout.
-        "published": {"as drawn": 90.0, "as routed": 220.0},
-        "rout": {"as drawn": 9e3, "as routed": 15e3},
         "units": "ns",
+        "projects": {
+            "tt_um_tnt_mosbius": {
+                "chip": TNT,
+                "bitstream": "00100000c020004820000000004821000000000000000030",
+                # tau = Rout * C, so C follows from the published tau and Rout.
+                "published": {"as drawn": 90.0, "as routed": 220.0},
+                "rout": {"as drawn": 9e3, "as routed": 15e3},
+            },
+            # No tt_um_mosbius entry: these tau/Rout figures have no
+            # reproducible derivation recorded to redo for a second part
+            # (see the module docstring). The diff amp's gain -- what this
+            # branch is actually about -- is already measured on Kang's part
+            # by measure_diffamp_ad3.py.
+        },
     },
 }
 
@@ -163,15 +194,15 @@ def wiring_table(name, profile, pads) -> str:
              f"{profile['in_pin']}, the stepped input"),
             ("1+ (orange)", pads[profile["in_pin"]], "the same node, times the stimulus")]
     if "hold_pin" in profile:
-        rows.insert(2, ("W2 (white)", pads[profile["hold_pin"]],
+        rows.insert(2, ("W2 (yellow/white)", pads[profile["hold_pin"]],
                         f"{profile['hold_pin']}, held at the common-mode point"))
     rows += [("2+ (blue)", pads[profile["out_pin"]], f"{profile['out_pin']}, the output"),
              ("1-, 2-, GND", "any gnd", "scope reference -- differential inputs")]
     out = [f"\n  Wiring for {name}:\n",
-           "    AD3 lead      where              signal",
-           "    -----------   ----------------   ------------------------------------"]
+           "    AD3 lead           where              signal",
+           "    ----------------   ----------------   ------------------------------------"]
     for lead, where, what in rows:
-        out.append(f"    {lead:<13s} {where:<18s} {what}")
+        out.append(f"    {lead:<18s} {where:<18s} {what}")
     if "hold_pin" not in profile:
         # Coming from the diffamp measurement, W2 is sitting on pad J holding
         # a common-mode level -- and for otabuf pad J is the *output*. A
@@ -187,9 +218,9 @@ def wiring_table(name, profile, pads) -> str:
     return "\n".join(out) + "\n\n" + format_analog_header(pads) + "\n"
 
 
-def program_chip(bitstream, port) -> None:
+def program_chip(bitstream, project, port) -> None:
     cmd = [sys.executable, "-m", "mosbius.cli", "program", bitstream,
-           "--project", PROJECT, "--ibias", "0"]
+           "--project", project, "--ibias", "0"]
     if port:
         cmd += ["--port", port]
     print("== loading the design onto the chip")
@@ -431,16 +462,25 @@ def check_alive(handle, profile, mid=1.65, tol=0.25):
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("circuit", choices=sorted(PROFILES))
+    ap.add_argument("--project", default="tt_um_tnt_mosbius")
     ap.add_argument("--port", default=None)
     ap.add_argument("--no-program", action="store_true")
     ap.add_argument("--captures", type=int, default=CAPTURES)
     args = ap.parse_args()
 
     profile = PROFILES[args.circuit]
-    pads = pads_in_use(SwitchConfig(bits=unpack(profile["bitstream"])),
-                       SHUTTLE, PROJECT)
+    if args.project not in profile["projects"]:
+        raise SystemExit(
+            f"{args.circuit} has not been characterized on {args.project} yet "
+            f"(only {', '.join(sorted(profile['projects']))} {'is' if len(profile['projects']) == 1 else 'are'}).\n"
+            "  See this file's module docstring for why.")
+    profile = {**profile, **profile["projects"][args.project]}
+
+    pads = pads_in_use(
+        SwitchConfig.from_bitstream(profile["bitstream"], chip=profile["chip"]),
+        SHUTTLE, args.project)
     if not args.no_program:
-        program_chip(profile["bitstream"], args.port)
+        program_chip(profile["bitstream"], args.project, args.port)
     print(wiring_table(args.circuit, profile, pads))
     input("  Press Enter once that is wired... ")
 
@@ -523,7 +563,7 @@ def main() -> None:
             else:
                 amps = implied_bias(rail["voltage"])
 
-            entry = {"amps": amps}
+            entry = {"amps": amps, "rail": v_rail}
             for rising, dir_name in directions:
                 ad3.scope_setup_triggered(handle, rate, NSAMPLES, trig_ch,
                                           level, rising=rising, position=0.0)
@@ -555,13 +595,34 @@ def main() -> None:
     print(f"\n== written to {out}")
 
 
+def _bias_label(entry: dict, short: bool = False) -> str:
+    """"X uA" when build/ibias_clamp.json turned the rail into a current,
+    else the raw rail voltage -- run tools/ad3/measure_ibias_clamp_ad3.py once
+    to get uA instead of rail voltages in every report from here on."""
+    if entry["amps"] is not None:
+        return f"{entry['amps'] * 1e6:.1f} uA"
+    if short:
+        return f"{entry['rail']:.2f} V"
+    return f"V+ = {entry['rail']:.2f} V (uA unknown)"
+
+
 def report(name, profile, by_bias) -> None:
     unit = profile["units"]
     corrected = probe_corrected(profile)
-    nominal = min(by_bias, key=lambda b: abs((b["amps"] or 0) - 100e-6))
+    # Prefer the actual bias current when known (from build/ibias_clamp.json,
+    # via implied_bias()); without it every entry's amps is None and this
+    # would tie on abs(0 - 100e-6) for all of them, silently handing min()
+    # whichever rail came first in SLEW_RAILS rather than the nominal one.
+    # Falling back to the rail closest to BIAS_RAIL keeps "nominal" honest
+    # either way.
+    nominal = min(
+        by_bias,
+        key=lambda b: abs(b["amps"] - 100e-6) if b["amps"] is not None
+        else abs(b["rail"] - BIAS_RAIL),
+    )
 
     print(f"\n  {name}: {len(by_bias)} bias point(s)\n")
-    print(f"    at {nominal['amps'] * 1e6:.0f} uA        {nominal['value']:7.2f} {unit}"
+    print(f"    at {_bias_label(nominal)}        {nominal['value']:7.2f} {unit}"
           f"   (sd {nominal['sd']:.2f} over {nominal['n']})")
     print(f"\n    published, 10 pF probe:  as drawn "
           f"{profile['published']['as drawn']:7.2f} {unit}")
@@ -593,7 +654,7 @@ def report(name, profile, by_bias) -> None:
         stim = b.get("stimulus_ns")
         margin = out_ns / stim if out_ns and stim else None
         flag = "" if margin and margin >= 3 else "  <- too close"
-        cells = [f"{b['amps'] * 1e6:6.1f} uA",
+        cells = [f"{_bias_label(b, short=True):>9s}",
                  f"{rise:5.2f} {unit}" if rise else "     --   ",
                  f"{fall:5.2f} {unit}" if fall else "     --   ",
                  f"{out_ns:4.0f}ns" if out_ns else "   --ns",
@@ -638,7 +699,7 @@ def report(name, profile, by_bias) -> None:
         for b in by_bias:
             r = b.get("rising", {}).get("delay_ns")
             f = b.get("falling", {}).get("delay_ns")
-            print(f"    {b['amps'] * 1e6:6.1f} uA   "
+            print(f"    {_bias_label(b, short=True):>9s}   "
                   + (f"{r:5.0f} ns" if r else "    -- ns") + "   "
                   + (f"{f:5.0f} ns" if f else "    -- ns"))
             if r and f:
@@ -656,7 +717,7 @@ def report(name, profile, by_bias) -> None:
             else:
                 print(f"\n  Rising and falling delays agree to within "
                       f"{max(abs(x - 1) for x in ratios) * 100:.0f}%.")
-        if len(delays) > 2:
+        if len(delays) > 2 and all(a is not None for a, _ in delays):
             # If slewing dominates, the delay is the time to slew half the
             # step, so it goes as 1/ibias. Anything left at infinite bias is
             # fixed loop delay. Fit delay against 1/ibias: the intercept is
@@ -675,7 +736,7 @@ def report(name, profile, by_bias) -> None:
                   f"  fixed delay through the loop and the instrument together. A single\n"
                   f"  reading at one bias cannot separate those two; the sweep can.")
 
-    if len(usable) > 1:
+    if len(usable) > 1 and all(b["amps"] is not None for b in usable):
         # slew = I_tail / C = 4 * ibias / C, so the slope against ibias gives
         # the node capacitance -- and a slope does not need the probe's own
         # capacitance to be known, which a single slew reading does.
@@ -696,6 +757,12 @@ def report(name, profile, by_bias) -> None:
               f"  means slew = 4 x ibias / C, so the SLOPE against ibias gives C on\n"
               f"  its own, while a single slew reading needs the probe capacitance to\n"
               f"  be right -- and 24 pF is a datasheet figure, not a measurement.")
+    elif len(usable) > 1:
+        print("\n  Skipping the slew-vs-bias capacitance fit: it needs real bias\n"
+              "  currents on the x-axis, and build/ibias_clamp.json hasn't\n"
+              "  characterized this board's V+ -> ibias relationship yet, so every\n"
+              "  point above is a rail voltage, not a current. Run\n"
+              "  tools/ad3/measure_ibias_clamp_ad3.py once and re-run this to get it.")
     else:
         print("\n  Too few points cleared the 3x margin to fit a capacitance. Lower\n"
               "  the bias further; the rails are set by SLEW_RAILS.")

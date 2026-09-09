@@ -8,6 +8,11 @@ crossing mid-rail to Q crossing it, which is `tb_srlatch.sch`'s `treset`.
 Run from the repo root, on the host:
 
     python3 tools/ad3/measure_srlatch_edge_ad3.py
+    python3 tools/ad3/measure_srlatch_edge_ad3.py --project tt_um_mosbius
+
+Defaults to tnt's part (`tt_um_tnt_mosbius`); `--project tt_um_mosbius`
+measures the same schematic routed for Andrew Kang's part instead, on
+different pads.
 
 **Triggering is what makes this possible, and its absence is what made it
 look impossible.** The event is tens of nanoseconds inside a sequence
@@ -49,6 +54,7 @@ not against `treset_drawn`/`treset_routed`.
 
 from __future__ import annotations
 
+import argparse
 import ctypes
 import json
 import statistics
@@ -61,25 +67,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.chips import KANG, TNT  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
     ProgramError,
     ibias_warning,
     program,
 )
-from mosbius.pads import pads_in_use  # noqa: E402
+from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-# examples/srlatch as the router placed it on 2026-08-29, the same string
-# tools/ad3/measure_srlatch_ad3.py programs; the measured reset edge is against it.
-# It is a record of an experiment, not a cached build artifact: if the
-# router's allocation ever changes, re-route and re-measure rather than
-# editing this string, or the published numbers quietly stop describing
-# the configuration that was actually on the chip.
-BITSTREAM = "0c008000c020008808000000008821000220200800000038"
-PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"
 VAPWR, MIDRAIL = 3.3, 1.65
+
+# Each entry is a record of a specific routing, not a cached build artifact:
+# if the router's allocation for a part ever changes, re-route and
+# re-measure rather than editing the bitstream here, or the published
+# numbers quietly stop describing the configuration that was actually on
+# the chip. Both entries are the same strings tools/ad3/measure_srlatch_ad3.py
+# programs, so the measured reset edge is against the same routing.
+PROJECTS = {
+    "tt_um_tnt_mosbius": {
+        "chip": TNT,
+        "bitstream": "0c008000c020008808000000008821000220200800000038",
+    },
+    "tt_um_mosbius": {
+        "chip": KANG,
+        "bitstream": "0408c08008100000000000004422200003020212220400408",
+    },
+}
 
 NSAMPLES = 4096
 CAPTURES = 20
@@ -94,25 +109,24 @@ STATE_DONE = 2
 RESET_CH, Q_CH = 0, 1        # scope channel index, so 0 is 1+ and 1 is 2+
 
 
-def wiring_table() -> str:
-    pads = pads_in_use(SwitchConfig(bits=unpack(BITSTREAM)), SHUTTLE, PROJECT)
+def wiring_table(pads: dict[str, str]) -> str:
     rows = [
         ("W1 (yellow)", pads["ua1"], "SET, design ua1 -- arms the latch high"),
-        ("W2 (yellow)", pads["ua2"], "RESET, design ua2 -- the edge being timed"),
+        ("W2 (yellow/white)", pads["ua2"], "RESET, design ua2 -- the edge being timed"),
         ("1+ (orange)", pads["ua2"], "the same node, so the stimulus is measured"),
         ("", "", "where it arrives rather than where it is commanded"),
         ("2+ (blue)", pads["ua3"], "Q, design ua3"),
         ("1-, 2-, GND", "gnd", "scope reference"),
     ]
     out = ["\n  Wire the Analog Discovery to the demoboard like this:\n",
-           "    AD3 lead      pad      signal",
-           "    -----------   -----    ------------------------------------------"]
+           "    AD3 lead           pad      signal",
+           "    ----------------   -----    ------------------------------------------"]
     for lead, pad, what in rows:
-        out.append(f"    {lead:<13s} {pad:<8s} {what}")
-    return "\n".join(out) + "\n"
+        out.append(f"    {lead:<18s} {pad:<8s} {what}")
+    return "\n".join(out) + "\n\n" + format_analog_header(pads) + "\n"
 
 
-def program_chip(port: str | None) -> None:
+def program_chip(project: str, bitstream: str, chip, port: str | None) -> None:
     """Upload the configuration through mosbius.program.program().
 
     Not `python3 -m mosbius.cli program` in a subprocess. The result dict
@@ -124,10 +138,10 @@ def program_chip(port: str | None) -> None:
     script would then measure an unbiased chip very carefully.
     tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
-    config = SwitchConfig.from_bitstream(BITSTREAM)
-    print("== loading the SR latch onto the chip")
+    config = SwitchConfig.from_bitstream(bitstream, chip=chip)
+    print(f"== loading the SR latch onto the chip ({project})")
     try:
-        result = program(config, project=PROJECT, port=port)
+        result = program(config, project=project, port=port)
     except ProgramError as exc:
         raise SystemExit(f"programming failed -- nothing measured\n\n{exc}")
     warning = ibias_warning(result, config)
@@ -248,11 +262,21 @@ def one_capture(handle, rate: float) -> dict | None:
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    port = args[args.index("--port") + 1] if "--port" in args else None
-    if "--no-program" not in args:
-        program_chip(port)
-    print(wiring_table())
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--project", choices=sorted(PROJECTS), default="tt_um_tnt_mosbius")
+    ap.add_argument("--port", default=None)
+    ap.add_argument("--no-program", action="store_true")
+    args = ap.parse_args()
+
+    spec = PROJECTS[args.project]
+    pads = pads_in_use(
+        SwitchConfig.from_bitstream(spec["bitstream"], chip=spec["chip"]),
+        SHUTTLE, args.project,
+    )
+    if not args.no_program:
+        program_chip(args.project, spec["bitstream"], spec["chip"], args.port)
+    print(wiring_table(pads))
+    input("  Press Enter once that is wired... ")
 
     handle = ad3.open_device()
     try:
@@ -261,6 +285,15 @@ def main() -> None:
               f"({1 / rate * 1e9:.1f} ns per sample), {NSAMPLES} samples, "
               f"triggered on Q falling through {MIDRAIL} V\n")
         start_stimulus(handle, STIMULUS_HZ)
+        # Throw the first capture away. start_stimulus() enables the wavegen
+        # and returns after a fixed 0.2 s settle, but the very first trigger
+        # after that can still catch the generator's own startup transient
+        # rather than a clean, steady-state edge -- the same failure mode
+        # _capture_batch() in measure_settling_ad3.py already guards
+        # against. Seen on a real run as one 12.6 us "delay" sitting among
+        # nineteen that agreed to 16 ps: not a rare event to average away,
+        # a single miscapture to discard.
+        one_capture(handle, rate)
         results, trace = [], None
         for _ in range(CAPTURES):
             got = one_capture(handle, rate)
@@ -282,7 +315,8 @@ def main() -> None:
 
     delays = [r["delay_ns"] for r in results]
     stimulus = [r["stimulus_1090_ns"] for r in results if r["stimulus_1090_ns"]]
-    out = Path("build/srlatch_silicon_edge.json")
+    suffix = "_kang" if args.project == "tt_um_mosbius" else ""
+    out = Path(f"build/srlatch{suffix}_silicon_edge.json")
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({"rate": rate, "captures": results,
                                "trace": {"reset": trace[RESET_CH], "q": trace[Q_CH]}}))

@@ -97,13 +97,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from mosbius.chips import chip_for_macro  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.pads import format_analog_header, pad_map  # noqa: E402
 from mosbius.program import ProgramError, program  # noqa: E402
 
-PROJECT = "tt_um_tnt_mosbius"
+DEFAULT_PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"
-ALL_SWITCHES_OPEN = "0" * 48
+
+
+def all_switches_open(project: str) -> str:
+    """The all-zero bitstream for whichever part's config chain this is.
+
+    Not a fixed 48-hex-char literal: Andrew Kang's part is a 196-bit chain
+    (49 hex chars), and a 48-char all-zero string handed to his part's
+    unpacker would be the wrong width rather than merely the wrong part.
+    """
+    return "0" * chip_for_macro(project).hex_chars
+
+
 DEFAULT_CONFIG = Path("build/currentsource.mosbius.json")
 CLAMP_FILE = Path("build/ibias_clamp.json")
 
@@ -197,7 +209,7 @@ def w1_limits(leg: dict, resistor: float, i_max: float) -> tuple[float, float]:
 # Talking to the board
 # ---------------------------------------------------------------------------
 
-def run_program(bitstream: str, ibias: float, port: str | None) -> dict:
+def run_program(bitstream: str, ibias: float, project: str, port: str | None) -> dict:
     """Upload one configuration. Returns the device's own result dict.
 
     This calls mosbius.program.program() rather than shelling out to
@@ -213,9 +225,9 @@ def run_program(bitstream: str, ibias: float, port: str | None) -> dict:
     path = Path(bitstream)
     if path.exists():
         hexbits = json.loads(path.read_text())["bitstream"]
-    config = SwitchConfig.from_bitstream(hexbits, ibias=ibias)
+    config = SwitchConfig.from_bitstream(hexbits, ibias=ibias, chip=chip_for_macro(project))
     try:
-        return program(config, project=PROJECT, port=port)
+        return program(config, project=project, port=port)
     except ProgramError as exc:
         raise SystemExit(
             "programming failed, so nothing downstream means anything:\n\n  "
@@ -253,7 +265,7 @@ def config_from(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
-def leg_ratio(routed: dict, leg: dict) -> tuple[int, str]:
+def leg_ratio(routed: dict, leg: dict, project: str) -> tuple[int, str]:
     """(ratio, which hardware device) for this leg, read out of the config.
 
     Read from the bitstream rather than taken from the schematic or the
@@ -261,8 +273,14 @@ def leg_ratio(routed: dict, leg: dict) -> tuple[int, str]:
     and because the router chooses which of the two mirror slots a
     `mosbius_psource` becomes, so `ratio=2` on the sheet could be either
     mirp_a or mirp_b's bits.
+
+    The chip comes from the routed design's own `"project"` field when it
+    has one -- that is what the bitstream was actually packed for -- and
+    falls back to the `--project` this run was given otherwise, for a
+    routed JSON written before that field existed.
     """
-    config = SwitchConfig.from_bitstream(routed["bitstream"])
+    config = SwitchConfig.from_bitstream(
+        routed["bitstream"], chip=chip_for_macro(routed.get("project", project)))
     settings = config.device_settings()
     roles = routed.get("device_roles", {})
     role = next((r for r in roles.values() if r == leg["role"]), None)
@@ -417,7 +435,7 @@ def scope_up(handle) -> None:
     )
 
 
-def measure_zero(handle, port: str | None, resistor: float) -> dict:
+def measure_zero(handle, project: str, port: str | None, resistor: float) -> dict:
     """Both channels' own offsets, with the leg disconnected from the pad.
 
     The all-zero bitstream is not a circuit: it opens every switch in the
@@ -431,7 +449,7 @@ def measure_zero(handle, port: str | None, resistor: float) -> dict:
     bias it delivered would be feeding a leg we are trying to hold at zero.
     """
     print("== zeroing: programming the all-switches-open bitstream")
-    run_program(ALL_SWITCHES_OPEN, 0.0, port)
+    run_program(all_switches_open(project), 0.0, project, port)
 
     # Take the shunt zero at several common-mode voltages, not one. With
     # every switch open no current can flow at any of them, so all five
@@ -527,7 +545,7 @@ def confirm_bias_reaches_chip(handle, args, leg: dict, ratio: int,
              "  have delivered it -- check what it reported"
              if args.has_bias_source else
              f"the bias comes from V+ through your {args.bias_resistor / 1000:g}k\n"
-             f"  resistor into pad {pad_map(SHUTTLE, PROJECT)['ibias']}; check that lead, "
+             f"  resistor into pad {pad_map(SHUTTLE, args.project)['ibias']}; check that lead, "
              f"and that {CLAMP_FILE}\n  describes the resistor you actually have in there")
     raise SystemExit(
         f"\n  NO CURRENT IS COMING OUT OF THIS LEG ({got * 1e6:.2f} uA against "
@@ -802,9 +820,9 @@ def mode_ratio(handle, args, leg, resistor, zero, routed, ratio, role):
     rows = []
     for path in args.configs:
         cfg = config_from(Path(path))
-        this_ratio, this_role = leg_ratio(cfg, leg)
+        this_ratio, this_role = leg_ratio(cfg, leg, args.project)
         print(f"\n== programming {path}: {this_role} at ratio={this_ratio}")
-        run_program(str(path), args.ibias, args.port)
+        run_program(str(path), args.ibias, args.project, args.port)
         point = hold_pin_at(handle, args.at, resistor, zero, leg,
                             args.i_max, f"at ratio={this_ratio}: ")
         if point is None:
@@ -905,7 +923,7 @@ def mode_ibias(handle, args, leg, resistor, zero, routed, ratio, role):
         levels = [args.ibias * f for f in (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)]
         for amps in levels:
             print(f"\n== programming with --ibias {amps * 1e6:.1f}u")
-            run_program(str(args.config), amps, args.port)
+            run_program(str(args.config), amps, args.project, args.port)
             point = hold_pin_at(handle, args.at, resistor, zero, leg,
                                 args.i_max, f"at ibias={amps * 1e6:.0f}u: ")
             if point is None:
@@ -915,7 +933,7 @@ def mode_ibias(handle, args, leg, resistor, zero, routed, ratio, role):
             rows.append({"ibias": amps, "commanded": True, **point})
     else:
         curve = _clamp_curve()
-        run_program(str(args.config), 0.0, args.port)
+        run_program(str(args.config), 0.0, args.project, args.port)
         rail = 1.5
         while rail <= 4.5 + 1e-9:
             ad3.supply(handle, rail, "V+", current_limit=0.05, settle=0.2)
@@ -960,7 +978,7 @@ def mode_background(handle, args, leg, resistor, zero, routed, ratio, role):
     """
     print("\n== programming the all-switches-open bitstream: the leg is now"
           " disconnected")
-    run_program(ALL_SWITCHES_OPEN, 0.0, args.port)
+    run_program(all_switches_open(args.project), 0.0, args.project, args.port)
     points = sweep_compliance(handle, leg, resistor, zero, args.step, args.i_max)
     if len(points) < 5:
         print("\n  Too few points survived to say anything.")
@@ -995,6 +1013,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--mode", choices=sorted(MODES), default="compliance",
                         help="which experiment to run (default: compliance)")
+    parser.add_argument("--project", default=DEFAULT_PROJECT,
+                        help=f"which part's config chain (default: {DEFAULT_PROJECT}); "
+                             "the routed design(s) passed via --config/--configs must "
+                             "have been routed for the same one")
     parser.add_argument("--leg", choices=sorted(LEGS), default="source",
                         help="which mirror leg to measure (default: source)")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG,
@@ -1039,11 +1061,11 @@ def main() -> None:
         )
 
     leg = LEGS[args.leg]
-    pads = pad_map(SHUTTLE, PROJECT)
+    pads = pad_map(SHUTTLE, args.project)
     pad = args.pad or pads[leg["net"]]
 
     routed = config_from(args.config if args.mode != "ratio" else Path(args.configs[0]))
-    ratio, role = leg_ratio(routed, leg)
+    ratio, role = leg_ratio(routed, leg, args.project)
 
     i_nom = ratio * args.ibias
     if args.i_max is None:
@@ -1058,7 +1080,7 @@ def main() -> None:
     # resistor changes the wiring the user is about to do.
     print("== checking the board")
     first = run_program(str(args.config if args.mode != "ratio" else args.configs[0]),
-                        args.ibias, args.port)
+                        args.ibias, args.project, args.port)
     args.has_bias_source = board_has_bias_source(first)
     if args.has_bias_source is None:
         raise SystemExit(
@@ -1084,10 +1106,10 @@ def main() -> None:
 
     with ad3.device() as handle:
         scope_up(handle)
-        zero = measure_zero(handle, args.port, args.resistor)
+        zero = measure_zero(handle, args.project, args.port, args.resistor)
         if args.mode not in ("ratio", "background"):
             print(f"== programming {args.config}")
-            run_program(str(args.config), args.ibias, args.port)
+            run_program(str(args.config), args.ibias, args.project, args.port)
         elif args.mode == "ratio":
             # mode_ratio() below programs each of --configs in turn, but
             # measure_zero() just above left the all-switches-open
@@ -1099,7 +1121,7 @@ def main() -> None:
             # leg this was reporting 0.02 uA for). ratio/i_nom above are
             # already this config's own, so program it here to match.
             print(f"== programming {args.configs[0]}")
-            run_program(str(args.configs[0]), args.ibias, args.port)
+            run_program(str(args.configs[0]), args.ibias, args.project, args.port)
         # The bias goes on AFTER the zero, so the zero is unambiguously a
         # no-current reading, and before the measurement, because without
         # it this board's mirrors have no operating point and the sweep
@@ -1116,8 +1138,11 @@ def main() -> None:
 
     # The leg is in the filename because a run measures one of the two, and
     # a second run must not silently overwrite the first -- the plot script
-    # draws whichever of the pair it finds.
-    out = args.out or Path(f"build/currentsource_{args.mode}_{args.leg}.json")
+    # draws whichever of the pair it finds. The part is too, for the same
+    # reason: a tnt run and a Kang run of the same mode and leg are not the
+    # same measurement.
+    suffix = "_kang" if args.project == "tt_um_mosbius" else ""
+    out = args.out or Path(f"build/currentsource_{args.mode}_{args.leg}{suffix}.json")
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({
         "mode": args.mode, "leg": args.leg, "net": leg["net"], "pad": pad,

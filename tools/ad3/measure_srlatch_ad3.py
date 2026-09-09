@@ -8,6 +8,12 @@ RESET, release -- and reads the stored output at each step. Run from the
 repo root, on the host, since it needs USB:
 
     python3 tools/ad3/measure_srlatch_ad3.py
+    python3 tools/ad3/measure_srlatch_ad3.py --project tt_um_mosbius
+
+Defaults to tnt's part (`tt_um_tnt_mosbius`); `--project tt_um_mosbius`
+measures the same schematic routed for Andrew Kang's part instead, on
+different pads -- the wiring table is derived from whichever `--project`
+is running, not memorised.
 
 **What this measures that no other example on this chip can.** The
 inverter, the ring, the diff amp, the OTA follower and the current source
@@ -51,6 +57,7 @@ reaches depends on where the project sits on that shuttle.
 
 from __future__ import annotations
 
+import argparse
 import ctypes
 import json
 import sys
@@ -61,25 +68,52 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.chips import KANG, TNT  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
     ProgramError,
     ibias_warning,
     program,
 )
-from mosbius.pads import pads_in_use  # noqa: E402
+from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-# examples/srlatch as the router placed it on 2026-08-29: ua1 SET, ua2 RESET,
-# ua3 Q -- the configuration this example's silicon numbers were measured with.
-# It is a record of an experiment, not a cached build artifact: if the
-# router's allocation ever changes, re-route and re-measure rather than
-# editing this string, or the published numbers quietly stop describing
-# the configuration that was actually on the chip.
-BITSTREAM = "0c008000c020008808000000008821000220200800000038"
-PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"
 VAPWR = 3.3
+
+# Each entry is a record of a specific routing, not a cached build artifact:
+# if the router's allocation for a part ever changes, re-route and
+# re-measure rather than editing the bitstream here, or the published
+# numbers quietly stop describing the configuration that was actually on
+# the chip.
+PROJECTS = {
+    # examples/srlatch as the router placed it on 2026-08-29: ua1 SET, ua2
+    # RESET, ua3 Q -- the configuration this example's silicon numbers were
+    # measured with. REFERENCE is the settled levels both decks reach while
+    # holding -- see the REFERENCE dict below for exactly where they were read.
+    "tt_um_tnt_mosbius": {
+        "chip": TNT,
+        "bitstream": "0c008000c020008808000000008821000220200800000038",
+        "reference": {
+            "after_set": {"drawn": 3.2999, "routed": 3.2998},
+            "after_reset": {"drawn": 0.0000, "routed": -0.0003},
+        },
+    },
+    # examples/srlatch routed for tt_um_mosbius on 2026-09-09. REFERENCE is
+    # from a tb_srlatch.sch run with MOSBIUS_PROJECT=tt_um_mosbius, read the
+    # same way as tnt's: v(out_drawn)/v(out_routed) at 200 ns (after_set) and
+    # the end of the 300 ns transient (after_reset). Within a millivolt of
+    # tnt's own settled levels, as expected for a rail-to-rail digital state
+    # held by devices (the write pair, drawn w=4) whose silicon width is
+    # fixed regardless of which part this is.
+    "tt_um_mosbius": {
+        "chip": KANG,
+        "bitstream": "0408c08008100000000000004422200003020212220400408",
+        "reference": {
+            "after_set": {"drawn": 3.2999, "routed": 3.2997},
+            "after_reset": {"drawn": 0.0000, "routed": -0.0004},
+        },
+    },
+}
 
 RATE, NSAMPLES = 1e5, 4000        # 40 ms of the held state, per reading
 DWELL_S = 0.05                    # settle after each step, before capturing
@@ -103,38 +137,36 @@ FIRST_READING = {
     False: "whatever the latch was already holding -- this run did not program it",
 }
 
-# Volts: the settled levels both decks reach while holding, read off
-# build/srlatch_tb_out_{drawn,routed}.txt at 200 ns (high) and 300 ns
-# (low). These are NOT tools/sim/check_srlatch_sim.py's reference numbers,
-# which are sampled at 110 ns and 280 ns and so catch the routed instance
-# mid-settle -- see this file's docstring. A bench reading taken 50 ms
-# after the pulse belongs against the settled value.
-REFERENCE = {
-    "after_set": {"drawn": 3.2999, "routed": 3.2998},
-    "after_reset": {"drawn": 0.0000, "routed": -0.0003},
-}
+# Each project's "reference" above is the settled levels both decks reach
+# while holding, read off build/srlatch_tb_out_{drawn,routed}.txt at 200 ns
+# (high) and 300 ns (low). These are NOT tools/sim/check_srlatch_sim.py's
+# reference numbers, which are sampled at 110 ns and 280 ns and so catch
+# the routed instance mid-settle -- see this file's docstring. A bench
+# reading taken 50 ms after the pulse belongs against the settled value.
 
 
-def wiring_table() -> str:
-    pads = pads_in_use(SwitchConfig(bits=unpack(BITSTREAM)), SHUTTLE, PROJECT)
+def wiring_table(project: str, pads: dict[str, str]) -> str:
     rows = [
         ("W1 (yellow)", pads["ua1"], "SET, design ua1"),
-        ("W2 (yellow)", pads["ua2"], "RESET, design ua2"),
+        ("W2 (yellow/white)", pads["ua2"], "RESET, design ua2"),
         ("2+ (blue)", pads["ua3"], "Q, design ua3 -- the stored output"),
-        ("2-, GND", "gnd", "scope reference -- the input is differential, so"),
-        ("", "", "this must be grounded or every reading is wrong"),
+        ("1+, 1-, 2-, GND", "gnd", "scope reference. 1+/1- go to ground too, not"),
+        ("", "", "just left off: this reads Q on 2+ only, but 1+ still"),
+        ("", "", "has to land somewhere known, or a floating input can"),
+        ("", "", "clip the capture at either edge of the scope range."),
     ]
     out = ["\n  Wire the Analog Discovery to the demoboard like this:\n",
-           "    AD3 lead      pad      signal",
-           "    -----------   -----    ------------------------------------------"]
+           "    AD3 lead           pad      signal",
+           "    ----------------   -----    ------------------------------------------"]
     for lead, pad, what in rows:
-        out.append(f"    {lead:<13s} {pad:<8s} {what}")
-    # `mosbius program` has already drawn the ANALOG header above, so this
-    # names the leads only rather than printing the same picture twice.
-    return "\n".join(out) + "\n"
+        out.append(f"    {lead:<18s} {pad:<8s} {what}")
+    # Drawn here rather than left to `mosbius program`'s side effect: with
+    # --no-program (re-checking wiring, or re-reading without reuploading)
+    # that step never runs, and nothing else would print the picture at all.
+    return "\n".join(out) + "\n\n" + format_analog_header(pads) + "\n"
 
 
-def program_chip(port: str | None) -> None:
+def program_chip(project: str, bitstream: str, chip, port: str | None) -> None:
     """Upload the configuration through mosbius.program.program().
 
     Not `python3 -m mosbius.cli program` in a subprocess. The result dict
@@ -146,10 +178,10 @@ def program_chip(port: str | None) -> None:
     script would then measure an unbiased chip very carefully.
     tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
-    config = SwitchConfig.from_bitstream(BITSTREAM)
-    print("== loading the SR latch onto the chip")
+    config = SwitchConfig.from_bitstream(bitstream, chip=chip)
+    print(f"== loading the SR latch onto the chip ({project})")
     try:
-        result = program(config, project=PROJECT, port=port)
+        result = program(config, project=project, port=port)
     except ProgramError as exc:
         raise SystemExit(f"programming failed -- nothing measured\n\n{exc}")
     warning = ibias_warning(result, config)
@@ -233,7 +265,7 @@ def leads_look_swapped(readings: list[dict]) -> bool:
     return spread("q_mean") < 0.5 and spread("other_channel_mean") > 1.0
 
 
-def report(readings: list[dict]) -> None:
+def report(readings: list[dict], reference: dict) -> None:
     print("\n  reading        Q          flat to     what it is")
     print("  ------------   --------   ---------   ---------------------------------")
     for r in readings:
@@ -246,16 +278,16 @@ def report(readings: list[dict]) -> None:
 
     by_name = {r["name"]: r for r in readings}
     zero = by_name["after_reset"]["q_mean"]
-    for name, refs in REFERENCE.items():
+    for name, refs in reference.items():
         measured = by_name[name]["q_mean"]
         print(f"  {name}: measured {measured:+.4f} V, corrected {measured - zero:+.4f} V; "
               f"as drawn {refs['drawn']:+.4f} V, as routed {refs['routed']:+.4f} V")
     print(f"\n  'Corrected' takes the held-low reading ({zero * 1e3:+.1f} mV) as this\n"
           "  channel's zero, since a pull-down with a 10 MOhm probe on it really is at\n"
-          "  ground. The two decks predict the same settled levels within 0.1 mV of\n"
+          "  ground. The two decks predict the same settled levels within a millivolt of\n"
           "  each other, so this measurement confirms them and separates nothing: the\n"
-          "  routed instance's extra 190 mV in the testbench is it still charging 9 ns\n"
-          "  after the pulse, not a level it settles to.")
+          "  routed instance's gap in the testbench (sampled at 110 ns) is it still\n"
+          "  charging through the matrix, not a level it settles to by 200 ns.")
 
     print("\n  The first reading has no reference to compare against: an SR latch's state\n"
           "  when it comes up is genuinely undefined, decided by whichever asymmetry the\n"
@@ -267,12 +299,22 @@ def report(readings: list[dict]) -> None:
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    port = args[args.index("--port") + 1] if "--port" in args else None
-    programmed = "--no-program" not in args
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--project", choices=sorted(PROJECTS), default="tt_um_tnt_mosbius")
+    ap.add_argument("--port", default=None)
+    ap.add_argument("--no-program", action="store_true")
+    args = ap.parse_args()
+
+    spec = PROJECTS[args.project]
+    pads = pads_in_use(
+        SwitchConfig.from_bitstream(spec["bitstream"], chip=spec["chip"]),
+        SHUTTLE, args.project,
+    )
+    programmed = not args.no_program
     if programmed:
-        program_chip(port)
-    print(wiring_table())
+        program_chip(args.project, spec["bitstream"], spec["chip"], args.port)
+    print(wiring_table(args.project, pads))
+    input("  Press Enter once that is wired... ")
 
     handle = ad3.open_device()
     try:
@@ -281,11 +323,12 @@ def main() -> None:
     finally:
         ad3.close(handle)
 
-    out = Path("build/srlatch_silicon_trace.json")
+    suffix = "_kang" if args.project == "tt_um_mosbius" else ""
+    out = Path(f"build/srlatch{suffix}_silicon_trace.json")
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps({"bitstream": BITSTREAM, "rate": RATE,
+    out.write_text(json.dumps({"bitstream": spec["bitstream"], "rate": RATE,
                                "readings": readings, "trace": trace}))
-    report(readings)
+    report(readings, spec["reference"])
     print(f"\n== trace written to {out}")
 
 
