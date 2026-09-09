@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Measure examples/ringosc's ua3 amplitude and frequency with a bench scope
-instead of the AD3.
+"""Measure examples/ringosc's buffered-output amplitude and frequency with
+a bench scope instead of the AD3.
 
 This is the ring-oscillator counterpart to
 `tools/measure_inverter_risetime_keysight.py`: the AD3's own scope input
@@ -12,16 +12,22 @@ live comparison between the AD3's two (nominally matched) input channels
 on the identical node, at the identical moment, still read ~750 mV on one
 and ~300 mV on the other, which only demonstrates the instrument is the
 limit, not which of the two numbers (if either) is real. A Keysight
-HD304MSO has far more bandwidth than 40 MHz needs, so pointing it at ua3
-gets a trustworthy number.
+HD304MSO has far more bandwidth than 40 MHz needs, so pointing it at the
+buffered output gets a trustworthy number.
+
+Defaults to tnt's part (`tt_um_tnt_mosbius`); `--project tt_um_mosbius`
+measures the same schematic routed for Andrew Kang's part instead, on a
+different pad. The buffered output itself moved pins on 2026-09-08 (it
+was `ua3` on tnt's part before that; it is `ua4` on both parts now, so the
+same schematic routes on Andrew Kang's chip too -- see CLAUDE.md).
 
 Unlike the inverter, the ring needs no stimulus -- it free-runs the
 moment it is programmed -- so this script does not touch the AD3 at all,
 only `mosbius.program.program()` to load the bitstream and pyvisa/SCPI to
-read the scope. Wiring is a single channel to ua3 plus a ground
-reference; every other `ua` pad on this design is a loop node and must
-stay untouched (see `tools/ad3/measure_ring_ad3.py`'s docstring for what
-happened the one time a lead landed on one of those instead).
+read the scope. Wiring is a single channel to the buffered output plus a
+ground reference; every other `ua` pad on this design is a loop node and
+must stay untouched (see `tools/ad3/measure_ring_ad3.py`'s docstring for
+what happened the one time a lead landed on one of those instead).
 
 **Check the channel's bandwidth-limit filter is OFF before trusting the
 result.** Many scopes ship a 20 MHz (or 25 MHz) low-pass "BW Limit"
@@ -47,13 +53,16 @@ family of command as that script's already-verified `:MEASure:RISetime?`
 Run from the repo root, on the host (needs the demoboard's serial port
 and the scope's LAN/USB/GPIB link):
 
-    python3 tools/measure_ring_keysight.py TCPIP0::<scope-ip>::inst0::INSTR
+    python3 tools/measure_ring_keysight.py                          # this bench's scope, tnt
+    python3 tools/measure_ring_keysight.py --project tt_um_mosbius  # this bench's scope, Kang
+    python3 tools/measure_ring_keysight.py TCPIP0::<scope-ip>::inst0::INSTR  # a different one
     python3 tools/measure_ring_keysight.py --list
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import statistics
 import sys
 import time
@@ -62,7 +71,7 @@ from pathlib import Path
 import pyvisa
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.chips import KANG, TNT  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
     ProgramError,
@@ -71,21 +80,43 @@ from mosbius.program import (  # noqa: E402
 )
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-# examples/ringosc as the router placed it on 2026-08-28 -- the same string
-# tools/ad3/measure_ring_ad3.py programs. It is a record of an experiment,
-# not a cached build artifact: if the router's allocation ever changes,
-# re-route and re-measure rather than editing this string.
-BITSTREAM = "3f008803f004001401000210188406000050040100000019"
-PROJECT, SHUTTLE = "tt_um_tnt_mosbius", "ttsky25a"
-
+SHUTTLE = "ttsky25a"
 INVALID = 1e30  # Keysight's sentinel for "no valid measurement" (test_hil.py)
 
+# This bench's HD304MSO, on a fixed IP. Override with a positional argument
+# for any other instrument or resource type (USB, GPIB, ...); --list finds
+# what's actually reachable if this one has moved.
+DEFAULT_RESOURCE = "TCPIP::192.168.50.11::INSTR"
 
-def program_chip(port: str | None) -> None:
-    config = SwitchConfig.from_bitstream(BITSTREAM)
-    print("== loading the ring oscillator onto the chip")
+# Each entry is a record of a specific routing, not a cached build artifact:
+# if the router's allocation for a part ever changes, re-route and
+# re-measure rather than editing the bitstream here, or the published
+# numbers quietly stop describing the configuration that was actually on
+# the chip.
+PROJECTS = {
+    # examples/ringosc as the router placed it on 2026-09-08, after moving
+    # the buffered output from ua3 to ua4 so the same schematic also routes
+    # on Andrew Kang's part -- the same string tools/ad3/measure_ring_ad3.py
+    # programs.
+    "tt_um_tnt_mosbius": {
+        "chip": TNT,
+        "bitstream": "3f008803f004001401000110184406000050040100000011",
+        "sim": {"drawn_ghz": 2.229, "routed_mhz": 43.92},
+    },
+    # examples/ringosc routed for tt_um_mosbius on 2026-09-08.
+    "tt_um_mosbius": {
+        "chip": KANG,
+        "bitstream": "4142c081828820c08000000048180800010303050a040c144",
+        "sim": {"drawn_ghz": 2.227, "routed_mhz": 51.69},
+    },
+}
+
+
+def program_chip(project: str, bitstream: str, chip, port: str | None) -> None:
+    config = SwitchConfig.from_bitstream(bitstream, chip=chip)
+    print(f"== loading the ring oscillator onto the chip ({project})")
     try:
-        result = program(config, project=PROJECT, port=port)
+        result = program(config, project=project, port=port)
     except ProgramError as exc:
         raise SystemExit(f"programming failed -- nothing measured\n\n{exc}")
     warning = ibias_warning(result, config)
@@ -93,20 +124,20 @@ def program_chip(port: str | None) -> None:
         print(warning)
 
 
-def wiring_table(channel: int) -> str:
-    pads = pads_in_use(SwitchConfig(bits=unpack(BITSTREAM)), SHUTTLE, PROJECT)
-    probe = pads["ua3"]
-    loop = ", ".join(f"{pad} ({name})" for name, pad in sorted(pads.items()) if name != "ua3")
+def wiring_table(pads: dict[str, str], channel: int) -> str:
+    pads = dict(pads)
+    probe = pads.pop("ua4")
+    loop = ", ".join(f"{pad} ({name})" for name, pad in sorted(pads.items()))
     out = [
         "\n  Wiring:\n",
         "    lead                pad      signal",
         "    -----------------   -----    ------------------------------------------",
-        f"    Keysight CH{channel}         {probe:<8s} ua3, the buffered output",
+        f"    Keysight CH{channel}         {probe:<8s} ua4, the buffered output",
         "    ground               gnd      scope reference",
         f"    every other lead     --       KEEP OFF {loop}: those are loop nodes,",
         "                                  and a lead on one stops the oscillator dead",
     ]
-    return "\n".join(out) + "\n\n" + format_analog_header(pads) + "\n"
+    return "\n".join(out) + "\n\n" + format_analog_header({"ua4": probe}) + "\n"
 
 
 def _read(scope, cmd: str, require_positive: bool = True) -> float | None:
@@ -172,35 +203,32 @@ def measure(resource: str, channel: int, duration: float, interval: float,
     return {"vpp": vpp, "freq": freq}
 
 
-def report(results: dict) -> None:
+def report(results: dict, sim: dict) -> None:
     vpp = results["vpp"]
     if not vpp:
         print("No valid Vpp samples collected -- check the trigger is finding the\n"
-              "edge on the channel and that the probe is actually on ua3.")
+              "edge on the channel and that the probe is actually on ua4.")
         return
 
     mean_vpp = statistics.mean(vpp)
     sd_vpp = statistics.pstdev(vpp) if len(vpp) > 1 else 0.0
-    print(f"\n  ua3, Vpp     {mean_vpp * 1e3:7.1f} mV   "
+    print(f"\n  ua4, Vpp     {mean_vpp * 1e3:7.1f} mV   "
           f"(sd {sd_vpp * 1e3:.1f} mV over {len(vpp)} samples)")
 
     freq = results["freq"]
     if freq:
         mean_freq = statistics.mean(freq)
         sd_freq = statistics.pstdev(freq) if len(freq) > 1 else 0.0
-        print(f"  ua3, frequency   {mean_freq / 1e6:7.3f} MHz   "
+        print(f"  ua4, frequency   {mean_freq / 1e6:7.3f} MHz   "
               f"(sd {sd_freq / 1e3:.2f} kHz over {len(freq)} samples)")
+        print(f"\n  Against the same circuit simulated: {sim['drawn_ghz']:.3f} GHz as drawn,\n"
+              f"  {sim['routed_mhz']:.2f} MHz as routed, {mean_freq / 1e6:.3f} MHz measured here.")
 
-    print("\n  Against examples/ringosc/README.md's other numbers:")
-    print("    as drawn, ideal wires             0.198 Vpp  @ 2.289 GHz")
-    print("    as routed, real switch matrix      1.72 Vpp  @ 43.89 MHz")
-    print("    AD3, flywire on Input 2 (2+)      ~0.27-0.30 Vpp  @ ~39.5 MHz")
-    print("    AD3, flywire on Input 1 (1+)      ~0.75-0.81 Vpp  @ ~39.6 MHz")
-    print("      (the AD3 pair disagreeing on the identical node is the reason")
-    print("       this script exists -- neither AD3 number was trustworthy)")
-    if vpp:
-        print(f"    measured here (Keysight)          {mean_vpp:.3f} Vpp"
-              + (f"  @ {statistics.mean(freq) / 1e6:.3f} MHz" if freq else ""))
+    print("\n  No fresh Vpp prediction is quoted here: the buffered output moved from\n"
+          "  ua3 to ua4 on 2026-09-08 (see this file's docstring), and the old\n"
+          "  0.198/1.72 Vpp pair in examples/ringosc/README.md describes the ua3\n"
+          "  routing, not this one. Re-simulate tb_ring.sch before trusting a\n"
+          "  drawn/routed Vpp comparison again.")
 
 
 def list_devices() -> None:
@@ -223,11 +251,13 @@ def list_devices() -> None:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("resource", nargs="?",
-                    help="Keysight VISA resource string, e.g. TCPIP0::192.168.50.11::inst0::INSTR")
+    ap.add_argument("resource", nargs="?", default=DEFAULT_RESOURCE,
+                    help=f"Keysight VISA resource string (default: {DEFAULT_RESOURCE}, "
+                         "this bench's HD304MSO)")
     ap.add_argument("--list", action="store_true", help="List available VISA devices and exit")
+    ap.add_argument("--project", choices=sorted(PROJECTS), default="tt_um_tnt_mosbius")
     ap.add_argument("--channel", type=int, default=1,
-                    help="Keysight channel wired to ua3 (default: 1)")
+                    help="Keysight channel wired to ua4 (default: 1)")
     ap.add_argument("--port", default=None, help="demoboard serial port")
     ap.add_argument("--no-program", action="store_true")
     ap.add_argument("--duration", type=float, default=10.0, help="seconds (default: 10)")
@@ -241,17 +271,35 @@ def main():
     if args.list:
         list_devices()
         return
-    if not args.resource:
-        ap.error("resource is required unless --list is specified")
 
+    spec = PROJECTS[args.project]
+    pads = pads_in_use(
+        SwitchConfig.from_bitstream(spec["bitstream"], chip=spec["chip"]),
+        SHUTTLE, args.project,
+    )
     if not args.no_program:
-        program_chip(args.port)
-    print(wiring_table(args.channel))
+        program_chip(args.project, spec["bitstream"], spec["chip"], args.port)
+    print(wiring_table(pads, args.channel))
     input("  Press Enter once that is wired... ")
 
     results = measure(args.resource, args.channel, args.duration, args.interval,
                       None if args.timebase == 0 else args.timebase)
-    report(results)
+
+    suffix = "_kang" if args.project == "tt_um_mosbius" else ""
+    out = Path(f"build/ring{suffix}_keysight.json")
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps({
+        "project": args.project,
+        "bitstream": spec["bitstream"],
+        "pad": pads["ua4"],
+        "channel": args.channel,
+        "resource": args.resource,
+        "sim": spec["sim"],
+        **results,
+    }))
+    print(f"\n== written to {out}")
+
+    report(results, spec["sim"])
 
 
 if __name__ == "__main__":

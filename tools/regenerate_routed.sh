@@ -38,6 +38,7 @@ fi
 
 name=$(basename "$sch" .sch)
 
+echo "== part: ${MOSBIUS_PROJECT:-tt_um_tnt_mosbius}"
 echo "== netlisting $sch"
 # Check what came out rather than xschem's exit code. It is a count of
 # ERC messages, and this library used to produce them on every design:

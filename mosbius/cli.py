@@ -174,8 +174,9 @@ def _shuttle_for(args: argparse.Namespace) -> str:
 
 def cmd_pads(args: argparse.Namespace) -> int:
     try:
-        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
-    except (ArgumentError, BitstreamError) as e:
+        config = SwitchConfig.from_bitstream(
+            _bitstream_arg(args.bitstream), ibias=args.ibias, chip=_chip_for(args))
+    except (ArgumentError, BitstreamError, UnknownChipError) as e:
         print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     try:
@@ -282,8 +283,9 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
 def cmd_program(args: argparse.Namespace) -> int:
     try:
-        config = SwitchConfig.from_bitstream(_bitstream_arg(args.bitstream), ibias=args.ibias)
-    except (ArgumentError, BitstreamError) as e:
+        config = SwitchConfig.from_bitstream(
+            _bitstream_arg(args.bitstream), ibias=args.ibias, chip=_chip_for(args))
+    except (ArgumentError, BitstreamError, UnknownChipError) as e:
         print(messages.CLI_CANT_READ_THAT.format(e=e), file=sys.stderr)
         return 1
     try:

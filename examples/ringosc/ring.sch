@@ -52,9 +52,9 @@ N 760 -30 760 140 {lab=ua1}
 N 760 -30 800 -30 {lab=ua1}
 N 760 140 800 140 {lab=ua1}
 N 840 -140 840 -60 {lab=VAPWR}
-N 840 0 840 110 {lab=ua3}
+N 840 0 840 110 {lab=ua4}
 N 840 170 840 210 {lab=VGND}
-N 840 30 900 30 {lab=ua3}
+N 840 30 900 30 {lab=ua4}
 N -30 210 400 210 {lab=VGND}
 N -30 60 160 60 {lab=#net1}
 N 540 60 760 60 {lab=ua1}
@@ -62,7 +62,7 @@ N -240 -10 -240 60 {lab=ua1}
 C {devices/iopin.sym} -420 -100 0 0 {name=p1 lab=ibias}
 C {devices/iopin.sym} -240 -10 0 0 {name=p2 lab=ua1}
 C {devices/iopin.sym} 340 -10 0 0 {name=p3 lab=ua2}
-C {devices/iopin.sym} 900 30 2 1 {name=p4 lab=ua3}
+C {devices/iopin.sym} 900 30 2 1 {name=p4 lab=ua4}
 C {devices/iopin.sym} -420 -10 0 0 {name=p6 lab=ua5}
 C {devices/iopin.sym} 930 -140 2 1 {name=p7 lab=VAPWR}
 C {devices/iopin.sym} -340 -150 0 1 {name=p8 lab=VDPWR}
@@ -75,5 +75,5 @@ C {mosbius_nmos.sym} 220 140 0 0 {name=M5 w=4}
 C {mosbius_pmos.sym} 220 -30 0 0 {name=M6 w=4}
 C {mosbius_nmos.sym} 820 140 0 0 {name=M7 w=4}
 C {mosbius_pmos.sym} 820 -30 0 0 {name=M8 w=4}
-C {devices/iopin.sym} -420 -40 0 0 {name=p5 lab=ua4}
+C {devices/iopin.sym} -420 -40 0 0 {name=p5 lab=ua3}
 C {mosbius_bias.sym} -720 200 0 0 {name=BIAS}

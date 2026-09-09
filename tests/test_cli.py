@@ -213,17 +213,40 @@ def test_pads_prints_the_bench_wiring_table(capsys):
     assert "gate" in out and "drain" in out
 
 
-def test_pads_explains_an_unknown_project_rather_than_tracebacking(capsys):
-    """A macro with no cached index entry (and, here, no network to fetch
-    one) has no pads, and the message has to name the URL that would have
-    had them plus where to save it.
+def test_pads_explains_a_project_with_no_cached_index_entry(capsys):
+    """A real, known part with no cached index entry (and, here, no network
+    to fetch one) has no pads, and the message has to name the URL that
+    would have had them plus where to save it. Andrew Kang's macro is right
+    for this: it is a genuine Chip this toolchain knows how to decode, but
+    the autouse fixture above only pre-caches tnt's pad file, so this one
+    still has to reach (and fail) the network.
+    """
+    kang_inverter_bitstream = "0000008002040000000000000000000000020200000400102"
+    rc = main(["pads", kang_inverter_bitstream, "--project", "tt_um_mosbius"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert messages.CLI_CANT_WORK_OUT_PADS_HEADLINE in err
+    assert "https://index.tinytapeout.com/ttsky25a/tt_um_mosbius.json" in err
+    assert "pads_ttsky25a_tt_um_mosbius.json" in err
+
+
+def test_pads_stops_rather_than_guessing_for_an_unknown_project(capsys):
+    """A macro this toolchain has no Chip definition for at all must not
+    silently fall back to tnt's bit width -- that is exactly the "guessing
+    produces an unrelated circuit" failure mode
+    test_chips.test_an_unmapped_macro_stops_rather_than_guessing already
+    guards at the chip_for_macro() layer; this is the same check from
+    `mosbius pads`, which used to skip it (chip= wasn't threaded through to
+    SwitchConfig.from_bitstream()) and so accepted a 48-hex-char bitstream
+    for absolutely any --project, tnt-shaped or not.
     """
     rc = main(["pads", INVERTER_BITSTREAM, "--project", "tt_um_not_here"])
     err = capsys.readouterr().err
     assert rc == 1
-    assert messages.CLI_CANT_WORK_OUT_PADS_HEADLINE in err
-    assert "https://index.tinytapeout.com/ttsky25a/tt_um_not_here.json" in err
-    assert "pads_ttsky25a_tt_um_not_here.json" in err
+    assert "CAN'T READ THAT" in err
+    assert "tt_um_not_here" in err
+    assert "tt_um_tnt_mosbius" in err
+    assert "tt_um_mosbius" in err
 
 
 def test_program_prints_the_pad_table_after_uploading(capsys):
@@ -311,6 +334,26 @@ def test_program_accepts_a_routed_design_json(tmp_path, capsys):
     assert messages.CLI_PROGRAM_UPLOADED.format(project=pads.DEFAULT_PROJECT) in capsys.readouterr().out
     config, = mock_program.call_args[0]
     assert config.to_bitstream() == INVERTER_BITSTREAM
+
+
+def test_program_accepts_a_routed_design_json_for_a_non_default_project(tmp_path, capsys):
+    """The same routed-JSON path, for Andrew Kang's 196-bit chain.
+
+    `cmd_program` used to call `SwitchConfig.from_bitstream(...)` without
+    `chip=_chip_for(args)`, so it always assumed tnt's 192-bit chain
+    regardless of `--project` -- a 49-hex-char Kang bitstream then failed
+    with "bitstream is 49 hex characters, expected exactly 48" even though
+    --project tt_um_mosbius was right there on the command line.
+    """
+    kang_ring_bitstream = "4142c081828820c08000000048180800010303050a040c144"
+    routed = tmp_path / "ring.mosbius.json"
+    routed.write_text(json.dumps({"bitstream": kang_ring_bitstream}))
+    with patch("mosbius.cli.program") as mock_program:
+        mock_program.return_value = {"ok": True, "verify_ok": None}
+        rc = main(["program", str(routed), "--project", "tt_um_mosbius"])
+    assert rc == 0
+    config, = mock_program.call_args[0]
+    assert config.to_bitstream() == kang_ring_bitstream
 
 
 def test_program_explains_a_missing_routed_design_without_reaching_hardware(tmp_path, capsys):

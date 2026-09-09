@@ -2,10 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Measure examples/diffamp on real silicon with an Analog Discovery.
 
-Inputs on pads C and J (`ua1`, `ua2`), output on pad G (`ua4`), bias
-current into pad K. Run from the repo root, on the host:
+Defaults to tnt's part (`tt_um_tnt_mosbius`): inputs on pads C and J
+(`ua1`, `ua2`), output on pad G (`ua4`), bias current into pad K.
+`--project tt_um_mosbius` measures the same schematic routed for Andrew
+Kang's part instead, on different pads -- the wiring table and pad picture
+are derived from whichever `--project` is running, not memorised. Run from
+the repo root, on the host:
 
     python3 tools/ad3/measure_diffamp_ad3.py
+    python3 tools/ad3/measure_diffamp_ad3.py --project tt_um_mosbius
 
 **Why this cannot be one sweep.** The amplifier's gain is about 20 V/V on
 3.3 V rails, so its linear output swing of roughly 1.2 to 2.8 V corresponds
@@ -46,7 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.chips import KANG, TNT  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
     ProgramError,
@@ -55,15 +60,7 @@ from mosbius.program import (  # noqa: E402
 )
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-# examples/diffamp as the router placed it on 2026-08-29 -- the configuration
-# the measured gain and its bias sweep were taken with.
-# It is a record of an experiment, not a cached build artifact: if the
-# router's allocation ever changes, re-route and re-measure rather than
-# editing this string, or the published numbers quietly stop describing
-# the configuration that was actually on the chip.
-BITSTREAM = "00100000c020004820000000004821000000000000000030"
-PROJECT, SHUTTLE = "tt_um_tnt_mosbius", "ttsky25a"
-
+SHUTTLE = "ttsky25a"
 COMMON_MODE = 1.5          # what the simulated sheet holds ua2 at
 COARSE_SPAN, COARSE_STEP = 0.150, 0.005
 FINE_SPAN, FINE_STEP = 0.040, 0.001
@@ -71,32 +68,64 @@ SETTLE = 0.03
 BIAS_RAILS = (2.25, 3.28, 4.30)     # ~55, ~100, ~145 uA through 20k
 NOMINAL_RAIL = 3.28
 
-# examples/diffamp/README.md, re-run 2026-08-29 at cprobe=10p, rprobe=10meg.
-# NOTE those are 10 MOhm / 10 pF; an AD3 is 1 MOhm / 24 pF, and 1 MOhm across
-# this amp's ~20 kOhm output is worth a couple of percent of gain. The
-# comparison below is not corrected for that.
-SIM = {"drawn": {"base": 2.012, "plus40": 2.744, "minus40": 1.237,
-                 "gain_plus": 18.31, "gain_minus": 19.35},
-       "routed": {"base": 2.018, "plus40": 2.769, "minus40": 1.227,
-                  "gain_plus": 18.78, "gain_minus": 19.77}}
-SIM_SMALL_SIGNAL = 19.5    # as drawn, near the origin
+# Each entry is a record of a specific routing, not a cached build artifact:
+# if the router's allocation for a part ever changes, re-route and
+# re-measure rather than editing the bitstream here, or the published
+# numbers quietly stop describing the configuration that was actually on
+# the chip.
+PROJECTS = {
+    # examples/diffamp as the router placed it on 2026-08-29 -- the
+    # configuration the measured gain and its bias sweep were taken with.
+    # SIM is examples/diffamp/README.md, re-run 2026-08-29 at cprobe=10p,
+    # rprobe=10meg. NOTE those are 10 MOhm / 10 pF; an AD3 is 1 MOhm / 24 pF,
+    # and 1 MOhm across this amp's ~20 kOhm output is worth a couple of
+    # percent of gain. The comparison in report() is not corrected for that.
+    "tt_um_tnt_mosbius": {
+        "chip": TNT,
+        "bitstream": "00100000c020004820000000004821000000000000000030",
+        "sim": {"drawn": {"base": 2.012, "plus40": 2.744, "minus40": 1.237,
+                          "gain_plus": 18.31, "gain_minus": 19.35},
+                "routed": {"base": 2.018, "plus40": 2.769, "minus40": 1.227,
+                           "gain_plus": 18.78, "gain_minus": 19.77}},
+        "sim_small_signal": 19.5,   # as drawn, near the origin
+        "confirmed_note": "ua1->C, ua2->J and ua0->K have",
+    },
+    # examples/diffamp routed for tt_um_mosbius on 2026-09-08. SIM is from
+    # the same tb_diffamp.sch +-40mV chord this script measures, simulated
+    # with Andrew Kang's device library and geometry -- not an independent
+    # near-origin fit the way tnt's sim_small_signal is, since none has been
+    # run for this part yet. It lands within 0.1 V/V of tnt's own chord
+    # gains, which is what the one-library-either-part branch predicts:
+    # this circuit's operating point depends on total device width, which
+    # is identical on both parts.
+    "tt_um_mosbius": {
+        "chip": KANG,
+        "bitstream": "0804c08008080000000000000823100003020200000008000",
+        "sim": {"drawn": {"base": 2.013, "plus40": 2.745, "minus40": 1.238,
+                          "gain_plus": 18.30, "gain_minus": 19.36},
+                "routed": {"base": 2.018, "plus40": 2.763, "minus40": 1.236,
+                           "gain_plus": 18.63, "gain_minus": 19.53}},
+        "sim_small_signal": 19.36,  # the as-drawn gain_minus chord above
+        "confirmed_note": "ua1->K and ua2->C have (examples/inverter, 2026-09-08)",
+    },
+}
 
 
 def wiring_table(pads: dict[str, str]) -> str:
     rows = [
         ("V+ (red)", f"via 20k to {pads['ibias']}", "bias current in"),
         ("W1 (yellow)", pads["ua1"], "ua1, the swept input"),
-        ("W2 (white)", pads["ua2"], f"ua2, held at {COMMON_MODE} V common mode"),
+        ("W2 (yellow/white)", pads["ua2"], f"ua2, held at {COMMON_MODE} V common mode"),
         ("1+ (orange)", pads["ua1"], "the swept input, as it actually arrives"),
         ("2+ (blue)", pads["ua4"], "ua4, the output"),
         ("1-, 2-, GND", "any gnd", "scope reference -- differential inputs,"),
         ("", "", "so these must be grounded"),
     ]
     out = ["\n  Wire the Analog Discovery to the demoboard like this:\n",
-           "    AD3 lead      where              signal",
-           "    -----------   ----------------   ----------------------------------"]
+           "    AD3 lead           where              signal",
+           "    ----------------   ----------------   ----------------------------------"]
     for lead, where, what in rows:
-        out.append(f"    {lead:<13s} {where:<18s} {what}")
+        out.append(f"    {lead:<18s} {where:<18s} {what}")
     return "\n".join(out) + "\n\n" + format_analog_header(pads) + "\n"
 
 
@@ -113,7 +142,7 @@ def implied_bias(rail: float) -> float | None:
     return None
 
 
-def program_chip(port: str | None) -> None:
+def program_chip(project: str, bitstream: str, chip, port: str | None) -> None:
     """Upload the configuration through mosbius.program.program().
 
     Not `python3 -m mosbius.cli program` in a subprocess. The result dict
@@ -125,10 +154,10 @@ def program_chip(port: str | None) -> None:
     script would then measure an unbiased chip very carefully.
     tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
-    config = SwitchConfig.from_bitstream(BITSTREAM, ibias=0)
-    print("== loading the differential amplifier onto the chip")
+    config = SwitchConfig.from_bitstream(bitstream, chip=chip, ibias=0)
+    print(f"== loading the differential amplifier onto the chip ({project})")
     try:
-        result = program(config, project=PROJECT, port=port)
+        result = program(config, project=project, port=port)
     except ProgramError as exc:
         raise SystemExit(f"programming failed -- nothing measured\n\n{exc}")
     warning = ibias_warning(result, config)
@@ -187,20 +216,26 @@ def local_gain(points, at, window=0.004):
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--project", choices=sorted(PROJECTS), default="tt_um_tnt_mosbius")
     ap.add_argument("--port", default=None)
     ap.add_argument("--no-program", action="store_true")
     ap.add_argument("--skip-bias-sweep", action="store_true",
                     help="only measure at the nominal bias")
     args = ap.parse_args()
 
-    pads = pads_in_use(SwitchConfig(bits=unpack(BITSTREAM)), SHUTTLE, PROJECT)
+    spec = PROJECTS[args.project]
+    pads = pads_in_use(
+        SwitchConfig.from_bitstream(spec["bitstream"], chip=spec["chip"]),
+        SHUTTLE, args.project,
+    )
     if not args.no_program:
-        program_chip(args.port)
+        program_chip(args.project, spec["bitstream"], spec["chip"], args.port)
     print(wiring_table(pads))
     input("  Press Enter once that is wired... ")
 
-    record = {"bitstream": BITSTREAM, "pads": pads, "common_mode": COMMON_MODE,
+    record = {"bitstream": spec["bitstream"], "pads": pads, "common_mode": COMMON_MODE,
               "fine_step": FINE_STEP, "by_bias": []}
+    out_path = f"build/diffamp{'_kang' if args.project == 'tt_um_mosbius' else ''}_silicon.json"
 
     with ad3.device() as handle:
         ad3.wavegen(handle, ch=1, func=ad3.funcDC, amp=0.0, offset=COMMON_MODE)
@@ -218,19 +253,19 @@ def main() -> None:
               f"bias rail {rail['voltage']:.4f} V"
               + (f" (~{amps * 1e6:.1f} uA)" if amps else ""))
         print(f"   output on pad {pads['ua4']}: {vout0:.4f} V   "
-              f"(simulated base: {SIM['drawn']['base']:.3f} as drawn, "
-              f"{SIM['routed']['base']:.3f} as routed)")
+              f"(simulated base: {spec['sim']['drawn']['base']:.3f} as drawn, "
+              f"{spec['sim']['routed']['base']:.3f} as routed)")
         record["phase1"] = {"vin": vin0, "vout": vout0,
                             "rail": rail["voltage"], "amps": amps}
         if vout0 < 0.2 or vout0 > 3.1:
             print(f"\n  THE OUTPUT IS AT A RAIL ({vout0:.3f} V), so there is nothing\n"
                   f"  to sweep yet. Pad {pads['ua4']} (ua4) has never been confirmed on\n"
-                  "  silicon -- ua1->C, ua2->J and ua0->K have. Either it is the wrong\n"
+                  f"  silicon -- {spec['confirmed_note']}. Either it is the wrong\n"
                   "  pad, or the amplifier is not biased, or the input offset is larger\n"
                   "  than the common-mode point allows for. Check the bias first: pad\n"
                   f"  {pads['ibias']} should sit near 1.28 V.")
             Path("build").mkdir(exist_ok=True)
-            Path("build/diffamp_silicon.json").write_text(json.dumps(record))
+            Path(out_path).write_text(json.dumps(record))
             return
 
         rails = (NOMINAL_RAIL,) if args.skip_bias_sweep else BIAS_RAILS
@@ -267,10 +302,10 @@ def main() -> None:
         ad3.wavegen(handle, ch=1, func=ad3.funcDC, amp=0.0, offset=0.0, enable=False)
 
     Path("build").mkdir(exist_ok=True)
-    out = Path("build/diffamp_silicon.json")
+    out = Path(out_path)
     out.write_text(json.dumps(record))
     print(f"\n== written to {out}")
-    report(record)
+    report(record, spec)
 
 
 LINEAR_WINDOW = (1.3, 2.4)     # output volts that are safely inside the fan
@@ -295,7 +330,7 @@ def linear_region(fine):
     return [p for p in fine if LINEAR_WINDOW[0] <= p[1] <= LINEAR_WINDOW[1]]
 
 
-def report(record) -> None:
+def report(record, spec) -> None:
     """**Gain here is a fit over the linear region, not a peak local slope.**
 
     The first version of this took the largest local slope, over a +/-4 mV
@@ -352,31 +387,48 @@ def report(record) -> None:
               f"  square root, so the two dependencies cancel. That is an inference\n"
               f"  from one measurement of one part, not something verified here.")
 
-    nominal = min(fits, key=lambda f: abs((f[0]["amps"] or 0) - 100e-6))
+    sim = spec["sim"]
+    sim_small_signal = spec["sim_small_signal"]
+    # Prefer the actual bias current when known (from build/ibias_clamp.json,
+    # via implied_bias()); without it every entry's amps is None and this
+    # would tie on abs(0 - 100e-6) for all of them, silently handing min()
+    # whichever bias came first in BIAS_RAILS -- the lowest current, not the
+    # nominal one. Falling back to the rail closest to NOMINAL_RAIL keeps
+    # "at the nominal bias" below actually true either way.
+    nominal = min(
+        fits,
+        key=lambda f: abs(f[0]["amps"] - 100e-6) if f[0]["amps"]
+        else abs(f[0]["rail"] - NOMINAL_RAIL),
+    )
     print(f"\n  Against the same circuit simulated, at the nominal bias:\n")
     print("               as drawn   as routed   on silicon")
     print("               --------   ---------   ----------")
-    print(f"    gain         {SIM_SMALL_SIGNAL:5.1f}      {SIM['routed']['gain_minus']:5.2f}"
+    print(f"    gain         {sim_small_signal:5.1f}      {sim['routed']['gain_minus']:5.2f}"
           f"       {nominal[1]:5.2f} V/V")
-    print(f"    output base  {SIM['drawn']['base']:5.3f}      {SIM['routed']['base']:5.3f}"
-          f"       ~2.07 V   (at the peak-gain point)")
+    print(f"    output base  {sim['drawn']['base']:5.3f}      {sim['routed']['base']:5.3f}"
+          f"       {nominal[3][1]:5.3f} V   (at the peak-gain point)")
 
-    shortfall = (SIM_SMALL_SIGNAL - nominal[1]) / SIM_SMALL_SIGNAL * 100
+    shortfall = (sim_small_signal - nominal[1]) / sim_small_signal * 100
     print(f"\n  Silicon is {shortfall:.0f}% below the as-drawn small-signal gain, and two\n"
           f"  known effects account for part of it before anything else is invoked.\n"
           f"  The AD3's 1 MOhm input across this amplifier's ~20 kOhm output is worth\n"
-          f"  about 2%, and the simulated numbers are at rprobe=10meg cprobe=10p.\n"
-          f"  Much more importantly, **this part is an `ss` corner** -- established\n"
-          f"  from the ring oscillator and the inverter (see CLAUDE.md) -- while every\n"
-          f"  published number on this page is `tt`. Gain is exactly the kind of\n"
-          f"  quantity a corner moves. tools/sweep_corners.sh re-runs a testbench at\n"
-          f"  ss without touching the committed schematics, and that is the next test\n"
-          f"  rather than a conclusion to draw here.")
-
-    print(f"\n  Worth noting the same direction turned up in examples/otabuf, measured\n"
-          f"  the same day: its closed-loop shortfall from unity was 1.38x the routed\n"
-          f"  model's, which also means less gain on silicon than modelled. Two\n"
-          f"  independent circuits, one part, same sign.")
+          f"  about 2%, and the simulated numbers are at rprobe=10meg cprobe=10p.")
+    if spec["chip"] is TNT:
+        print(f"  Much more importantly, **this part is an `ss` corner** -- established\n"
+              f"  from the ring oscillator and the inverter (see CLAUDE.md) -- while every\n"
+              f"  published number on this page is `tt`. Gain is exactly the kind of\n"
+              f"  quantity a corner moves. tools/sweep_corners.sh re-runs a testbench at\n"
+              f"  ss without touching the committed schematics, and that is the next test\n"
+              f"  rather than a conclusion to draw here.")
+        print(f"\n  Worth noting the same direction turned up in examples/otabuf, measured\n"
+              f"  the same day: its closed-loop shortfall from unity was 1.38x the routed\n"
+              f"  model's, which also means less gain on silicon than modelled. Two\n"
+              f"  independent circuits, one part, same sign.")
+    else:
+        print(f"  This chip's corner is not established the way tnt's part is (CLAUDE.md's\n"
+              f"  `ss` finding is from tnt's ring and inverter specifically) -- a shortfall\n"
+              f"  this size is worth a corner sweep before reading anything into it, not a\n"
+              f"  conclusion on its own.")
 
     print(f"\n  The operating point shifts by about "
           f"{(fits[-1][3][0] - fits[0][3][0]) * 1000:.0f} mV across that bias range\n"
