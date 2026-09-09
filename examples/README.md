@@ -147,6 +147,10 @@ one width bin runs from 20 um to 1.01 mm. What changes is the per-finger
 effective width BSIM4's narrow-width terms see, worth about 1.2 mV of
 gate-source voltage at 187 uA.
 
+[`../PARTS.md`](../PARTS.md) covers what else is actually different
+between the two parts (pad mapping, the one unmodelled PMOS bulk tie) and
+every example's numbers measured on both.
+
 ## The probe
 
 Each testbench hangs `Cprobe_drawn` / `Rprobe_drawn` and `Cprobe_routed` /

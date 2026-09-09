@@ -21,7 +21,7 @@ with an Analog Discovery 3. Simulated at the `tt` corner with the default
 | small-signal gain | ~19.5 V/V | 19.77 V/V | 16.19 V/V |
 | output base | 2.012 V | 2.018 V | ~2.07 V |
 
-## On Andrew Kang's part
+## On tt_um_mosbius
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|

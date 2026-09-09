@@ -28,6 +28,10 @@ common ground -- the testbench idiom, the probe model, the bias reference
 and the traps -- and [`TUTORIAL.md`](TUTORIAL.md) walks the inverter
 through from a blank sheet, one instruction at a time.
 
+Every example runs on either of two taped-out chips, `tt_um_tnt_mosbius`
+and `tt_um_mosbius` -- [`PARTS.md`](PARTS.md) covers what's actually
+different between them, and what's been measured on each.
+
 ## Quickstart
 
 Nothing is installed natively: xschem and ngspice run inside the

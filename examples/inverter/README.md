@@ -21,7 +21,7 @@ curves are at the `tt` corner with the default 10x probe (`rprobe=10meg`,
 
 Digilent AD3 was too slow to measure rise time so Keysight HD304MSO was used instead.
 
-## On Andrew Kang's part
+## On tt_um_mosbius
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
