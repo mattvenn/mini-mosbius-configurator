@@ -17,21 +17,21 @@ silicon trace reads low due to limited bandwidth of the AD3.*
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| frequency | 2.229 GHz | 43.92 MHz | 39.59 MHz |
-| against silicon | x56 too fast | +10.9% | -- |
-| amplitude (Vpp) | 0.198 V | 1.72 V | 1.750 V |
+| frequency | 2.289 GHz | 43.95 MHz | 39.60 MHz |
+| against silicon | x58 too fast | +11.0% | -- |
+| amplitude (Vpp) | 0.208 V | 2.01 V | 1.750 V |
 
 Keysight HD304MSO used for amplitude measurement. Numbers above are for the
 buffered output on `ua4` (moved from `ua3` 2026-09-08 so this schematic also
-routes on Andrew Kang's part -- see CLAUDE.md); the loop itself is unchanged.
+routes on tt_um_mosbius -- see CLAUDE.md); the loop itself is unchanged.
 
-## On Andrew Kang's part
+## On tt_um_mosbius
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| frequency | 2.227 GHz | 51.69 MHz | 44.61 MHz |
-| against silicon | x50 too fast | +15.9% | -- |
-| amplitude (Vpp) | -- | -- | 1.159 V |
+| frequency | 2.288 GHz | 51.39 MHz | 44.61 MHz |
+| against silicon | x51 too fast | +15.2% | -- |
+| amplitude (Vpp) | 0.208 V | 1.486 V | 1.159 V |
 
 ## Try this
 

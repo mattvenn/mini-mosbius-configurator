@@ -196,7 +196,7 @@ def main() -> None:
                    "on the same axis as as-routed.\n"
                    f"Its {bv.max() - bv.min():.2f} V pk-pk reads low -- the AD3's flywire leads roll off "
                    "badly at 40 MHz.\n"
-                   "A Keysight HD304MSO on the same pad measured 1.589 Vpp instead (see the README), "
+                   "A Keysight HD304MSO on the same pad measured 1.750 Vpp instead (see the README), "
                    "close to the routed swing.\n"
                    "Only the period and shape are trustworthy here, not the amplitude.",
                    transform=routed_ax.transAxes, fontsize=7.5, color="dimgrey",
