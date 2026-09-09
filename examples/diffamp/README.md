@@ -21,6 +21,16 @@ with an Analog Discovery 3. Simulated at the `tt` corner with the default
 | small-signal gain | ~19.5 V/V | 19.77 V/V | 16.19 V/V |
 | output base | 2.012 V | 2.018 V | ~2.07 V |
 
+## On Andrew Kang's part
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| small-signal gain | 19.4 V/V | 19.53 V/V | 17.91 V/V |
+| output base | 2.013 V | 2.018 V | 2.007 V |
+
+Silicon is 7% below as-drawn -- less than tnt's chip, and this part's
+corner is not established, so no `ss` conclusion yet.
+
 ## Try this
 
 Change the tail current and see how little the gain moves. `XT1`'s `tail`

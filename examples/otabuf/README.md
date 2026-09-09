@@ -30,6 +30,15 @@ carries the difference between two scope channel offsets, which on this
 instrument is the same tens of millivolts as the offsets being measured. A
 slope is a ratio of differences within each channel, so it survives that.*
 
+## On Andrew Kang's part
+
+Slew rate swept 18-100 uA; only the bottom three bias points cleared the
+3x margin against the AD3 generator's own edge (`measure_settling_ad3.py
+otabuf --project tt_um_mosbius`). Fitting slew against bias over those
+gives a node capacitance of 43.9 pF, against 40.1 pF expected from the
+routed model plus the AD3's 24 pF probe -- 1.09x, matching tnt's own
+agreement.
+
 ## Try this
 
 Trade current for speed. The follower's slew rate is set by how fast the

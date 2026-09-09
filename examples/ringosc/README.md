@@ -1,7 +1,7 @@
 # Ring oscillator
 
 Three inverting stages wired in a loop, with a fourth inverter buffering
-the loop out to `ua3`. Eight transistors, which is every usable single FET
+the loop out to `ua4`. Eight transistors, which is every usable single FET
 on the chip. An odd number of inversions round a closed loop has no stable
 state, so the loop free-runs. The buffer is there because a probe on a
 loop node is inside the feedback path and changes the oscillator instead
@@ -9,7 +9,7 @@ of measuring it.
 
 ![Ring oscillator output as drawn, and as routed against silicon](ring_comparison.png)
 
-*Fig. 1. Two periods of the buffered output on `ua3`: as drawn (ideal
+*Fig. 1. Two periods of the buffered output on `ua4`: as drawn (ideal
 wires), and as routed (through the configured switch matrix, from `mosbius
 simulate`) against a ttsky25a chip measured with an Analog Discovery 3,
 folded from 300 periods, on the same voltage axis as the routed trace. The
@@ -17,11 +17,21 @@ silicon trace reads low due to limited bandwidth of the AD3.*
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| frequency | 2.289 GHz | 43.89 MHz | 40.02 MHz |
-| against silicon | x57 too fast | +9.7% | -- |
-| amplitude (Vpp) | 0.198 V | 1.72 V | 1.589 V |
+| frequency | 2.229 GHz | 43.92 MHz | 39.59 MHz |
+| against silicon | x56 too fast | +10.9% | -- |
+| amplitude (Vpp) | 0.198 V | 1.72 V | 1.750 V |
 
-Keysight HD304MSO used for amplitude measurement.
+Keysight HD304MSO used for amplitude measurement. Numbers above are for the
+buffered output on `ua4` (moved from `ua3` 2026-09-08 so this schematic also
+routes on Andrew Kang's part -- see CLAUDE.md); the loop itself is unchanged.
+
+## On Andrew Kang's part
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| frequency | 2.227 GHz | 51.69 MHz | 44.61 MHz |
+| against silicon | x50 too fast | +15.9% | -- |
+| amplitude (Vpp) | -- | -- | 1.159 V |
 
 ## Try this
 

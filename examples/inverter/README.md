@@ -21,6 +21,14 @@ curves are at the `tt` corner with the default 10x probe (`rprobe=10meg`,
 
 Digilent AD3 was too slow to measure rise time so Keysight HD304MSO was used instead.
 
+## On Andrew Kang's part
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| trip point (out = in) | 1.605 V | 1.600 V | 1.614 V |
+
+Peak gain -17.1 V/V, uncalibrated -- not simulated for this part yet.
+
 ## Try this
 
 Widen the PMOS and watch the rise time. `M2`'s `w` property selects how

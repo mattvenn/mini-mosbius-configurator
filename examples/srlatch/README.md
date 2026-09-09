@@ -27,6 +27,14 @@ simulation nanoseconds apart -- so they share the voltage axis only.*
 three columns driven by the same bench edge; the committed testbench uses
 a faster edge of its own and reads shorter.*
 
+## On Andrew Kang's part
+
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| Q holding a 1 | 3.2999 V | 3.2997 V | 3.309 V |
+| Q holding a 0 | 0.0000 V | -0.0004 V | 0.000 V (reference) |
+| reset time | -- | -- | 27.95 ns (against a 19.63 ns bench edge) |
+
 ## Try this
 
 Watch the latch power up. With both inputs idle the circuit has three DC

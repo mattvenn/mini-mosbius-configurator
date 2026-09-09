@@ -29,6 +29,18 @@ current, which on a demoboard without a programmable source is a bench
 supply through a resistor and is the least trustworthy number in the
 measurement.*
 
+## On Andrew Kang's part
+
+| at mid-rail | as drawn | as routed | on silicon |
+|---|---|---|---|
+| `psource_a` (source) | +209.9 uA | +209.2 uA | +213.3 uA |
+| `nsink_a` (sink) | -201.3 uA | -203.8 uA | -200.5 uA |
+| output resistance, 0.5-2.3 V (source) | -- | 85.5 kOhm | 83.7 kOhm |
+| output resistance, 0.5-2.3 V (sink) | -- | 79.1 kOhm | 87.4 kOhm |
+
+Both legs land within 2% of simulation, closer than tnt's own chip did --
+one sample, not yet a corner claim.
+
 ## The ratio cycler bits, confirmed on silicon
 
 Checked 2026-09-01: routed the same sheet at `ratio` 1, 2, 3 and 4 (four

@@ -114,7 +114,7 @@ def main() -> None:
     f_routed = meas.get("freq_routed", float("nan"))
     print(f"{'as drawn':12s} {f_drawn / 1e6:9.1f} MHz   (tb_ring.sch .meas, loop node)")
     print(f"{'as routed':12s} {f_routed / 1e6:9.2f} MHz   (tb_ring.sch .meas, loop node)")
-    print(f"{'on silicon':12s} {f_silicon / 1e6:9.3f} MHz   (ua3, zero crossings)"
+    print(f"{'on silicon':12s} {f_silicon / 1e6:9.3f} MHz   (ua4, zero crossings)"
           f"\n{'':12s} {'':9s}        as routed is {(f_routed / f_silicon - 1) * 100:+.1f}%, "
           f"as drawn is x{f_drawn / f_silicon:.0f}")
 
@@ -163,7 +163,7 @@ def main() -> None:
     dtw, dvw = last_periods(dt, dv, f_drawn)
     drawn_ax.plot(dtw * 1e12, dvw, lw=1.4, color="#4C72B0")
     drawn_ax.set_xlabel("time (ps)")
-    drawn_ax.set_ylabel("ua3, buffered output (V)")
+    drawn_ax.set_ylabel("ua4, buffered output (V)")
     drawn_ax.set_title(f"as drawn -- {f_drawn / 1e9:.3f} GHz", fontsize=10)
     drawn_ax.grid(alpha=0.3)
 
@@ -187,7 +187,7 @@ def main() -> None:
         routed_ax.plot((ph[keep] + offset) * 1e9, pv[keep], ".", ms=1.6, color="#7D5BBE",
                        label="on silicon (AD3, uncorrected)" if cycle == 0 else None)
     routed_ax.set_xlabel("time (ns)")
-    routed_ax.set_ylabel("ua3, buffered output (V)")
+    routed_ax.set_ylabel("ua4, buffered output (V)")
     routed_ax.set_title("as routed against silicon -- 11% apart in period", fontsize=10)
     routed_ax.grid(alpha=0.3)
     routed_ax.legend(fontsize=9, loc="upper right")
