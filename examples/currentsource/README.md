@@ -29,7 +29,7 @@ current, which on a demoboard without a programmable source is a bench
 supply through a resistor and is the least trustworthy number in the
 measurement.*
 
-## On Andrew Kang's part
+## On tt_um_mosbius
 
 | at mid-rail | as drawn | as routed | on silicon |
 |---|---|---|---|
@@ -64,6 +64,18 @@ demoboard's uncalibrated bias entirely, which is what makes this the one
 measurement here an uncalibrated bias can't spoil. The mirror-ratio bits mean
 what the bit map says they mean: the first of the chip's 11 device-setting
 cycler bit-groups exercised on real silicon (CLAUDE.md, TODO.md).
+
+Checked on tt_um_mosbius too, 2026-09-09, the same way (`psource_a` stayed
+on `ua2`, `nsink_a` on `ua3` across all four):
+
+| ratio | `psource_a` (source) | per unit | `nsink_a` (sink) | per unit |
+|---|---|---|---|---|
+| 1 | +103.56 uA | +103.56 uA | -99.88 uA | -99.88 uA |
+| 2 | +212.89 uA | +106.45 uA | -200.50 uA | -100.25 uA |
+| 3 | +308.69 uA | +102.90 uA | -301.11 uA | -100.37 uA |
+| 4 | +417.19 uA | +104.30 uA | -400.75 uA | -100.19 uA |
+
+Spread: 3.4% (source), 0.5% (sink) -- evenly spaced on this part too.
 
 ## Reproducing the numbers
 

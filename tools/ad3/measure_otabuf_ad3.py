@@ -7,6 +7,12 @@ The OTA unity-gain follower: input on pad C (`ua1`), output on pad J
 host -- it needs USB for the demoboard:
 
     python3 tools/ad3/measure_otabuf_ad3.py
+    python3 tools/ad3/measure_otabuf_ad3.py --project tt_um_mosbius
+
+Defaults to tnt's part (`tt_um_tnt_mosbius`); `--project tt_um_mosbius`
+measures the same schematic routed for Andrew Kang's part instead, on
+different pads -- the wiring table is derived from whichever `--project`
+is running, not memorised.
 
 **This is the first example measured here that needs a bias current.** The
 OTA's tail is a slave of the chip's bias reference, so with `ibias` unfed
@@ -43,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ad3  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from mosbius.bitstream import unpack  # noqa: E402
+from mosbius.chips import KANG, TNT  # noqa: E402
 from mosbius.model import SwitchConfig  # noqa: E402
 from mosbius.program import (  # noqa: E402
     ProgramError,
@@ -52,25 +58,44 @@ from mosbius.program import (  # noqa: E402
 )
 from mosbius.pads import format_analog_header, pads_in_use  # noqa: E402
 
-# examples/otabuf as the router placed it on 2026-08-29 -- the configuration
-# the measured slew and its tail sweep were taken with.
-# It is a record of an experiment, not a cached build artifact: if the
-# router's allocation ever changes, re-route and re-measure rather than
-# editing this string, or the published numbers quietly stop describing
-# the configuration that was actually on the chip.
-BITSTREAM = "404000000000000000000000000000000000000000850210"
-PROJECT = "tt_um_tnt_mosbius"
 SHUTTLE = "ttsky25a"
-
 RAMP_LO, RAMP_HI, STEP = 0.2, 3.1, 0.025
 SETTLE = 0.03
 BIAS_RAIL = 3.28          # V+ for ~100 uA through 20k, from the clamp sweep
 BIAS_RESISTOR = 20000.0
-
-# examples/otabuf/README.md, measured 2026-08-28 at ibias=100u, tail=4.
-SIM_OFFSETS = {1.00: (+30.2, +25.0), 1.65: (+8.6, +5.9), 2.50: (-31.7, -33.1)}
-SIM_CMR = (0.85, 2.9)
 TRACKING = 0.100          # |out - in| under this counts as following
+
+# Each entry is a record of a specific routing, not a cached build artifact:
+# if the router's allocation for a part ever changes, re-route and
+# re-measure rather than editing the bitstream here, or the published
+# numbers quietly stop describing the configuration that was actually on
+# the chip. sim_cmr is the common-mode range both branches were simulated
+# to reach, within 50 mV of each other on tnt's part.
+PROJECTS = {
+    # examples/otabuf as the router placed it on 2026-08-29 -- the
+    # configuration the measured slew and its tail sweep were taken with.
+    # sim_offsets is examples/otabuf/README.md, measured 2026-08-28 at
+    # ibias=100u, tail=4.
+    "tt_um_tnt_mosbius": {
+        "chip": TNT,
+        "bitstream": "404000000000000000000000000000000000000000850110",
+        "sim_offsets": {1.00: (+30.2, +25.0), 1.65: (+8.6, +5.9), 2.50: (-31.7, -33.1)},
+        "sim_cmr": (0.85, 2.9),
+    },
+    # examples/otabuf routed for tt_um_mosbius on 2026-09-09. sim_offsets is
+    # from a tb_otabuf.sch run with MOSBIUS_PROJECT=tt_um_mosbius, at the
+    # same three input levels; within a couple of mV of tnt's own, as
+    # expected for a quantity set by total device width, unchanged between
+    # parts. sim_cmr is carried over from tnt's part for the same reason --
+    # not independently re-simulated, since it is set by the same total
+    # widths -- rather than re-derived here.
+    "tt_um_mosbius": {
+        "chip": KANG,
+        "bitstream": "0000000000000000000010888000000001020200000000000",
+        "sim_offsets": {1.00: (+30.2, +26.2), 1.65: (+8.5, +5.6), 2.50: (-31.7, -35.7)},
+        "sim_cmr": (0.85, 2.9),
+    },
+}
 
 
 def wiring_table(pads: dict[str, str]) -> str:
@@ -109,7 +134,7 @@ def implied_bias(rail: float) -> str:
     return f"  ({rail:.2f} V is outside the range {path} swept)"
 
 
-def program_chip(port: str | None) -> None:
+def program_chip(project: str, bitstream: str, chip, port: str | None) -> None:
     """Upload the configuration through mosbius.program.program().
 
     Not `python3 -m mosbius.cli program` in a subprocess. The result dict
@@ -121,10 +146,10 @@ def program_chip(port: str | None) -> None:
     script would then measure an unbiased chip very carefully.
     tools/ad3/measure_currentsource_ad3.py has always done it this way.
     """
-    config = SwitchConfig.from_bitstream(BITSTREAM, ibias=0)
-    print("== loading the OTA follower onto the chip")
+    config = SwitchConfig.from_bitstream(bitstream, chip=chip, ibias=0)
+    print(f"== loading the OTA follower onto the chip ({project})")
     try:
-        result = program(config, project=PROJECT, port=port)
+        result = program(config, project=project, port=port)
     except ProgramError as exc:
         raise SystemExit(f"programming failed -- nothing measured\n\n{exc}")
     warning = ibias_warning(result, config)
@@ -194,7 +219,8 @@ def _tracking_band(points):
     return best
 
 
-def report(points: list[tuple[float, float]]) -> None:
+def report(points: list[tuple[float, float]], sim_offsets: dict, sim_cmr: tuple,
+           pads: dict[str, str]) -> None:
     if len(points) < 5:
         print("\n  Too few points survived to say anything. See the errors above.")
         return
@@ -203,7 +229,7 @@ def report(points: list[tuple[float, float]]) -> None:
     print("\n  Offset (output minus input), against the same circuit simulated:\n")
     print("    input     as drawn   as routed   on silicon")
     print("    -------   --------   ---------   ----------")
-    for target, (drawn, routed) in sorted(SIM_OFFSETS.items()):
+    for target, (drawn, routed) in sorted(sim_offsets.items()):
         vin, vout = min(points, key=lambda p: abs(p[0] - target))
         print(f"    {target:.2f} V    {drawn:+6.1f} mV   {routed:+6.1f} mV   "
               f"{(vout - vin) * 1000:+7.1f} mV   (at {vin:.3f} V)")
@@ -215,14 +241,14 @@ def report(points: list[tuple[float, float]]) -> None:
     else:
         lo = hi = None
         print("    on silicon    it never followed -- see the verdict below")
-    print(f"    simulated     {SIM_CMR[0]:.2f} V to {SIM_CMR[1]:.2f} V "
+    print(f"    simulated     {sim_cmr[0]:.2f} V to {sim_cmr[1]:.2f} V "
           "(both branches, within 50 mV of each other)")
 
     if not tracking:
         print("\n  THE FOLLOWER IS NOT FOLLOWING. Before suspecting the routing,\n"
               "  check the bias: this is the first example here that needs one, and\n"
-              "  with ibias unfed the OTA has no operating point and its output goes\n"
-              "  wherever leakage puts it. Move scope 2+ to pad D (ua3) -- that is\n"
+              f"  with ibias unfed the OTA has no operating point and its output goes\n"
+              f"  wherever leakage puts it. Move scope 2+ to pad {pads['ua3']} (ua3) -- that is\n"
               "  the mirror node, and it says whether the OTA is biased at all.\n"
               "  A follower follows regardless of how much tail current it has, so\n"
               "  no tracking anywhere is a bias or a connection problem, not a\n"
@@ -239,8 +265,8 @@ def report(points: list[tuple[float, float]]) -> None:
     # differences, one per channel, so a constant offset cancels out of it.
     lo, hi = _at(points, 1.00), _at(points, 2.50)
     two_point = 1.0 + ((hi[1] - hi[0]) - (lo[1] - lo[0])) / (hi[0] - lo[0])
-    drawn = 1.0 + (SIM_OFFSETS[2.50][0] - SIM_OFFSETS[1.00][0]) / 1000 / 1.5
-    routed = 1.0 + (SIM_OFFSETS[2.50][1] - SIM_OFFSETS[1.00][1]) / 1000 / 1.5
+    drawn = 1.0 + (sim_offsets[2.50][0] - sim_offsets[1.00][0]) / 1000 / 1.5
+    routed = 1.0 + (sim_offsets[2.50][1] - sim_offsets[1.00][1]) / 1000 / 1.5
     print("\n  Closed-loop gain -- the slope, not the offset:\n")
     print("               as drawn   as routed   on silicon")
     print("               --------   ---------   ----------")
@@ -281,16 +307,22 @@ def _slope(tracking: list[tuple[float, float]]) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--project", choices=sorted(PROJECTS), default="tt_um_tnt_mosbius")
     parser.add_argument("--rail", type=float, default=BIAS_RAIL,
                         help=f"V+ feeding the bias resistor (default: {BIAS_RAIL})")
     parser.add_argument("--port", default=None, help="demoboard serial port")
     parser.add_argument("--no-program", action="store_true")
     args = parser.parse_args()
 
-    pads = pads_in_use(SwitchConfig(bits=unpack(BITSTREAM)), SHUTTLE, PROJECT)
+    spec = PROJECTS[args.project]
+    pads = pads_in_use(
+        SwitchConfig.from_bitstream(spec["bitstream"], chip=spec["chip"]),
+        SHUTTLE, args.project,
+    )
     if not args.no_program:
-        program_chip(args.port)
+        program_chip(args.project, spec["bitstream"], spec["chip"], args.port)
     print(wiring_table(pads))
+    input("  Press Enter once that is wired... ")
 
     with ad3.device() as handle:
         measured = ad3.supply(handle, args.rail, "V+", current_limit=0.05, settle=0.5)
@@ -299,11 +331,12 @@ def main() -> None:
         print(implied_bias(measured["voltage"]))
         points = sweep(handle)
 
-    out = Path("build/otabuf_silicon_dc.json")
+    suffix = "_kang" if args.project == "tt_um_mosbius" else ""
+    out = Path(f"build/otabuf{suffix}_silicon_dc.json")
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(points))
     print(f"\n== {len(points)} points written to {out}")
-    report(points)
+    report(points, spec["sim_offsets"], spec["sim_cmr"], pads)
 
 
 if __name__ == "__main__":

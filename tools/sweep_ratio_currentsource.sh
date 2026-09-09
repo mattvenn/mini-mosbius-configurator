@@ -21,7 +21,17 @@
 # needed.
 #
 #   sh tools/sweep_ratio_currentsource.sh
+#   sh tools/sweep_ratio_currentsource.sh tt_um_mosbius
+#
+# Takes an optional part, default tt_um_tnt_mosbius; the four configs go to
+# build/currentsource_r<n>.mosbius.json for tnt's part and
+# build/currentsource_r<n>_kang.mosbius.json for tt_um_mosbius, so a sweep
+# of one part never overwrites the other's.
 set -e
+
+PROJECT=${1:-tt_um_tnt_mosbius}
+SUFFIX=""
+[ "$PROJECT" = "tt_um_mosbius" ] && SUFFIX="_kang"
 
 cd "$(dirname "$0")/.."
 
@@ -35,22 +45,28 @@ if [ ! -f build/currentsource.spice ]; then
 fi
 
 for n in 1 2 3 4; do
-    echo "== ratio=$n"
-    sed "s/ratio=2/ratio=$n/g" build/currentsource.spice > "build/currentsource_r$n.spice"
-    python3 -m mosbius.cli route "build/currentsource_r$n.spice" \
-        --out "build/currentsource_r$n.mosbius.json"
+    echo "== ratio=$n, $PROJECT"
+    sed "s/ratio=2/ratio=$n/g" build/currentsource.spice > "build/currentsource_r$n$SUFFIX.spice"
+    python3 -m mosbius.cli route "build/currentsource_r$n$SUFFIX.spice" --project "$PROJECT" \
+        --out "build/currentsource_r$n$SUFFIX.mosbius.json"
 done
 
 echo
 echo "== checking the four bitstreams differ only in the ratio cycler bits"
-python3 - <<'PY'
+PROJECT="$PROJECT" SUFFIX="$SUFFIX" python3 - <<'PY'
 import json
+import os
+from mosbius.chips import chip_for_macro
 from mosbius.model import SwitchConfig
+
+project = os.environ["PROJECT"]
+suffix = os.environ["SUFFIX"]
+chip = chip_for_macro(project)
 
 configs = {}
 for n in (1, 2, 3, 4):
-    routed = json.load(open(f"build/currentsource_r{n}.mosbius.json"))
-    settings = SwitchConfig.from_bitstream(routed["bitstream"]).device_settings()
+    routed = json.load(open(f"build/currentsource_r{n}{suffix}.mosbius.json"))
+    settings = SwitchConfig.from_bitstream(routed["bitstream"], chip=chip).device_settings()
     configs[n] = {
         "bitstream": routed["bitstream"],
         "roles": routed["device_roles"],
@@ -89,8 +105,9 @@ print("\n  OK -- four clean configs, one hardware slot each, ready for "
 PY
 
 echo
-echo "done -- build/currentsource_r1..4.mosbius.json"
+echo "done -- build/currentsource_r1$SUFFIX..4$SUFFIX.mosbius.json"
 echo "measure with, e.g.:"
 echo "  python3 tools/ad3/measure_currentsource_ad3.py --mode ratio --leg source \\"
-echo "      --configs build/currentsource_r1.mosbius.json build/currentsource_r2.mosbius.json \\"
-echo "                build/currentsource_r3.mosbius.json build/currentsource_r4.mosbius.json"
+echo "      --project $PROJECT \\"
+echo "      --configs build/currentsource_r1$SUFFIX.mosbius.json build/currentsource_r2$SUFFIX.mosbius.json \\"
+echo "                build/currentsource_r3$SUFFIX.mosbius.json build/currentsource_r4$SUFFIX.mosbius.json"

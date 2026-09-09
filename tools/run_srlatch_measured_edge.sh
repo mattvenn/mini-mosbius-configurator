@@ -23,25 +23,44 @@
 #   docker run --rm -v "$PWD:/work" -w /work hpretl/iic-osic-tools:2026.05 \
 #       --skip bash -lc 'sh tools/run_srlatch_measured_edge.sh'
 #
-# Takes an optional process corner, default tt:
+# Takes an optional process corner (default tt) and part (default
+# tt_um_tnt_mosbius):
 #
 #   sh tools/run_srlatch_measured_edge.sh ss
+#   sh tools/run_srlatch_measured_edge.sh tt tt_um_mosbius
 #
-# This chip measured as an ss part -- see CLAUDE.md for the two-circuit
-# argument that establishes that -- so ss is the corner to
-# compare a silicon timing against, while tt stays what the committed
-# sheets and CI use.
+# tnt's chip measured as an ss part -- see CLAUDE.md for the two-circuit
+# argument that establishes that -- so ss is the corner to compare a
+# silicon timing against there; tt_um_mosbius's corner is not established,
+# so tt (the committed sheets' own corner) is the reasonable default for
+# it. tt stays what CI uses either way.
 set -e
 
 CORNER=${1:-tt}
+PROJECT=${2:-tt_um_tnt_mosbius}
+export MOSBIUS_PROJECT="$PROJECT"
+
+# The measured 10%-90% stimulus edge for whichever part -- both from
+# tools/ad3/measure_srlatch_edge_ad3.py, close but not identical since
+# it's the same AD3 generator either way.
+case "$PROJECT" in
+    tt_um_tnt_mosbius) STIMULUS_NS=20.2 ;;
+    tt_um_mosbius)     STIMULUS_NS=19.63 ;;
+    *) echo "no measured stimulus edge recorded for $PROJECT -- add one" \
+            "to this script's case statement" >&2; exit 1 ;;
+esac
+SUFFIX=""
+[ "$PROJECT" = "tt_um_mosbius" ] && SUFFIX="_kang"
 
 cd "$(dirname "$0")/.."
 mkdir -p build
 
-if [ ! -f build/srlatch_routed.spice ]; then
-    echo "== building the routed subcircuit first"
-    sh tools/regenerate_routed.sh examples/srlatch/srlatch.sch
-fi
+# Always rebuild the routed subcircuit rather than reusing whatever is in
+# build/ -- it is cheap (route + build, no ngspice), and reusing it would
+# silently replay whichever part it was last built for regardless of
+# $PROJECT.
+echo "== building the routed subcircuit for $PROJECT"
+sh tools/regenerate_routed.sh examples/srlatch/srlatch.sch
 
 # Always re-netlist rather than reusing whatever is in build/. The
 # testbench's `.include` of the routed subcircuit is written as an
@@ -57,9 +76,10 @@ grep -q 'IS MISSING' build/tb_srlatch.spice && {
     echo "build/tb_srlatch.spice has unresolved symbols -- run this from the" >&2
     echo "repo root, so xschem reads the repo's own xschemrc." >&2; exit 1; }
 
-echo "== rewriting the stimulus, the probe and the analysis"
+echo "== rewriting the stimulus, the probe and the analysis ($STIMULUS_NS ns edge)"
 python3 tools/rewrite_srlatch_measured_edge.py \
-    build/tb_srlatch.spice build/tb_srlatch_measured_edge.spice
+    build/tb_srlatch.spice build/tb_srlatch_measured_edge.spice \
+    --stimulus-ns "$STIMULUS_NS" --prefix "srlatch_edge$SUFFIX"
 if [ "$CORNER" != "tt" ]; then
     echo "== switching the model library to $CORNER"
     sed -i "s|\(sky130.lib.spice\) tt|\1 $CORNER|" build/tb_srlatch_measured_edge.spice
@@ -67,12 +87,12 @@ fi
 
 echo "== running ngspice at $CORNER"
 cp .spiceinit build/.spiceinit
-( cd build && ngspice -b tb_srlatch_measured_edge.spice \
-    > ngspice_tb_srlatch_measured_edge.log 2>&1 ) \
+log="ngspice_tb_srlatch_measured_edge$SUFFIX.log"
+( cd build && ngspice -b tb_srlatch_measured_edge.spice > "$log" 2>&1 ) \
     || { echo "ngspice exited non-zero -- tail of the log:"; \
-         tail -40 build/ngspice_tb_srlatch_measured_edge.log; exit 1; }
+         tail -40 "build/$log"; exit 1; }
 
-grep -E '^(treset|vhigh|vlow)' build/ngspice_tb_srlatch_measured_edge.log || true
+grep -E '^(treset|vhigh|vlow)' "build/$log" || true
 echo
 echo "Compare treset_* above with the silicon number from"
 echo "tools/ad3/measure_srlatch_edge_ad3.py, not with the sheet's own treset."

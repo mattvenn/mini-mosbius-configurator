@@ -9,9 +9,12 @@ Four changes, and nothing else:
 
 * **The stimulus edge.** `tb_srlatch.sch` uses 1 ns edges. The Analog
   Discovery's generator was measured at 20.2 ns 10%-90% on the RESET pad
-  by tools/ad3/measure_srlatch_edge_ad3.py. A SPICE PULSE's `tr` is the full
-  0-100% transition, so the 10%-90% part of it is 0.8*tr: tr = 25.3 ns
-  reproduces the measured 20.2 ns.
+  by tools/ad3/measure_srlatch_edge_ad3.py (19.6 ns on tt_um_mosbius's
+  part -- close, since it is the same generator, but not identical, so
+  --stimulus-ns takes the part-specific figure rather than assuming
+  tnt's). A SPICE PULSE's `tr` is the full 0-100% transition, so the
+  10%-90% part of it is 0.8*tr: tr = 25.3 ns reproduces tnt's measured
+  20.2 ns.
 * **The timescale.** Edges 25x longer need a longer window, so the pulses
   move out to 100 ns and 600 ns and the run goes to 1.2 us.
 * **The probe.** The sheet defaults to a 10x passive probe (10 MOhm,
@@ -34,11 +37,12 @@ what the bench script times between its two channels.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
-# 10%-90% of a SPICE PULSE's tr is 0.8*tr, and the bench measured 20.2 ns.
-STIMULUS_TR = "25.3n"
+# 10%-90% of a SPICE PULSE's tr is 0.8*tr, and tnt's bench measured 20.2 ns.
+DEFAULT_STIMULUS_NS = 20.2
 SET_AT, RESET_AT, PULSE_WIDTH, PERIOD = "100n", "600n", "300n", "5u"
 
 # One prefix, since there is one experiment now. There used to be two --
@@ -63,28 +67,37 @@ ANALYSIS = """.control
 
 
 def main() -> int:
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    source, target = Path(args[0]), Path(args[1])
-    text = source.read_text()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("source", type=Path)
+    ap.add_argument("target", type=Path)
+    ap.add_argument("--stimulus-ns", type=float, default=DEFAULT_STIMULUS_NS,
+                    help=f"measured 10%%-90%% stimulus edge (default: "
+                         f"{DEFAULT_STIMULUS_NS}, tnt's part)")
+    ap.add_argument("--prefix", default="srlatch_edge",
+                    help="wrdata output file prefix (default: srlatch_edge)")
+    args = ap.parse_args()
+
+    stimulus_tr = f"{args.stimulus_ns / 0.8:.2f}n"
+    text = args.source.read_text()
 
     text = text.replace(
         "Vset set VGND PULSE(0 3.3 60n 1n 1n 40n 1000n)",
-        f"Vset set VGND PULSE(0 3.3 {SET_AT} {STIMULUS_TR} {STIMULUS_TR} "
+        f"Vset set VGND PULSE(0 3.3 {SET_AT} {stimulus_tr} {stimulus_tr} "
         f"{PULSE_WIDTH} {PERIOD})")
     text = text.replace(
         "Vreset reset VGND PULSE(0 3.3 220n 1n 1n 40n 1000n)",
-        f"Vreset reset VGND PULSE(0 3.3 {RESET_AT} {STIMULUS_TR} {STIMULUS_TR} "
+        f"Vreset reset VGND PULSE(0 3.3 {RESET_AT} {stimulus_tr} {stimulus_tr} "
         f"{PULSE_WIDTH} {PERIOD})")
     text = text.replace(".param rprobe=10meg", ".param rprobe=1meg")
     text = text.replace(".param cprobe=10p", ".param cprobe=24p")
 
     start = text.index(".control")
     end = text.index(".endc") + len(".endc\n")
-    prefix = "srlatch_edge"
-    text = text[:start] + ANALYSIS.format(prefix=prefix) + text[end:]
+    text = text[:start] + ANALYSIS.format(prefix=args.prefix) + text[end:]
 
-    target.write_text(text)
-    print(f"  wrote {target}")
+    args.target.write_text(text)
+    print(f"  wrote {args.target} (stimulus tr={stimulus_tr}, "
+          f"10%-90% edge={args.stimulus_ns} ns)")
     return 0
 
 

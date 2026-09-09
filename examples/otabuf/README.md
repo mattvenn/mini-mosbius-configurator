@@ -30,14 +30,24 @@ carries the difference between two scope channel offsets, which on this
 instrument is the same tens of millivolts as the offsets being measured. A
 slope is a ratio of differences within each channel, so it survives that.*
 
-## On Andrew Kang's part
+## On tt_um_mosbius
 
-Slew rate swept 18-100 uA; only the bottom three bias points cleared the
-3x margin against the AD3 generator's own edge (`measure_settling_ad3.py
-otabuf --project tt_um_mosbius`). Fitting slew against bias over those
-gives a node capacitance of 43.9 pF, against 40.1 pF expected from the
-routed model plus the AD3's 24 pF probe -- 1.09x, matching tnt's own
-agreement.
+| | as drawn | as routed | on silicon |
+|---|---|---|---|
+| closed-loop slope, 1.00-2.50 V | 0.9587 | 0.9587 | 0.9538 |
+| offset at 1.00 V | +30.2 mV | +26.2 mV | +29.9 mV |
+| offset at 1.65 V | +8.5 mV | +5.6 mV | +5.3 mV |
+| offset at 2.50 V | -31.7 mV | -35.7 mV | -39.6 mV |
+| input common-mode range | 0.85-2.90 V | 0.85-2.90 V | 0.65-2.70 V |
+| slew rate, 1.3-2.0 V rising | 42.7 V/us | 15.7 V/us | -- (nominal bias is generator-limited here) |
+| node capacitance, fitted against bias | -- | 40.1 pF | 43.9 pF |
+
+Silicon's slope shortfall from 1 is 1.12x the routed model's -- less than
+tnt's 1.36x, the same direction as the currentsource legs. Slew rate was
+swept 18-100 uA; only the bottom three bias points cleared the 3x margin
+against the AD3 generator's own edge, so the nominal-bias slew isn't
+directly comparable. The capacitance fit uses those three and matches the
+routed model to 1.09x -- the same agreement as tnt's part.
 
 ## Try this
 
