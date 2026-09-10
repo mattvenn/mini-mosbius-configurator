@@ -19,29 +19,66 @@ amp, OTA follower, current source, SR latch -- routes on his part and has
 now been measured on his silicon; PARTS.md has every number side by side
 with tnt's.
 
-What is left is the as-drawn ideal library's one remaining device
-difference. The finger-count half of the geometry question is done and a
-no-op for tnt (CLAUDE.md has the binning investigation); this is the
-other half, and neither piece below needs a chip:
+The as-drawn ideal library's one device difference from real silicon --
+the bulk tie -- is fixed as of 2026-09-10, for both PMOS and NMOS, both
+confirmed on silicon first. The finger-count half of the geometry question
+was already done and a no-op for tnt (CLAUDE.md has the binning
+investigation); this was the other half.
 
-- **The PMOS bulk tie.** His generic PMOS and PMOS differential-pair
-  halves tie bulk to their own source; tnt's tie every PMOS bulk to VAPWR.
-  Every other PMOS on both parts already has its source on the rail, so
-  this only bites a PMOS whose source moves with the signal -- negligible
-  on a differential pair's shared source (1.9% of gain, 4.8 mV on
-  `examples/pdiffamp/`), but about 20% low on a PMOS source follower drawn
-  with the bulk on the rail instead of the source. Nothing in the examples
-  draws that circuit yet. Shape of the fix, from CLAUDE.md: an internal
-  well node in `mosbius_pmos`, tied to the rail through one resistor and
-  to the source through another, both values from the `Chip` alongside
-  the width per finger.
+**What was wrong.** His generic PMOS/PMOS differential-pair halves tie
+bulk to their own source; tnt's tie every PMOS bulk to VAPWR. `diff_n.sch`
+(NMOS pair, `itail`) and `ota_n.sch` (NMOS input pair) do the same on the
+NMOS side. Both need deep-nwell isolation to be physically real, and
+`tt_um_mosbius.mag` has it: four top-level `dnwell` rectangles, with
+several `sky130_fd_pr__nfet_g5v0d10v5_*` instances sitting fully inside
+them. Every PMOS/NMOS whose source never leaves a rail is unaffected --
+`mirror_n`'s tail bank, the bias mirror legs, `tt_asw_3v3`'s pass-FETs,
+and every existing example except a diff-pair/OTA input pair (a small
+effect, 1.9% of gain / 4.8 mV on `examples/pdiffamp/`, from the shared
+source acting as a virtual ground). A source follower is where it bites
+hard, and nothing in the examples drew one, so two one-shot circuits did
+(not committed examples -- `build/pfollower/`, `build/nfollower/`,
+`tools/ad3/measure_pfollower_ad3.py`, `measure_nfollower_ad3.py`):
+0.921 V/V measured on `tt_um_mosbius` silicon against 0.918 V/V simulated
+as routed (0.3% off) and 0.746 V/V as drawn (19% off) for PMOS; 0.924
+against 0.929 routed (0.5% off) and 0.789 drawn (13.5% off) for NMOS.
+`mosbius simulate`'s switch-matrix model already had this right in both
+cases, since it comes from Andrew Kang's own extracted device library --
+only the ideal library was wrong.
 
-- **The NMOS bulk, unsettled.** This used to assume his NMOS schematics
-  tie bulk to source too but that there is no deep nwell anywhere in his
-  layout, so the bulk is really the substrate and the two parts agree.
-  His top-level layout does contain three deep-nwell rectangles, and at
-  least three NMOS placements fall inside them. Check that before relying
-  on it.
+**The fix.** `mosbius_pmos.sch`/`mosbius_nmos.sch` each gained an internal
+`well` node: the FET's `body=` now points there instead of straight at the
+rail, and two resistors (`Rwell_rail`, `Rwell_source`) connect `well` to
+the rail and to the device's own drawn source. Both resistor values are
+`.param`s driven by a new `Chip.bulk_follows_source` field (False for tnt,
+True for Kang), written into the generated routed netlist by
+`mosbius/simulate.py`'s `render_drawn_geometry()` -- the exact mechanism
+`pmos_width_per_finger` already uses, so `--project` stays the one place a
+part is chosen. One trap on the way: the first resistor values (1e-12/1e12
+ohm, mirroring `CONFIG_TIE_OHMS`'s near-zero convention) made ngspice hang
+for 50+ minutes at ~100% CPU instead of the usual ~2-minute model load --
+a 24-decade spread on one internal node, with 1e-12 sitting on top of
+ngspice's own default `gmin`, is a much harder linear-algebra problem than
+a single tie to a fixed rail. 1 ohm / 1e9 ohm (nine decades, comfortably
+past the stiffest real node in these decks, ~50 kOhm) fixed it and reran
+in seconds. `BULK_TIE_OHMS`/`BULK_OPEN_OHMS` in `mosbius/simulate.py`.
+
+**Verified.** All 382 pytest tests pass. Every tnt example with a
+published number (inverter, diff amp, PMOS diff amp, SR latch, OTA
+follower, current source, ring oscillator) matches its README exactly --
+confirms the fix is a true no-op for tnt, not just in the resistor math
+but in the actual regression. Both one-shot followers moved from
+15-19% off the as-routed/silicon numbers to within ~1.5%. `examples/pdiffamp`
+on `tt_um_mosbius` shifted about 2% (21.6->21.1, 20.8->20.5 V/V), matching
+the virtual-ground-cancellation size predicted above rather than the
+follower's much larger shift.
+
+**Left:** `examples/diffamp` (the NMOS pair) on `tt_um_mosbius` hasn't
+been re-simulated with the fix yet. Kang's `pdiffamp`/`diffamp` READMEs
+still publish the old as-drawn numbers and need updating once diffamp is
+checked too. `build/pfollower/`/`build/nfollower/` are still one-shot,
+uncommitted, gitignored -- promote to real examples only if that's
+wanted, since the silicon check was the point, not a permanent addition.
 
 The wider question this came from is answered for now: every mini-MOSbius so
 far is sky130A, so the PDK axis is still hypothetical, and
@@ -82,7 +119,7 @@ being scaled.
 
 4 check all the schematic texts
 
-5 add limks for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
+5 add links for xschem viewer. doesn't work out of the box, need to be able to provide our custom library
 
 6 overview of how the router works
 

@@ -42,6 +42,24 @@ from mosbius.netlist import schematic_for_netlist
 from mosbius.model import DEFAULT_IBIAS, SwitchConfig, bus_node, connected_components
 from mosbius.spice import render_bus_wire_caps, render_config_spice
 
+# The two sides of the bulk-tie resistor divider `mosbius_pmos.sch`/
+# `mosbius_nmos.sch` use to model which of {rail, own source} a part's real
+# bulk follows -- see Chip.bulk_follows_source. Deliberately NOT
+# CONFIG_TIE_OHMS (1e-12): that value is ngspice's own stand-in for a literal
+# 0-ohm resistor, fine for a single tie to a fixed rail, but paired against
+# an equally extreme "open" value on the *same floating node* it made
+# ngspice's DC sweep hang for tens of minutes at ~100% CPU instead of the
+# usual ~2-minute model load -- a 1e-12/1e12 spread is 24 decades of
+# conductance on one Jacobian entry, and 1e-12 ohm sits right on top of
+# ngspice's own default gmin, so the solver cannot tell "real resistor" from
+# its own numerical stabilization noise. 1 ohm / 1e9 ohm is nine decades,
+# comfortably dominant either way against the stiffest real node in these
+# decks (~50 kOhm, CLAUDE.md's probe note) while nowhere near ngspice's own
+# internal constants. An actual 0-ohm/open pair was never necessary here --
+# unlike CONFIG_TIE_OHMS's job, nothing measures across this divider.
+BULK_TIE_OHMS = "1"
+BULK_OPEN_OHMS = "1e9"
+
 # Which switch-matrix library a design gets is a property of the part it was
 # routed for, so it lives on the Chip. This name is the default part's copy.
 DEVICE_LIBRARY_PATH = DEFAULT_CHIP.device_library
@@ -122,6 +140,10 @@ def render_drawn_geometry(chip: Chip) -> str:
     chosen -- a testbench that named its own part could disagree with the
     routed netlist beside it, and nothing would say so.
     """
+    if chip.bulk_follows_source:
+        rwell_rail, rwell_source = BULK_OPEN_OHMS, BULK_TIE_OHMS
+    else:
+        rwell_rail, rwell_source = BULK_TIE_OHMS, BULK_OPEN_OHMS
     return (
         f"* Device geometry for {chip.title}, for the as-drawn half of a\n"
         f"* testbench. This is global, so the ideal mosbius_* symbols on the\n"
@@ -132,6 +154,12 @@ def render_drawn_geometry(chip: Chip) -> str:
         f"* parts. They differ only in how many fingers that width is split\n"
         f"* into, and every PMOS width in use divides exactly by both.\n"
         f".param pmos_width_per_finger={chip.pmos_width_per_finger}\n"
+        f"*\n"
+        f"* mosbius_pmos.sch/mosbius_nmos.sch's internal well node: which of\n"
+        f"* {{rail, own source}} a bulk follows, as two resistor values rather\n"
+        f"* than a net choice, for the same reason the width is a number here\n"
+        f"* -- see Chip.bulk_follows_source.\n"
+        f".param rwell_rail={rwell_rail} rwell_source={rwell_source}\n"
     )
 
 

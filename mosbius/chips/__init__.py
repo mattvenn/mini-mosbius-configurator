@@ -96,6 +96,21 @@ class Chip:
     # per-finger effective width BSIM4's narrow-width terms see, worth about
     # 1.2 mV of gate-source voltage at 187 uA.
     pmos_width_per_finger: float
+    # Whether a user-drawn `mosbius_pmos`/`mosbius_nmos`'s bulk follows the
+    # device's own source (True) or the rail (False, tnt's behaviour and the
+    # ideal library's old, unconditional default). Confirmed on both parts
+    # 2026-09-10, PMOS by a one-shot silicon follower measurement (0.921 V/V
+    # measured against 0.918 simulated as routed and 0.746 as drawn) and NMOS
+    # the same way (0.924 against 0.929 and 0.789); schematic evidence is
+    # `diff_n.sch`'s/`ota_n.sch`'s pair halves tying bulk to their own shared
+    # source (`itail`) rather than to a rail. Every PMOS/NMOS whose source
+    # never leaves the rail is unaffected either way, which is every example
+    # except a source follower or a diff-pair/OTA input pair -- see TODO.md
+    # Sec 2. `mosbius_pmos.sch`/`mosbius_nmos.sch` turn this into two
+    # resistor values (mosbius/simulate.py's render_drawn_geometry()): one
+    # near-zero and one near-open, on whichever sides make the internal well
+    # node follow the source when True and the rail when False.
+    bulk_follows_source: bool
     # Which physical `ua[k]` carries the bias reference. tnt puts it on ua[0],
     # Andrew on ua[5]. It is the one analog pin with no switch matrix behind
     # it, so it is named rather than numbered everywhere a user sees it.
@@ -570,6 +585,7 @@ TNT = Chip(
     bus_wire_cap=_TNT_BUS_WIRE_CAP,
     device_library=DATA_DIR / "mosbius_device_library.spice",
     pmos_width_per_finger=7.5,
+    bulk_follows_source=False,
     ibias_ua=0,
     ota_amplifier_bits=(("ctrl_otan_mode", 0),),
     ota_setting_fields={
@@ -626,6 +642,7 @@ KANG = Chip(
     bus_wire_cap=_KANG_BUS_WIRE_CAP,
     device_library=DATA_DIR / "kang_device_library.spice",
     pmos_width_per_finger=5.0,
+    bulk_follows_source=True,
     ibias_ua=5,
     ota_amplifier_bits=(),
     ota_setting_fields={
