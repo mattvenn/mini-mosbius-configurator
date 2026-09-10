@@ -34,12 +34,12 @@ slope is a ratio of differences within each channel, so it survives that.*
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| closed-loop slope, 1.00-2.50 V | 0.9587 | 0.9587 | 0.9538 |
-| offset at 1.00 V | +30.2 mV | +26.2 mV | +29.9 mV |
-| offset at 1.65 V | +8.5 mV | +5.6 mV | +5.3 mV |
-| offset at 2.50 V | -31.7 mV | -35.7 mV | -39.6 mV |
+| closed-loop slope, 1.00-2.50 V | 0.9569 | 0.9587 | 0.9538 |
+| offset at 1.00 V | +30.0 mV | +26.2 mV | +29.9 mV |
+| offset at 1.65 V | +8.3 mV | +5.6 mV | +5.3 mV |
+| offset at 2.50 V | -34.6 mV | -35.7 mV | -39.6 mV |
 | input common-mode range | 0.85-2.90 V | 0.85-2.90 V | 0.65-2.70 V |
-| slew rate, 1.3-2.0 V rising | 42.7 V/us | 15.7 V/us | -- (nominal bias is generator-limited here) |
+| slew rate, 1.3-2.0 V rising | 42.7 V/us | 15.3 V/us | -- (nominal bias is generator-limited here) |
 | node capacitance, fitted against bias | -- | 40.1 pF | 43.9 pF |
 
 Silicon's slope shortfall from 1 is 1.12x the routed model's -- less than
@@ -48,6 +48,27 @@ swept 18-100 uA; only the bottom three bias points cleared the 3x margin
 against the AD3 generator's own edge, so the nominal-bias slew isn't
 directly comparable. The capacitance fit uses those three and matches the
 routed model to 1.09x -- the same agreement as tnt's part.
+
+The as-drawn column moved on 2026-09-10, when `mosbius_ota.sch` learned
+that this part ties its NMOS input pair's bulk to the pair's own shared
+source rather than to ground ([`../../PARTS.md`](../../PARTS.md)). Almost
+all of the move lands on the offset at the top of the input range, which
+goes from -31.7 mV to -34.6 mV: removing the body effect lowers the pair's
+threshold, and the top of the range is where that headroom is scarcest.
+The offsets at 1.00 V and 1.65 V move under a fifth of a millivolt each,
+and the as-drawn slew rate does not move at all, because slew is set by the
+tail current and the node capacitance rather than by a threshold. The
+as-routed column is unchanged to the last digit, verified by re-running it
+with the sheet reverted: it comes from the part's own extracted device
+library, which always had the bulk right.
+
+Two things this table does not settle. The input common-mode range is
+carried over from `tt_um_tnt_mosbius` rather than simulated for this part,
+which the bulk correction makes a weaker assumption than it was, since the
+low end of that range is a threshold. And the slew row read 15.7 V/us until
+2026-09-10, which was `tt_um_tnt_mosbius`'s number copied by mistake; the
+simulation gives 15.3 both before and after the correction, and that is
+what `tools/ad3/measure_settling_ad3.py` had all along.
 
 ## Try this
 

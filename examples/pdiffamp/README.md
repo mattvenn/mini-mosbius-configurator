@@ -25,8 +25,18 @@ with an Analog Discovery 3. Simulated at the `tt` corner with the default
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| small-signal gain | 21.6 V/V | 21.24 V/V | 18.10 V/V |
-| output base | 1.112 V | 1.124 V | 1.097 V |
+| small-signal gain | 21.1 V/V | 21.24 V/V | 18.10 V/V |
+| output base | 1.117 V | 1.124 V | 1.097 V |
+
+The as-drawn column moved on 2026-09-10, when the ideal library learned
+that this part's PMOS differential pair ties its bulk to its own shared
+source rather than to the supply ([`../../PARTS.md`](../../PARTS.md)). The shift is small -- 2% of
+gain, 5 mV of output -- because that shared source is a virtual ground for
+a differential input, so the body effect largely drops out. A source
+follower, whose source moves with the signal, shifts about 19%. The
+as-routed column is unchanged to the last digit, which is what says the
+correction landed on the ideal side only: the routed branch always had
+this right, since it comes from the part's own extracted device library.
 
 ## Try this
 

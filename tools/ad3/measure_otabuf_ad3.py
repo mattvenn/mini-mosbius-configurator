@@ -84,15 +84,22 @@ PROJECTS = {
     },
     # examples/otabuf routed for tt_um_mosbius on 2026-09-09. sim_offsets is
     # from a tb_otabuf.sch run with MOSBIUS_PROJECT=tt_um_mosbius, at the
-    # same three input levels; within a couple of mV of tnt's own, as
-    # expected for a quantity set by total device width, unchanged between
-    # parts. sim_cmr is carried over from tnt's part for the same reason --
-    # not independently re-simulated, since it is set by the same total
-    # widths -- rather than re-derived here.
+    # same three input levels. The as-drawn column was re-simulated on
+    # 2026-09-10, when mosbius_ota.sch learned that this part ties its input
+    # pair's bulk to the pair's own source: only the 2.50 V offset moved
+    # much, -31.7 -> -34.6 mV, since removing the body effect lowers the
+    # threshold and the top of the input range is where headroom is
+    # scarcest. The as-routed column is unchanged, and was re-run with the
+    # sheet reverted to confirm that.
+    #
+    # sim_cmr is still carried over from tnt's part rather than simulated
+    # here, and the bulk correction makes that a weaker assumption than it
+    # was: the low end of a common-mode range is a threshold, which is
+    # exactly what moved. Treat the low figure as indicative on this part.
     "tt_um_mosbius": {
         "chip": KANG,
         "bitstream": "0000000000000000000010888000000001020200000000000",
-        "sim_offsets": {1.00: (+30.2, +26.2), 1.65: (+8.5, +5.6), 2.50: (-31.7, -35.7)},
+        "sim_offsets": {1.00: (+30.0, +26.2), 1.65: (+8.3, +5.6), 2.50: (-34.6, -35.7)},
         "sim_cmr": (0.85, 2.9),
     },
 }

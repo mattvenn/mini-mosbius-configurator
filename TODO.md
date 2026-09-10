@@ -10,75 +10,34 @@ anything is removed, so cite an item by describing it, not by its number.
 
 ## Tooling and library
 
-2 finish supporting Andrew Kang's mini-MOSbius (tt_um_mosbius), alongside
-tnt's. Routing, bitstreams, pad tables, programming and the as-routed SPICE
-model all work on both parts; `MOSBIUS_PROJECT` in the environment picks
-which, `--project` overrides it per command, and an unmapped macro stops
-rather than guessing. Every example -- inverter, ring, diff amp, PMOS diff
-amp, OTA follower, current source, SR latch -- routes on his part and has
-now been measured on his silicon; PARTS.md has every number side by side
-with tnt's.
+2 three loose ends left over from supporting Andrew Kang's part
+(`tt_um_mosbius`), which is otherwise done -- routing, bitstreams, pad
+tables, programming, the as-routed SPICE model, the finger-count geometry
+and the bulk tie all work on both parts, all seven examples route on his
+part and have been measured on his silicon, and PARTS.md has every number
+side by side with tnt's. None of these three blocks using the part.
 
-The as-drawn ideal library's one device difference from real silicon --
-the bulk tie -- is fixed as of 2026-09-10, for both PMOS and NMOS, both
-confirmed on silicon first. The finger-count half of the geometry question
-was already done and a no-op for tnt (CLAUDE.md has the binning
-investigation); this was the other half.
-
-**What was wrong.** His generic PMOS/PMOS differential-pair halves tie
-bulk to their own source; tnt's tie every PMOS bulk to VAPWR. `diff_n.sch`
-(NMOS pair, `itail`) and `ota_n.sch` (NMOS input pair) do the same on the
-NMOS side. Both need deep-nwell isolation to be physically real, and
-`tt_um_mosbius.mag` has it: four top-level `dnwell` rectangles, with
-several `sky130_fd_pr__nfet_g5v0d10v5_*` instances sitting fully inside
-them. Every PMOS/NMOS whose source never leaves a rail is unaffected --
-`mirror_n`'s tail bank, the bias mirror legs, `tt_asw_3v3`'s pass-FETs,
-and every existing example except a diff-pair/OTA input pair (a small
-effect, 1.9% of gain / 4.8 mV on `examples/pdiffamp/`, from the shared
-source acting as a virtual ground). A source follower is where it bites
-hard, and nothing in the examples drew one, so two one-shot circuits did
-(not committed examples -- `build/pfollower/`, `build/nfollower/`,
-`tools/ad3/measure_pfollower_ad3.py`, `measure_nfollower_ad3.py`):
-0.921 V/V measured on `tt_um_mosbius` silicon against 0.918 V/V simulated
-as routed (0.3% off) and 0.746 V/V as drawn (19% off) for PMOS; 0.924
-against 0.929 routed (0.5% off) and 0.789 drawn (13.5% off) for NMOS.
-`mosbius simulate`'s switch-matrix model already had this right in both
-cases, since it comes from Andrew Kang's own extracted device library --
-only the ideal library was wrong.
-
-**The fix.** `mosbius_pmos.sch`/`mosbius_nmos.sch` each gained an internal
-`well` node: the FET's `body=` now points there instead of straight at the
-rail, and two resistors (`Rwell_rail`, `Rwell_source`) connect `well` to
-the rail and to the device's own drawn source. Both resistor values are
-`.param`s driven by a new `Chip.bulk_follows_source` field (False for tnt,
-True for Kang), written into the generated routed netlist by
-`mosbius/simulate.py`'s `render_drawn_geometry()` -- the exact mechanism
-`pmos_width_per_finger` already uses, so `--project` stays the one place a
-part is chosen. One trap on the way: the first resistor values (1e-12/1e12
-ohm, mirroring `CONFIG_TIE_OHMS`'s near-zero convention) made ngspice hang
-for 50+ minutes at ~100% CPU instead of the usual ~2-minute model load --
-a 24-decade spread on one internal node, with 1e-12 sitting on top of
-ngspice's own default `gmin`, is a much harder linear-algebra problem than
-a single tie to a fixed rail. 1 ohm / 1e9 ohm (nine decades, comfortably
-past the stiffest real node in these decks, ~50 kOhm) fixed it and reran
-in seconds. `BULK_TIE_OHMS`/`BULK_OPEN_OHMS` in `mosbius/simulate.py`.
-
-**Verified.** All 382 pytest tests pass. Every tnt example with a
-published number (inverter, diff amp, PMOS diff amp, SR latch, OTA
-follower, current source, ring oscillator) matches its README exactly --
-confirms the fix is a true no-op for tnt, not just in the resistor math
-but in the actual regression. Both one-shot followers moved from
-15-19% off the as-routed/silicon numbers to within ~1.5%. `examples/pdiffamp`
-on `tt_um_mosbius` shifted about 2% (21.6->21.1, 20.8->20.5 V/V), matching
-the virtual-ground-cancellation size predicted above rather than the
-follower's much larger shift.
-
-**Left:** `examples/diffamp` (the NMOS pair) on `tt_um_mosbius` hasn't
-been re-simulated with the fix yet. Kang's `pdiffamp`/`diffamp` READMEs
-still publish the old as-drawn numbers and need updating once diffamp is
-checked too. `build/pfollower/`/`build/nfollower/` are still one-shot,
-uncommitted, gitignored -- promote to real examples only if that's
-wanted, since the silicon check was the point, not a permanent addition.
+- **Two committed scripts measure a circuit that exists nowhere.**
+  `tools/ad3/measure_pfollower_ad3.py` and `measure_nfollower_ad3.py` were
+  the one-shot silicon checks that confirmed the bulk difference before it
+  was fixed, and their schematics lived in `build/pfollower/` and
+  `build/nfollower/`, which is gitignored and has since been cleaned. Their
+  own headers tell you to re-run `tools/regenerate_routed.sh`, which cannot
+  work, because the schematic that script starts from is the file that is
+  gone. Promote the followers to real examples or drop the scripts. Do not
+  simply edit the scripts' hard-coded bitstreams: those are the provenance
+  for a measurement that really happened on silicon, not build output.
+- **`examples/otabuf/`'s input common-mode range on his part is tnt's,
+  carried over rather than simulated.** The bulk correction of 2026-09-10
+  makes that a weaker assumption than it was, because the low end of a
+  common-mode range is a threshold and a threshold is what moved. Deriving
+  it needs a DC sweep `tb_otabuf.sch` does not have; the same sweep would
+  settle it on both parts at once. `sim_cmr` in
+  `tools/ad3/measure_otabuf_ad3.py` is the constant, and its comment
+  already says it is carried over.
+- **`examples/inverter/`'s peak gain on his part is measured but never
+  simulated**, so that README publishes a bare silicon number with no
+  as-drawn or as-routed column beside it. tnt's inverter has the whole row.
 
 The wider question this came from is answered for now: every mini-MOSbius so
 far is sky130A, so the PDK axis is still hypothetical, and
@@ -125,4 +84,15 @@ being scaled.
 
 7 can the name from the xschem make it to the pinout? so we'd see 'inverter input' if we'd labelled it
 
-8 proof the readme
+8 proof the readme. One thing already found: the two differential
+amplifier READMEs publish a "small-signal gain" without saying what it is
+the slope of, and the four rows involved use three different definitions.
+The testbench settles the output at three input levels, so three lines can
+be drawn through them -- base to the positive endpoint, base to the
+negative endpoint, and the symmetric one across the whole step -- and the
+transfer curve bends enough that they differ by a few percent. `pdiffamp`'s
+tnt row is the symmetric one, its Kang row is the positive half, and both
+of `diffamp`'s rows are the negative half, which puts that table 2.6% away
+from its own figure, whose legend computes the symmetric one. Pick the
+symmetric chord, say so in both tables, and re-publish the two tnt numbers
+that move.

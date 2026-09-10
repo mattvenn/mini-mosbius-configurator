@@ -26,15 +26,35 @@ geometry into the routed netlist as a `.param pmos_width_per_finger`, which
 the ideal `mosbius_*` symbols on the design sheet read too, so the as-drawn
 half always matches whichever part the as-routed half was built for.
 
-**One PMOS bulk tie is still not modelled.** `tt_um_mosbius`'s generic PMOS
-and PMOS differential-pair halves tie their bulk to their own source;
-`tt_um_tnt_mosbius`'s tie every PMOS bulk to VAPWR. Every other PMOS on
-both parts already has its source on the rail, so this only bites a PMOS
-whose source moves with the signal -- negligible on a differential pair's
-shared (virtual-ground) source (1.9% of gain, 4.8 mV of output on
-`examples/pdiffamp/`), but worth roughly 20% low on a PMOS source follower
-drawn with the bulk tied to the rail instead of the source. Nothing in this
-repo draws that circuit yet.
+**A generic transistor's bulk follows a different node on each part.**
+`tt_um_mosbius`'s generic PMOS and PMOS differential-pair halves tie their
+bulk to their own source, and its NMOS differential pair and OTA input pair
+do the same on the NMOS side, through real deep-nwell isolation;
+`tt_um_tnt_mosbius` ties every bulk to the rail. Every device whose source
+never leaves a rail is unaffected either way, which is most of both chips.
+It bites a source whose voltage moves: negligible on a differential pair's
+shared source, which is a virtual ground for a differential input (1.9% of
+gain, 4.8 mV of output on `examples/pdiffamp/`), but worth 15-19% on a
+source follower.
+
+`mosbius simulate` writes this into the generated routed netlist as a pair
+of resistor values, `rwell_rail` and `rwell_source`, driven by
+`Chip.bulk_follows_source` -- the route `pmos_width_per_finger` takes, so
+`--project` stays the only place a part is named. `mosbius_pmos.sch` and
+`mosbius_nmos.sch` split an internal `well` node between the rail and the
+device's own drawn source with those two values. Confirmed on silicon
+before it was fixed, with a PMOS and an NMOS source follower on
+`tt_um_mosbius`: 0.921 V/V and 0.924 V/V measured, against 0.918 and 0.929
+as routed but only 0.746 and 0.789 as drawn.
+
+The OTA's input pair shares one tub on its own tail node, so
+`mosbius_ota.sch` splits its well the same way; its PMOS loads sit on the
+supply on both parts and keep their existing tie. Every transistor in the
+ideal library whose source can leave a rail now follows the right node on
+both parts, which was checked by flattening both extracted device libraries
+and listing every instance with an off-rail bulk. `tt_um_tnt_mosbius` has
+none. `tt_um_mosbius` has eight, in the two generic transistors, the two
+differential pairs and the OTA input pair, plus three shorted dummies.
 
 **The config chain is a different length.** 192 bits (48 hex characters)
 on `tt_um_tnt_mosbius`, 196 (49) on `tt_um_mosbius`. `--project`/

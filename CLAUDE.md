@@ -343,29 +343,67 @@ they are dummies -- "every PMOS is 1.5x" means every PMOS in the ideal
 library, not every PMOS on the die, and the pad mux is identical on both at
 W=180 nf=18.
 
-**The PMOS bulk is the one part difference still not modelled, and its size
-is known.** Andrew's generic PMOS and his PMOS differential-pair halves tie
-their bulk to their own source where tnt's tie it to VAPWR; every other
-PMOS on both parts sits with its source on the rail, so the bulk lands in
-the same place and there is nothing to model. It therefore only bites when
-a PMOS source is off the rail. Measured on a pair half at his geometry,
-200 uA, that is worth 51 mV of extra gate drive at 200 mV of source drop
-and 142 mV at 600 mV. At the *circuit* level it is much smaller than that
-suggests: on `examples/pdiffamp/`, whose tail node sits 580 mV below the
-rail, drawing the bulk on the source instead moves the gain from 21.21 to
-20.80 V/V (1.9%) and the quiescent output by 4.8 mV, because the tail
-source sets the current rather than the threshold and the pair's shared
-source is a virtual ground differentially, so the body effect drops out of
-the differential gain. Where it would *not* be ignorable is a circuit whose
-source moves with the signal: body transconductance is 25% of gm on this
-device, so a PMOS source follower drawn with the bulk on the rail comes out
-about 20% low. Note the asymmetry -- the as-routed side is already correct,
-since it comes from his own device library, so leaving this undone puts a
-2% artifact into his drawn-versus-routed comparison that is not the switch
-matrix. A bulk is a node and not a number, so it cannot ride the same
-`.param`; the shape that fits is an internal well node in `mosbius_pmos`
-tied to the rail through one resistor and to the source through another,
-with both values coming from the `Chip` alongside the width per finger.
+**A bulk tie is the second part difference, it is modelled as of
+2026-09-10, and the OTA is the one device it does not cover yet.** Andrew's
+generic PMOS and his PMOS differential-pair halves tie their bulk to their
+own source where tnt's tie it to VAPWR, and his `diff_n.sch` (NMOS pair)
+and `ota_n.sch` (NMOS input pair) do the same on the NMOS side -- both need
+deep-nwell isolation to be physically real, and `tt_um_mosbius.mag` has it,
+four top-level `dnwell` rectangles with `nfet_g5v0d10v5` instances sitting
+fully inside them. Every device whose source never leaves a rail is
+unaffected, which is most of both chips: the tail banks, the bias mirror
+legs, `tt_asw_3v3`'s pass FETs.
+
+`mosbius_pmos.sch`/`mosbius_nmos.sch` each carry an internal `well` node,
+with the FET's `body=` pointing there and two resistors (`Rwell_rail`,
+`Rwell_source`) joining it to the rail and to the device's own drawn
+source. The two values are `.param`s written into the generated routed
+netlist by `render_drawn_geometry()` from `Chip.bulk_follows_source`,
+which is the mechanism `pmos_width_per_finger` already uses, so
+`--project` stays the one place a part is chosen. `tests/test_geometry.py`
+is the join, since nothing else in Python reads either name.
+
+`mosbius_ota.sch` got the same split on 2026-09-10, on its NMOS input pair
+only: that pair shares one tub on its own tail node, while the PMOS loads
+sit on the supply on both parts and keep their existing tie. **The list is
+now provably complete**, by flattening both extracted device libraries and
+listing every instance whose bulk is off a rail. tnt's has none. Andrew's
+has eight -- `nmos_prog`, `pmos_prog`, both differential pairs and
+`ota_n`'s input pair -- plus three all-nodes-shorted dummies. Every one of
+those eight is drawn by a sheet that now splits its well.
+
+Republishing `examples/otabuf/` on his part was the cost, and it is small
+and lopsided: the offset at the top of the input range moves -31.7 to
+-34.6 mV, the other two move under 0.2 mV, and the as-drawn slew does not
+move at all, since slew is tail current over capacitance rather than a
+threshold. Two things fell out of doing it. The as-routed column was
+re-run with the sheet reverted and is identical to the last digit, which is
+how you check a claim like that rather than asserting it. And the table's
+as-routed slew had read 15.7 V/us, which was tnt's number copied by
+mistake; it is 15.3, which is what `tools/ad3/measure_settling_ad3.py` had
+all along. What is still carried over from tnt rather than simulated is
+that example's input common-mode range, and the bulk correction makes that
+a weaker assumption than it was, since the low end of a common-mode range
+is a threshold.
+
+Two numbers worth keeping. **The size of the effect depends entirely on
+whether the source moves.** On `examples/pdiffamp/`, whose tail node sits
+580 mV below the rail, the correction moves the gain 1.9% and the
+quiescent output 4.8 mV, because the pair's shared source is a virtual
+ground differentially and the body effect drops out of the differential
+gain; `examples/diffamp/` is 1% and 4 mV. A source follower is where it
+bites: body transconductance is 25% of gm on these devices, and two
+one-shot followers measured on his silicon came out 0.921 V/V (PMOS) and
+0.924 V/V (NMOS) against 0.918 and 0.929 as routed but 0.746 and 0.789 as
+drawn. **And the resistor values matter for a reason that is not
+electrical.** The first pair tried was 1e-12/1e12 ohm, mirroring
+`CONFIG_TIE_OHMS`; that made ngspice run for 50+ minutes at ~100% CPU
+instead of the usual ~2-minute model load, because 24 decades of
+conductance on one floating node, with 1e-12 sitting on top of ngspice's
+own default `gmin`, is a far harder linear-algebra problem than a single
+tie to a fixed rail. `BULK_TIE_OHMS`/`BULK_OPEN_OHMS` are 1 and 1e9 --
+nine decades, well past the stiffest real node in these decks (~50 kOhm)
+and nowhere near ngspice's internal constants.
 
 **Which part is an environment variable, `MOSBIUS_PROJECT`, and that is
 what makes the testbench's `generate routed spice` button work for either

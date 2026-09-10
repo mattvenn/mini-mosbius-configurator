@@ -25,11 +25,21 @@ with an Analog Discovery 3. Simulated at the `tt` corner with the default
 
 | | as drawn | as routed | on silicon |
 |---|---|---|---|
-| small-signal gain | 19.4 V/V | 19.53 V/V | 17.91 V/V |
-| output base | 2.013 V | 2.018 V | 2.007 V |
+| small-signal gain | 19.2 V/V | 19.53 V/V | 17.91 V/V |
+| output base | 2.009 V | 2.018 V | 2.007 V |
 
-Silicon is 7% below as-drawn -- less than tnt's chip, and this part's
+Silicon is about 7% below as-drawn -- less than tnt's chip, and this part's
 corner is not established, so no `ss` conclusion yet.
+
+The as-drawn column moved on 2026-09-10, when the ideal library learned
+that this part's NMOS differential pair ties its bulk to its own shared
+source rather than to ground ([`../../PARTS.md`](../../PARTS.md)). The shift is small -- 1% of
+gain, 4 mV of output -- because that shared source is a virtual ground for
+a differential input, so the body effect largely drops out. A source
+follower, whose source moves with the signal, shifts about 15%. The
+as-routed column is unchanged to the last digit, which is what says the
+correction landed on the ideal side only: the routed branch always had
+this right, since it comes from the part's own extracted device library.
 
 ## Try this
 
